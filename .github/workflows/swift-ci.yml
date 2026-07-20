@@ -28,9 +28,12 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate
 
-      - name: Build App
+      - name: Build App (Unsigned)
         run: |
           xcodebuild -scheme SamFinance \
                      -destination 'generic/platform=iOS' \
                      -configuration Debug \
+                     CODE_SIGN_IDENTITY="-" \
+                     CODE_SIGNING_REQUIRED=NO \
+                     CODE_SIGNING_ALLOWED=NO \
                      clean build
