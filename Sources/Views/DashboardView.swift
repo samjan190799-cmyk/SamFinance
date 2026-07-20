@@ -617,3 +617,57 @@ struct AddGoalView: View {
         dismiss()
     }
 }
+
+/// Строка транзакции на белой шторке
+struct TransactionRowView: View {
+    let transaction: Transaction
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // Иконка бренда с цветной точкой в правом нижнем углу
+            ZStack(alignment: .bottomTrailing) {
+                Circle()
+                    .fill(transaction.type == .income ? Color.green.opacity(0.12) : Color.black.opacity(0.05))
+                    .frame(width: 44, height: 44)
+                
+                Image(systemName: transaction.brandIcon ?? transaction.category.icon)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(transaction.type == .income ? .green : .black)
+                
+                // Цветная точка бренда
+                if let colorHex = transaction.brandColorHex {
+                    Circle()
+                        .fill(Color(hex: colorHex))
+                        .frame(width: 10, height: 10)
+                        .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
+                        .offset(x: 2, y: 2)
+                }
+            }
+            
+            // Название бренда и категория
+            VStack(alignment: .leading, spacing: 4) {
+                Text(transaction.brandName ?? transaction.title)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.black)
+                
+                Text(transaction.category.name)
+                    .font(.system(size: 12))
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+            
+            // Сумма
+            Text(transaction.type == .income ? "+\(formatAmount(transaction.amount)) $" : "-\(formatAmount(transaction.amount)) $")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(transaction.type == .income ? .green : .black)
+        }
+    }
+    
+    private func formatAmount(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+    }
+}
