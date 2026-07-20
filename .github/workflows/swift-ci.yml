@@ -1,14 +1,18 @@
-name: SamFinance CI
+name: Build SamFinance iOS IPA
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
-    name: Build Application
+    name: Build Unsigned IPA
     runs-on: macos-14
 
     steps:
@@ -28,12 +32,55 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate
 
-      - name: Build App (Unsigned)
+      - name: Build App (Release / Unsigned)
         run: |
-          xcodebuild -scheme SamFinance \
+          set -o pipefail
+          xcodebuild -project SamFinance.xcodeproj \
+                     -scheme SamFinance \
                      -destination 'generic/platform=iOS' \
-                     -configuration Debug \
+                     -configuration Release \
+                     -derivedDataPath build \
                      CODE_SIGN_IDENTITY="-" \
                      CODE_SIGNING_REQUIRED=NO \
                      CODE_SIGNING_ALLOWED=NO \
+                     VALIDATE_PRODUCT=NO \
+                     AD_HOC_CODE_SIGNING_ALLOWED=YES \
                      clean build
+
+      - name: Package as IPA
+        run: |
+          mkdir -p build/Payload
+          APP_PATH=$(find build/Build/Products/Release-iphoneos -name "*.app" | head -1)
+          echo "App path: $APP_PATH"
+          cp -r "$APP_PATH" build/Payload/SamFinance.app
+          cd build
+          zip -r SamFinance.ipa Payload/
+          echo "IPA size: $(du -h SamFinance.ipa | cut -f1)"
+
+      - name: Upload IPA as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SamFinance-Unsigned-IPA
+          path: build/SamFinance.ipa
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "SamFinance v1.0.0 (Build ${{ github.run_number }})"
+          body: |
+            ## Приложение SamFinance (Unsigned IPA)
+            
+            Сборка создана автоматически.
+            
+            ### Как установить на iOS:
+            1. Скачайте файл **`SamFinance.ipa`** из раздела Assets ниже.
+            2. Установите приложение на устройство с помощью **AltStore**, **TrollStore**, **Scarlet** или любого другого удобного установщика.
+          files: build/SamFinance.ipa
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
