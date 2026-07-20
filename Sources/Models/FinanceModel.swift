@@ -36,6 +36,29 @@ public struct Category: Codable, Identifiable, Hashable, Sendable {
     ]
 }
 
+/// Банковская карта пользователя
+public struct Card: Codable, Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public var number: String // Например, "7642"
+    public var holderName: String
+    public var balance: Double
+    public var type: String // "Digital card"
+    public var colorHex: String // Основной цвет свечения
+    public var gradientColors: [String] // Цвета для градиентного фона
+    public var isFrozen: Bool
+    
+    public init(id: UUID = UUID(), number: String, holderName: String, balance: Double, type: String = "Digital card", colorHex: String, gradientColors: [String], isFrozen: Bool = false) {
+        self.id = id
+        self.number = number
+        self.holderName = holderName
+        self.balance = balance
+        self.type = type
+        self.colorHex = colorHex
+        self.gradientColors = gradientColors
+        self.isFrozen = isFrozen
+    }
+}
+
 /// Модель финансовой транзакции
 public struct Transaction: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
@@ -46,7 +69,12 @@ public struct Transaction: Codable, Identifiable, Hashable, Sendable {
     public var date: Date
     public var notes: String?
     
-    public init(id: UUID = UUID(), title: String, amount: Double, type: TransactionType, category: Category, date: Date = Date(), notes: String? = nil) {
+    // Брендирование транзакции под новый дизайн
+    public var brandName: String? // Например, "Apple"
+    public var brandIcon: String? // Системная иконка или логотип (для простоты системная иконка)
+    public var brandColorHex: String? // Цвет точки индикатора рядом с логотипом
+    
+    public init(id: UUID = UUID(), title: String, amount: Double, type: TransactionType, category: Category, date: Date = Date(), notes: String? = nil, brandName: String? = nil, brandIcon: String? = nil, brandColorHex: String? = nil) {
         self.id = id
         self.title = title
         self.amount = amount
@@ -54,5 +82,8 @@ public struct Transaction: Codable, Identifiable, Hashable, Sendable {
         self.category = category
         self.date = date
         self.notes = notes
+        self.brandName = brandName
+        self.brandIcon = brandIcon
+        self.brandColorHex = brandColorHex
     }
 }

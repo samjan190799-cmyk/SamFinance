@@ -1,203 +1,263 @@
 import SwiftUI
 import Charts
 
-/// Главный экран дашборда с карточкой баланса, круговой диаграммой расходов (Swift Charts) и историей операций.
+/// Главный экран приложения с дизайном по макету 2 (баланс, выглядывающие карты справа, расходы и белая шторка транзакций).
 struct DashboardView: View {
     let financeService: FinanceService
+    @Binding var selectedTab: Int
     @State private var isShowingAddSheet = false
     
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    // Карточка баланса
-                    balanceCard
-                        .padding(.horizontal)
-                        .padding(.top, 8)
-                    
-                    // Диаграмма расходов (Swift Charts)
-                    expenseChartSection
-                        .padding(.horizontal)
-                    
-                    // Список последних транзакций
-                    transactionsSection
-                }
-            }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("Мои Финансы")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        HapticManager.shared.impact(.light)
-                        isShowingAddSheet = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title2)
-                            .symbolRenderingMode(.hierarchical)
-                    }
-                }
-            }
-            .sheet(isPresented: $isShowingAddSheet) {
-                AddTransactionView(financeService: financeService)
-            }
-        }
-    }
-    
-    // MARK: - Карточка баланса
-    private var balanceCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Текущий баланс")
-                .font(.subheadline)
-                .foregroundColor(.white.opacity(0.85))
+        ZStack(alignment: .top) {
+            Color(hex: "#0E0F12") // Глубокий темный фон из макета
+                .ignoresSafeArea()
             
-            Text(formatCurrency(financeService.totalBalance))
-                .font(.system(size: 36, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-            
-            HStack(spacing: 20) {
-                // Доходы
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.down.left.circle.fill")
-                            .foregroundColor(.green)
-                        Text("Доходы")
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                    Text(formatCurrency(financeService.totalIncome))
-                        .font(.headline)
-                        .foregroundColor(.white)
-                }
+            VStack(spacing: 0) {
+                // Шапка (Профиль и уведомления)
+                headerView
+                    .padding(.horizontal, 24)
+                    .padding(.top, 8)
                 
-                Spacer()
-                
-                // Расходы
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.up.right.circle.fill")
-                            .foregroundColor(.red)
-                        Text("Расходы")
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                    Text(formatCurrency(financeService.totalExpenses))
-                        .font(.headline)
-                        .foregroundColor(.white)
-                }
-            }
-            .padding(.top, 8)
-        }
-        .padding(24)
-        .background {
-            RoundedRectangle(cornerRadius: 24)
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: "#5E5CE6"), Color(hex: "#007AFF")],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .shadow(color: Color(hex: "#5E5CE6").opacity(0.25), radius: 15, x: 0, y: 8)
-        }
-    }
-    
-    // MARK: - Секция с диаграммой расходов
-    private var expenseChartSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Структура расходов")
-                .font(.headline)
-                .foregroundColor(.secondary)
-            
-            let expenseData = financeService.expenseByCategory
-            
-            if expenseData.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "chart.pie.fill")
-                        .font(.system(size: 40))
-                        .foregroundColor(.secondary.opacity(0.5))
-                    Text("Расходы отсутствуют")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 32)
-                .background(Color(.secondarySystemGroupedBackground))
-                .cornerRadius(20)
-            } else {
-                HStack(spacing: 16) {
-                    Chart {
-                        ForEach(Array(expenseData.keys)) { category in
-                            if let amount = expenseData[category], amount > 0 {
-                                SectorMark(
-                                    angle: .value("Сумма", amount),
-                                    innerRadius: .ratio(0.68),
-                                    angularInset: 2.0
-                                )
-                                .cornerRadius(5)
-                                .foregroundStyle(Color(hex: category.colorHex))
-                            }
-                        }
-                    }
-                    .frame(width: 120, height: 120)
+                // Сводка баланса и выглядывающие карты справа
+                HStack(alignment: .center, spacing: 0) {
+                    balanceSection
                     
                     Spacer()
                     
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(Array(expenseData.keys.prefix(4))) { category in
-                            HStack(spacing: 8) {
-                                Circle()
-                                    .fill(Color(hex: category.colorHex))
-                                    .frame(width: 8, height: 8)
-                                Text(category.name)
-                                    .font(.caption)
-                                    .foregroundColor(.primary)
-                                    .lineLimit(1)
-                                Spacer()
-                                if let amount = expenseData[category] {
-                                    Text(formatCurrency(amount))
-                                        .font(.caption.bold())
-                                }
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
+                    miniCardsStack
                 }
-                .padding(20)
-                .background(Color(.secondarySystemGroupedBackground))
-                .cornerRadius(20)
+                .padding(.horizontal, 24)
+                .padding(.top, 24)
+                
+                // Блок расходов Spending
+                spendingSection
+                    .padding(.horizontal, 24)
+                    .padding(.top, 24)
+                    .padding(.bottom, 24)
+                
+                // Белая шторка с транзакциями
+                transactionsBottomSheet
+            }
+        }
+        .preferredColorScheme(.dark)
+        .sheet(isPresented: $isShowingAddSheet) {
+            AddTransactionView(financeService: financeService)
+        }
+    }
+    
+    // MARK: - Шапка
+    private var headerView: some View {
+        HStack {
+            // Аватарка (круглая с градиентом)
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(hex: "#FFE259"), Color(hex: "#FFA751")],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 40, height: 40)
+                
+                Image(systemName: "person.fill")
+                    .foregroundColor(.white)
+                    .font(.system(size: 18))
+            }
+            .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
+            
+            Spacer()
+            
+            // Колокольчик
+            Button {
+                HapticManager.shared.impact(.light)
+            } label: {
+                Image(systemName: "bell")
+                    .font(.title3)
+                    .foregroundColor(.white.opacity(0.8))
+                    .frame(width: 40, height: 40)
+                    .background(Color.white.opacity(0.06))
+                    .clipShape(Circle())
             }
         }
     }
     
-    // MARK: - Секция истории операций
-    private var transactionsSection: some View {
+    // MARK: - Раздел баланса
+    private var balanceSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("История операций")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
-                Spacer()
-            }
-            .padding(.horizontal)
+            Text("Total balance")
+                .font(.system(size: 14))
+                .foregroundColor(.gray)
             
-            if financeService.transactions.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "tray.fill")
-                        .font(.system(size: 40))
-                        .foregroundColor(.secondary.opacity(0.5))
-                    Text("У вас нет транзакций")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+            // Форматированный баланс с мелкой дробной частью
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                let formatted = balanceFormatted
+                Text(formatted.whole)
+                    .font(.system(size: 38, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                
+                Text(formatted.fraction)
+                    .font(.system(size: 22, weight: .medium, design: .rounded))
+                    .foregroundColor(.gray)
+            }
+            
+            // Кнопки Send и Request
+            HStack(spacing: 8) {
+                // Кнопка Send (белая)
+                Button {
+                    HapticManager.shared.trigger(.success)
+                    isShowingAddSheet = true
+                } label: {
+                    HStack(spacing: 6) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.black)
+                                .frame(width: 22, height: 22)
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        Text("Send")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.black)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.white)
+                    .clipShape(Capsule())
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 48)
-                .background(Color(.secondarySystemGroupedBackground))
-                .cornerRadius(20)
-                .padding(.horizontal)
-            } else {
-                LazyVStack(spacing: 12) {
+                
+                // Кнопка Request (темная)
+                Button {
+                    HapticManager.shared.impact(.light)
+                } label: {
+                    Text("Request")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.white.opacity(0.08))
+                        .clipShape(Capsule())
+                }
+            }
+        }
+    }
+    
+    // MARK: - Стопка мини-карт справа
+    private var miniCardsStack: some View {
+        Button {
+            HapticManager.shared.trigger(.success)
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
+                selectedTab = 2 // Переключение на вкладку карт
+            }
+        } label: {
+            ZStack {
+                // Синяя карта (самая задняя)
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(LinearGradient(colors: [Color(hex: "#00C6FF"), Color(hex: "#0072FF")], startPoint: .top, endPoint: .bottom))
+                    .frame(width: 46, height: 78)
+                    .offset(x: 20, y: 6)
+                    .rotationEffect(.degrees(4))
+                
+                // Зеленая карта (средняя)
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(LinearGradient(colors: [Color(hex: "#00F2FE"), Color(hex: "#4FACFE")], startPoint: .top, endPoint: .bottom))
+                    .frame(width: 46, height: 78)
+                    .offset(x: 10, y: 0)
+                    .rotationEffect(.degrees(-2))
+                
+                // Желтая карта (передняя)
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(LinearGradient(colors: [Color(hex: "#FFE259"), Color(hex: "#FFA751")], startPoint: .top, endPoint: .bottom))
+                    .frame(width: 46, height: 78)
+                    .offset(x: 0, y: -6)
+                    .rotationEffect(.degrees(-6))
+            }
+            .frame(width: 70, height: 90)
+            .offset(x: 30) // Выдвигаем за правый край экрана
+            .shadow(color: Color.black.opacity(0.4), radius: 8, x: -4, y: 4)
+        }
+    }
+    
+    // MARK: - Блок Spending (Расходы)
+    private var spendingSection: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Spending")
+                    .font(.system(size: 13))
+                    .foregroundColor(.gray)
+                
+                Text(formatSpendingAmount(financeService.totalSpending))
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            
+            Spacer()
+            
+            // Наползающие друг на друга иконки брендов из дизайна
+            HStack(spacing: -10) {
+                brandMiniIcon(name: "apple.logo", color: .white, bgColor: .black)
+                brandMiniIcon(name: "at", color: .white, bgColor: .black)
+                brandMiniIcon(name: "calendar", color: .white, bgColor: Color(hex: "#34C759"))
+                
+                // Счетчик
+                Text("+2")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 28, height: 28)
+                    .background(Color(hex: "#1E1F22"))
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color(hex: "#0E0F12"), lineWidth: 1.5))
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(20)
+        .overlay {
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.white.opacity(0.04), lineWidth: 1)
+        }
+    }
+    
+    // MARK: - Белая шторка с транзакциями
+    private var transactionsBottomSheet: some View {
+        VStack(spacing: 0) {
+            // Заголовок шторки
+            HStack {
+                Button {
+                    HapticManager.shared.impact(.light)
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease")
+                        .foregroundColor(.black.opacity(0.6))
+                        .font(.title3)
+                }
+                
+                Spacer()
+                
+                Text("Transactions")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundColor(.black)
+                
+                Spacer()
+                
+                Button {
+                    HapticManager.shared.impact(.light)
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.black.opacity(0.6))
+                        .font(.title3)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 16)
+            
+            // Список транзакций
+            ScrollView {
+                VStack(spacing: 18) {
                     ForEach(financeService.transactions) { transaction in
-                        TransactionRow(transaction: transaction)
+                        TransactionRowView(transaction: transaction)
                             .contextMenu {
                                 Button(role: .destructive) {
                                     HapticManager.shared.trigger(.warning)
@@ -210,76 +270,109 @@ struct DashboardView: View {
                             }
                     }
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
+                .padding(.bottom, 110) // Сдвиг под плавающий таб-бар
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.white)
+        .clipShape(.rect(topLeadingRadius: 32, topTrailingRadius: 32))
+        .ignoresSafeArea(edges: .bottom)
     }
     
-    private func formatCurrency(_ value: Double) -> String {
+    // MARK: - Вспомогательные методы
+    
+    private func brandMiniIcon(name: String, color: Color, bgColor: Color) -> some View {
+        Image(systemName: name)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundColor(color)
+            .frame(width: 28, height: 28)
+            .background(bgColor)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(Color(hex: "#0E0F12"), lineWidth: 1.5))
+    }
+    
+    private var balanceFormatted: (whole: String, fraction: String) {
+        let balance = financeService.totalBalance
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencySymbol = "₽"
-        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.currencySymbol = "$"
+        formatter.locale = Locale(identifier: "en_US")
+        formatter.maximumFractionDigits = 2
+        formatter.minimumFractionDigits = 2
+        
+        guard let formattedString = formatter.string(from: NSNumber(value: balance)) else {
+            return ("$0", ".00")
+        }
+        
+        let components = formattedString.components(separatedBy: ".")
+        if components.count == 2 {
+            return (components[0], "." + components[1])
+        }
+        return (formattedString, "")
+    }
+    
+    private func formatSpendingAmount(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencySymbol = "$"
+        formatter.locale = Locale(identifier: "en_US")
         formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: value)) ?? "\(value) ₽"
+        return formatter.string(from: NSNumber(value: value)) ?? "$\(value)"
     }
 }
 
-/// Строка транзакции в списке
-struct TransactionRow: View {
+/// Строка транзакции на белой шторке
+struct TransactionRowView: View {
     let transaction: Transaction
     
     var body: some View {
         HStack(spacing: 16) {
-            ZStack {
+            // Иконка бренда с цветной точкой в правом нижнем углу
+            ZStack(alignment: .bottomTrailing) {
                 Circle()
-                    .fill(Color(hex: transaction.category.colorHex).opacity(0.12))
-                    .frame(width: 46, height: 46)
+                    .fill(transaction.type == .income ? Color.green.opacity(0.12) : Color.black.opacity(0.05))
+                    .frame(width: 44, height: 44)
                 
-                Image(systemName: transaction.category.icon)
-                    .font(.body.bold())
-                    .foregroundColor(Color(hex: transaction.category.colorHex))
+                Image(systemName: transaction.brandIcon ?? transaction.category.icon)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(transaction.type == .income ? .green : .black)
+                
+                // Цветная точка бренда
+                if let colorHex = transaction.brandColorHex {
+                    Circle()
+                        .fill(Color(hex: colorHex))
+                        .frame(width: 10, height: 10)
+                        .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
+                        .offset(x: 2, y: 2)
+                }
             }
             
+            // Название бренда и категория
             VStack(alignment: .leading, spacing: 4) {
-                Text(transaction.title)
-                    .font(.headline)
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
+                Text(transaction.brandName ?? transaction.title)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.black)
                 
                 Text(transaction.category.name)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 12))
+                    .foregroundColor(.gray)
             }
             
             Spacer()
             
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(transaction.type == .income ? "+\(formatAmount(transaction.amount))" : "-\(formatAmount(transaction.amount))")
-                    .font(.headline.bold())
-                    .foregroundColor(transaction.type == .income ? .green : .primary)
-                
-                Text(formatDate(transaction.date))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+            // Сумма
+            Text(transaction.type == .income ? "+\(formatAmount(transaction.amount)) $" : "-\(formatAmount(transaction.amount)) $")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(transaction.type == .income ? .green : .black)
         }
-        .padding(14)
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(16)
     }
     
     private func formatAmount(_ value: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = 0
-        return (formatter.string(from: NSNumber(value: value)) ?? "\(value)") + " ₽"
-    }
-    
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "d MMMM"
-        formatter.locale = Locale(identifier: "ru_RU")
-        return formatter.string(from: date)
+        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
     }
 }
