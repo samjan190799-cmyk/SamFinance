@@ -1,10 +1,15 @@
 import SwiftUI
 
 /// Главный контейнер приложения. Управляет кастомным Floating Tab Bar (плавающей пилюлей)
-/// и переключением экранов (Контакты, Главная, Карты).
+/// и переключением экранов (Контакты, Главная, Карты). Адаптирован под все типы экранов.
 struct ContentView: View {
     @State private var financeService = FinanceService()
     @State private var selectedTab = 1 // По умолчанию открыт главный экран (индекс 1)
+    
+    /// Определение компактных экранов (iPhone SE, 8, 7 и т.д.) для динамической адаптации верстки
+    private var isSmallScreen: Bool {
+        UIScreen.main.bounds.height < 750
+    }
     
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -25,7 +30,7 @@ struct ContentView: View {
             
             // Кастомный плавающий таб-бар
             customTabBar
-                .padding(.bottom, 28) // Удобный отступ снизу
+                .padding(.bottom, isSmallScreen ? 12 : 24) // Адаптивный отступ снизу (12 для экранов с кнопкой Home, 24 для безрамочных)
         }
         .background(Color(hex: "#0E0F12")) // Темный фон на уровне всего контейнера
         .ignoresSafeArea(edges: .bottom)
@@ -48,7 +53,7 @@ struct ContentView: View {
             tabButton(index: 2, activeIcon: "creditcard.fill", inactiveIcon: "creditcard")
         }
         .padding(.horizontal, 8)
-        .frame(width: 220, height: 58) // Физический размер компактной пилюли
+        .frame(width: isSmallScreen ? 200 : 220, height: isSmallScreen ? 52 : 58) // Более компактный размер на iPhone SE
         .background(Color(hex: "#17181A")) // Темно-серый матовый фон
         .clipShape(Capsule())
         .overlay {
@@ -74,40 +79,15 @@ struct ContentView: View {
                     // Белая подложка под активной иконкой
                     Capsule()
                         .fill(Color.white)
-                        .frame(width: 50, height: 40)
+                        .frame(width: isSmallScreen ? 44 : 50, height: isSmallScreen ? 34 : 40)
                         .transition(.scale.combined(with: .opacity))
                 }
                 
                 Image(systemName: isSelected ? activeIcon : inactiveIcon)
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: isSmallScreen ? 16 : 18, weight: .bold))
                     .foregroundColor(isSelected ? .black : .white.opacity(0.4))
             }
-            .frame(width: 60, height: 48)
-        }
-    }
-}
-
-/// Экран-заглушка для вкладки контактов/друзей
-struct FriendsView: View {
-    var body: some View {
-        ZStack {
-            Color(hex: "#0E0F12").ignoresSafeArea()
-            
-            VStack(spacing: 12) {
-                Image(systemName: "person.2.fill")
-                    .font(.system(size: 44))
-                    .foregroundColor(.gray.opacity(0.4))
-                
-                Text("Раздел контактов")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                
-                Text("Здесь будут отображаться ваши друзья для совершения быстрых денежных переводов.")
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 48)
-            }
+            .frame(width: isSmallScreen ? 54 : 60, height: isSmallScreen ? 42 : 48)
         }
     }
 }

@@ -1,22 +1,27 @@
 import SwiftUI
 import Charts
 
-/// Главный экран приложения с дизайном по макету 2 (баланс, выглядывающие карты справа, расходы и белая шторка транзакций).
+/// Главный экран приложения с дизайном по макету 2, адаптированным под все размеры экранов iPhone (включая SE и mini).
 struct DashboardView: View {
     let financeService: FinanceService
     @Binding var selectedTab: Int
     @State private var isShowingAddSheet = false
     
+    /// Определение компактных экранов (iPhone SE, 8, 7 и т.д.) для динамической адаптации верстки
+    private var isSmallScreen: Bool {
+        UIScreen.main.bounds.height < 750
+    }
+    
     var body: some View {
         ZStack(alignment: .top) {
-            Color(hex: "#0E0F12") // Глубокий темный фон из макета
+            Color(hex: "#0E0F12") // Глубокий темный фон
                 .ignoresSafeArea()
             
             VStack(spacing: 0) {
                 // Шапка (Профиль и уведомления)
                 headerView
                     .padding(.horizontal, 24)
-                    .padding(.top, 8)
+                    .padding(.top, isSmallScreen ? 4 : 8)
                 
                 // Сводка баланса и выглядывающие карты справа
                 HStack(alignment: .center, spacing: 0) {
@@ -27,13 +32,13 @@ struct DashboardView: View {
                     miniCardsStack
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, 24)
+                .padding(.top, isSmallScreen ? 12 : 24)
                 
                 // Блок расходов Spending
                 spendingSection
                     .padding(.horizontal, 24)
-                    .padding(.top, 24)
-                    .padding(.bottom, 24)
+                    .padding(.top, isSmallScreen ? 12 : 24)
+                    .padding(.bottom, isSmallScreen ? 16 : 24)
                 
                 // Белая шторка с транзакциями
                 transactionsBottomSheet
@@ -58,11 +63,11 @@ struct DashboardView: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 40, height: 40)
+                    .frame(width: isSmallScreen ? 34 : 40, height: isSmallScreen ? 34 : 40)
                 
                 Image(systemName: "person.fill")
                     .foregroundColor(.white)
-                    .font(.system(size: 18))
+                    .font(.system(size: isSmallScreen ? 15 : 18))
             }
             .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
             
@@ -73,9 +78,9 @@ struct DashboardView: View {
                 HapticManager.shared.impact(.light)
             } label: {
                 Image(systemName: "bell")
-                    .font(.title3)
+                    .font(.system(size: isSmallScreen ? 16 : 18))
                     .foregroundColor(.white.opacity(0.8))
-                    .frame(width: 40, height: 40)
+                    .frame(width: isSmallScreen ? 34 : 40, height: isSmallScreen ? 34 : 40)
                     .background(Color.white.opacity(0.06))
                     .clipShape(Circle())
             }
@@ -84,20 +89,20 @@ struct DashboardView: View {
     
     // MARK: - Раздел баланса
     private var balanceSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: isSmallScreen ? 6 : 10) {
             Text("Total balance")
-                .font(.system(size: 14))
+                .font(.system(size: isSmallScreen ? 12 : 14))
                 .foregroundColor(.gray)
             
             // Форматированный баланс с мелкой дробной частью
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 let formatted = balanceFormatted
                 Text(formatted.whole)
-                    .font(.system(size: 38, weight: .bold, design: .rounded))
+                    .font(.system(size: isSmallScreen ? 30 : 38, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                 
                 Text(formatted.fraction)
-                    .font(.system(size: 22, weight: .medium, design: .rounded))
+                    .font(.system(size: isSmallScreen ? 18 : 22, weight: .medium, design: .rounded))
                     .foregroundColor(.gray)
             }
             
@@ -112,17 +117,17 @@ struct DashboardView: View {
                         ZStack {
                             Circle()
                                 .fill(Color.black)
-                                .frame(width: 22, height: 22)
+                                .frame(width: isSmallScreen ? 18 : 22, height: isSmallScreen ? 18 : 22)
                             Image(systemName: "arrow.up.right")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(.system(size: isSmallScreen ? 8 : 10, weight: .bold))
                                 .foregroundColor(.white)
                         }
                         Text("Send")
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.system(size: isSmallScreen ? 11 : 13, weight: .bold))
                             .foregroundColor(.black)
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, isSmallScreen ? 10 : 14)
+                    .padding(.vertical, isSmallScreen ? 6 : 8)
                     .background(Color.white)
                     .clipShape(Capsule())
                 }
@@ -132,10 +137,10 @@ struct DashboardView: View {
                     HapticManager.shared.impact(.light)
                 } label: {
                     Text("Request")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(size: isSmallScreen ? 11 : 13, weight: .bold))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, isSmallScreen ? 12 : 16)
+                        .padding(.vertical, isSmallScreen ? 6 : 8)
                         .background(Color.white.opacity(0.08))
                         .clipShape(Capsule())
                 }
@@ -147,75 +152,75 @@ struct DashboardView: View {
     private var miniCardsStack: some View {
         Button {
             HapticManager.shared.trigger(.success)
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                 selectedTab = 2 // Переключение на вкладку карт
             }
         } label: {
             ZStack {
                 // Синяя карта (самая задняя)
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 8)
                     .fill(LinearGradient(colors: [Color(hex: "#00C6FF"), Color(hex: "#0072FF")], startPoint: .top, endPoint: .bottom))
-                    .frame(width: 46, height: 78)
-                    .offset(x: 20, y: 6)
+                    .frame(width: isSmallScreen ? 38 : 46, height: isSmallScreen ? 64 : 78)
+                    .offset(x: isSmallScreen ? 16 : 20, y: isSmallScreen ? 4 : 6)
                     .rotationEffect(.degrees(4))
                 
                 // Зеленая карта (средняя)
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 8)
                     .fill(LinearGradient(colors: [Color(hex: "#00F2FE"), Color(hex: "#4FACFE")], startPoint: .top, endPoint: .bottom))
-                    .frame(width: 46, height: 78)
-                    .offset(x: 10, y: 0)
+                    .frame(width: isSmallScreen ? 38 : 46, height: isSmallScreen ? 64 : 78)
+                    .offset(x: isSmallScreen ? 8 : 10, y: 0)
                     .rotationEffect(.degrees(-2))
                 
                 // Желтая карта (передняя)
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 8)
                     .fill(LinearGradient(colors: [Color(hex: "#FFE259"), Color(hex: "#FFA751")], startPoint: .top, endPoint: .bottom))
-                    .frame(width: 46, height: 78)
-                    .offset(x: 0, y: -6)
+                    .frame(width: isSmallScreen ? 38 : 46, height: isSmallScreen ? 64 : 78)
+                    .offset(x: 0, y: isSmallScreen ? -4 : -6)
                     .rotationEffect(.degrees(-6))
             }
-            .frame(width: 70, height: 90)
-            .offset(x: 30) // Выдвигаем за правый край экрана
-            .shadow(color: Color.black.opacity(0.4), radius: 8, x: -4, y: 4)
+            .frame(width: isSmallScreen ? 60 : 70, height: isSmallScreen ? 80 : 90)
+            .offset(x: isSmallScreen ? 24 : 30) // Выдвигаем за правый край экрана
+            .shadow(color: Color.black.opacity(0.35), radius: 6, x: -3, y: 3)
         }
     }
     
     // MARK: - Блок Spending (Расходы)
     private var spendingSection: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("Spending")
-                    .font(.system(size: 13))
+                    .font(.system(size: isSmallScreen ? 11 : 13))
                     .foregroundColor(.gray)
                 
                 Text(formatSpendingAmount(financeService.totalSpending))
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: isSmallScreen ? 18 : 20, weight: .bold))
                     .foregroundColor(.white)
             }
             
             Spacer()
             
-            // Наползающие друг на друга иконки брендов из дизайна
-            HStack(spacing: -10) {
+            // Наползающие друг на друга иконки брендов
+            HStack(spacing: -8) {
                 brandMiniIcon(name: "apple.logo", color: .white, bgColor: .black)
                 brandMiniIcon(name: "at", color: .white, bgColor: .black)
                 brandMiniIcon(name: "calendar", color: .white, bgColor: Color(hex: "#34C759"))
                 
                 // Счетчик
                 Text("+2")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 9, weight: .bold))
                     .foregroundColor(.white)
-                    .frame(width: 28, height: 28)
+                    .frame(width: isSmallScreen ? 24 : 28, height: isSmallScreen ? 24 : 28)
                     .background(Color(hex: "#1E1F22"))
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Color(hex: "#0E0F12"), lineWidth: 1.5))
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, isSmallScreen ? 10 : 16)
         .background(Color.white.opacity(0.05))
-        .cornerRadius(20)
+        .cornerRadius(16)
         .overlay {
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.white.opacity(0.04), lineWidth: 1)
         }
     }
@@ -230,13 +235,13 @@ struct DashboardView: View {
                 } label: {
                     Image(systemName: "line.3.horizontal.decrease")
                         .foregroundColor(.black.opacity(0.6))
-                        .font(.title3)
+                        .font(.system(size: isSmallScreen ? 16 : 18))
                 }
                 
                 Spacer()
                 
                 Text("Transactions")
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.system(size: isSmallScreen ? 15 : 17, weight: .bold))
                     .foregroundColor(.black)
                 
                 Spacer()
@@ -246,16 +251,16 @@ struct DashboardView: View {
                 } label: {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.black.opacity(0.6))
-                        .font(.title3)
+                        .font(.system(size: isSmallScreen ? 16 : 18))
                 }
             }
             .padding(.horizontal, 24)
-            .padding(.top, 24)
-            .padding(.bottom, 16)
+            .padding(.top, isSmallScreen ? 16 : 24)
+            .padding(.bottom, isSmallScreen ? 12 : 16)
             
             // Список транзакций
             ScrollView {
-                VStack(spacing: 18) {
+                VStack(spacing: isSmallScreen ? 14 : 18) {
                     ForEach(financeService.transactions) { transaction in
                         TransactionRowView(transaction: transaction)
                             .contextMenu {
@@ -271,13 +276,13 @@ struct DashboardView: View {
                     }
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, 8)
-                .padding(.bottom, 110) // Сдвиг под плавающий таб-бар
+                .padding(.top, 4)
+                .padding(.bottom, isSmallScreen ? 90 : 110) // Динамический сдвиг под плавающий таб-бар
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.white)
-        .clipShape(.rect(topLeadingRadius: 32, topTrailingRadius: 32))
+        .clipShape(.rect(topLeadingRadius: isSmallScreen ? 24 : 32, topTrailingRadius: isSmallScreen ? 24 : 32))
         .ignoresSafeArea(edges: .bottom)
     }
     
@@ -285,9 +290,9 @@ struct DashboardView: View {
     
     private func brandMiniIcon(name: String, color: Color, bgColor: Color) -> some View {
         Image(systemName: name)
-            .font(.system(size: 11, weight: .bold))
+            .font(.system(size: isSmallScreen ? 9 : 11, weight: .bold))
             .foregroundColor(color)
-            .frame(width: 28, height: 28)
+            .frame(width: isSmallScreen ? 24 : 28, height: isSmallScreen ? 24 : 28)
             .background(bgColor)
             .clipShape(Circle())
             .overlay(Circle().stroke(Color(hex: "#0E0F12"), lineWidth: 1.5))
@@ -320,59 +325,5 @@ struct DashboardView: View {
         formatter.locale = Locale(identifier: "en_US")
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: value)) ?? "$\(value)"
-    }
-}
-
-/// Строка транзакции на белой шторке
-struct TransactionRowView: View {
-    let transaction: Transaction
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            // Иконка бренда с цветной точкой в правом нижнем углу
-            ZStack(alignment: .bottomTrailing) {
-                Circle()
-                    .fill(transaction.type == .income ? Color.green.opacity(0.12) : Color.black.opacity(0.05))
-                    .frame(width: 44, height: 44)
-                
-                Image(systemName: transaction.brandIcon ?? transaction.category.icon)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(transaction.type == .income ? .green : .black)
-                
-                // Цветная точка бренда
-                if let colorHex = transaction.brandColorHex {
-                    Circle()
-                        .fill(Color(hex: colorHex))
-                        .frame(width: 10, height: 10)
-                        .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
-                        .offset(x: 2, y: 2)
-                }
-            }
-            
-            // Название бренда и категория
-            VStack(alignment: .leading, spacing: 4) {
-                Text(transaction.brandName ?? transaction.title)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.black)
-                
-                Text(transaction.category.name)
-                    .font(.system(size: 12))
-                    .foregroundColor(.gray)
-            }
-            
-            Spacer()
-            
-            // Сумма
-            Text(transaction.type == .income ? "+\(formatAmount(transaction.amount)) $" : "-\(formatAmount(transaction.amount)) $")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundColor(transaction.type == .income ? .green : .black)
-        }
-    }
-    
-    private func formatAmount(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
     }
 }
