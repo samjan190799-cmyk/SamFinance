@@ -1,0 +1,57 @@
+# Xcode
+#
+# gitignore contributors: cache info to prevent tracking Xcode internal files
+build/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+!default.xcworkspace
+xcuserdata/
+*.moved-aside
+*.xcuserstate
+*.xcshareddata/xcschemes/
+!*.xcshareddata/xcschemes/*.xcscheme
+*.xccheckout
+*.xcscmblueprint
+
+# XcodeGen
+#
+# Ignore generated Xcode project files if they are managed by XcodeGen
+# (XcodeGen декларативно генерирует .xcodeproj на основе project.yml)
+SamFinance.xcodeproj/
+SamFinance.xcworkspace/
+
+# Swift Package Manager
+#
+.build/
+Packages/
+Package.pins
+Package.resolved
+.swiftpm/
+# Ignore Xcode-specific SPM cache
+*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+*.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
+# CocoaPods
+#
+# Pods/
+# Podfile.lock
+# *.xcworkspace
+
+# Carthage
+#
+Carthage/Build/
+
+# fastlane
+#
+# It is recommended to not store the screenshots in the git repo.
+# fastlane/screenshots
+# fastlane/test_output
+
+# macOS
+#
+.DS_Store
+*.swp
+*~
+*.lock
+profile

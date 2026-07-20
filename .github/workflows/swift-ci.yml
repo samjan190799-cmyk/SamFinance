@@ -1,0 +1,29 @@
+name: SamFinance CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build Application
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode Project
+        run: xcodegen generate
+
+      - name: Build App
+        run: |
+          xcodebuild -scheme SamFinance \
+                     -destination 'generic/platform=iOS' \
+                     -configuration Debug \
+                     clean build
