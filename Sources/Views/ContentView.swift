@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Главный контейнер приложения. Управляет кастомным Floating Tab Bar (плавающей пилюлей)
-/// и переключением экранов (Долги, Копилки, Главная, Карты). Адаптирован под все типы экранов.
+/// и переключением экранов (Долги, Копилки, Главная, Карты).
+/// Растянут на весь физический экран (ignoresSafeArea) для премиального отображения.
 struct ContentView: View {
     @State private var financeService = FinanceService()
     @State private var selectedTab = 2 // По умолчанию открыт главный экран (индекс 2)
@@ -29,13 +30,14 @@ struct ContentView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea() // Растягиваем контент на весь экран под границы устройства
             
             // Кастомный плавающий таб-бар
             customTabBar
-                .padding(.bottom, isSmallScreen ? 12 : 24) // Адаптивный отступ снизу
+                .padding(.bottom, isSmallScreen ? 12 : 30) // Адаптивный отступ снизу для безрамочных моделей
         }
         .background(Color(hex: "#0E0F12")) // Темный фон на уровне всего контейнера
-        .ignoresSafeArea(edges: .bottom)
+        .ignoresSafeArea() // Игнорируем безопасную зону для полной заливки
     }
     
     // MARK: - Панель таб-бара (Floating Tab Bar)
@@ -67,7 +69,7 @@ struct ContentView: View {
             Capsule()
                 .stroke(Color.white.opacity(0.06), lineWidth: 1)
         }
-        .shadow(color: Color.black.opacity(0.35), radius: 12, x: 0, y: 6)
+        .shadow(color: Color.black.opacity(0.45), radius: 15, x: 0, y: 8)
     }
     
     // MARK: - Кнопка вкладки

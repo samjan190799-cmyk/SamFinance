@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Экран создания новой финансовой транзакции с валидацией, тактильной отдачей и микро-анимациями.
+/// Экран создания новой финансовой транзакции с валидацией, тактильной отдачей
+/// и поддержкой быстрого импорта/распознавания СМС из буфера обмена.
 struct AddTransactionView: View {
     @Environment(\.dismiss) private var dismiss
     let financeService: FinanceService
@@ -12,6 +13,9 @@ struct AddTransactionView: View {
     @State private var date: Date = Date()
     @State private var notes: String = ""
     
+    // Результат распознавания
+    @State private var recognitionMessage: String? = nil
+    
     init(financeService: FinanceService) {
         self.financeService = financeService
         // По умолчанию выбираем первую категорию расходов
@@ -22,6 +26,29 @@ struct AddTransactionView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Button {
+                        recognizeSMSFromClipboard()
+                    } label: {
+                        HStack {
+                            Image(systemName: "doc.on.clipboard.fill")
+                                .foregroundColor(.orange)
+                            Text("Распознать СМС из буфера")
+                                .fontWeight(.semibold)
+                            Spacer()
+                        }
+                    }
+                    .foregroundColor(.white)
+                    
+                    if let msg = recognitionMessage {
+                        Text(msg)
+                            .font(.caption)
+                            .foregroundColor(msg.contains("Успешно") ? .green : .red)
+                    }
+                } header: {
+                    Text("Быстрый ввод из банка")
+                }
+                
                 Section {
                     Picker("Тип транзакции", selection: $transactionType) {
                         Text("Расход").tag(TransactionType.expense)
@@ -126,71 +153,47 @@ struct AddTransactionView: View {
             type: transactionType,
             category: selectedCategory,
             date: date,
-            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes
+            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes,
+            brandName: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            brandIcon: selectedCategory.icon,
+            brandColorHex: selectedCategory.colorHex
         )
         
         financeService.addTransaction(transaction)
         HapticManager.shared.trigger(.success)
         dismiss()
     }
-}
-
-/// Элемент выбора категории в виде пилюли
-struct CategoryBubble: View {
-    let category: Category
-    let isSelected: Bool
     
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: category.icon)
-                .font(.body.bold())
-            Text(category.name)
-                .font(.subheadline)
+    private func recognizeSMSFromClipboard() {
+        guard let clipboardString = UIPasteboard.general.string,
+              !clipboardString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            HapticManager.shared.trigger(.error)
+            recognitionMessage = "Буфер обмена пуст"
+            return
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background {
-            if isSelected {
-                Color(hex: category.colorHex)
+        
+        if let parsed = SMSParser.parse(text: clipboardString) {
+            HapticManager.shared.trigger(.success)
+            // Форматируем сумму без лишних копеек, если они равны нулю
+            if parsed.amount.truncatingRemainder(dividingBy: 1) == 0 {
+                amountString = String(format: "%.0f", parsed.amount)
             } else {
-                Color(.systemGray6)
+                amountString = String(format: "%.2f", parsed.amount)
             }
-        }
-        .foregroundColor(isSelected ? .white : .primary)
-        .clipShape(Capsule())
-        .overlay {
-            if isSelected {
-                Capsule()
-                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
+            transactionType = parsed.type
+            title = parsed.title
+            
+            if let matchedCat = financeService.categories.first(where: { $0.name == parsed.categoryName }) {
+                selectedCategory = matchedCat
             }
+            
+            recognitionMessage = "Успешно распознано: \(parsed.title) (\(Int(parsed.amount)) $)"
+            
+            // Очищаем буфер для безопасности
+            UIPasteboard.general.string = ""
+        } else {
+            HapticManager.shared.trigger(.error)
+            recognitionMessage = "Не удалось распознать формат СМС"
         }
-        .scaleEffect(isSelected ? 1.05 : 1.0)
-    }
-}
-
-extension Color {
-    init(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&int)
-        let a, r, g, b: UInt64
-        switch hex.count {
-        case 3: // RGB (12-bit)
-            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
-        case 6: // RGB (24-bit)
-            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
-        case 8: // ARGB (32-bit)
-            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
-        default:
-            (a, r, g, b) = (1, 1, 1, 1)
-        }
-
-        self.init(
-            .sRGB,
-            red: Double(r) / 255,
-            green: Double(g) / 255,
-            blue:  Double(b) / 255,
-            opacity: Double(a) / 255
-        )
     }
 }

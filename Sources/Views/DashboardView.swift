@@ -1,14 +1,17 @@
 import SwiftUI
 import Charts
 
-/// Главный экран приложения с дизайном по макету 2.
-/// Все элементы (баланс, карты, spending, транзакции) скроллируются в единой ленте,
-/// что гарантирует идеальное отображение на любых экранах iPhone (включая iPhone 15 Pro и SE)
-/// и предотвращает сжатие списка транзакций.
+/// Главный экран приложения с дизайном по макету 2, переработанный под темную тему без шторки транзакций.
+/// Содержит графики аналитики расходов (Swift Charts) и систему автоматического распознавания СМС из буфера обмена.
 struct DashboardView: View {
     let financeService: FinanceService
     @Binding var selectedTab: Int
     @State private var isShowingAddSheet = false
+    
+    // Распознавание СМС
+    @State private var detectedSMSTransaction: ParsedSMSTransaction? = nil
+    @State private var showSMSBanner = false
+    @State private var lastCheckedClipboardString = ""
     
     /// Определение компактных экранов для динамической адаптации верстки
     private var isSmallScreen: Bool {
@@ -25,7 +28,7 @@ struct DashboardView: View {
                     // Шапка (Профиль и уведомления)
                     headerView
                         .padding(.horizontal, 24)
-                        .padding(.top, isSmallScreen ? 12 : 20)
+                        .padding(.top, isSmallScreen ? 34 : 54) // Отступ сверху с учетом safe area
                     
                     // Сводка баланса и выглядывающие карты справа
                     HStack(alignment: .center, spacing: 0) {
@@ -43,14 +46,26 @@ struct DashboardView: View {
                         .padding(.horizontal, 24)
                         .padding(.top, isSmallScreen ? 16 : 24)
                     
-                    // Белая шторка с транзакциями (теперь плавно выкатывается снизу в общем скролле)
-                    transactionsSection
-                        .padding(.top, isSmallScreen ? 20 : 28)
+                    // Секция аналитики и графиков трат (вместо шторки транзакций)
+                    analyticsSection
+                        .padding(.horizontal, 24)
+                        .padding(.top, isSmallScreen ? 18 : 28)
+                        .padding(.bottom, isSmallScreen ? 90 : 110) // Отступ под таб-бар
                 }
             }
-            .ignoresSafeArea(edges: .bottom) // Позволяет скроллу и плашке уходить до низа экрана
+            .ignoresSafeArea(edges: .bottom)
+            
+            // Парящий СМС Баннер (Dynamic Island style)
+            if showSMSBanner, let parsed = detectedSMSTransaction {
+                smsNotificationBanner(parsed: parsed)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(100)
+            }
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            checkClipboardForSMS()
+        }
         .sheet(isPresented: $isShowingAddSheet) {
             AddTransactionView(financeService: financeService)
         }
@@ -82,6 +97,7 @@ struct DashboardView: View {
             // Колокольчик
             Button {
                 HapticManager.shared.impact(.light)
+                checkClipboardForSMS() // Принудительная проверка буфера
             } label: {
                 Image(systemName: "bell")
                     .font(.system(size: isSmallScreen ? 16 : 18))
@@ -159,7 +175,7 @@ struct DashboardView: View {
         Button {
             HapticManager.shared.trigger(.success)
             withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                selectedTab = 3 // Переключение на вкладку карт (теперь это вкладка 3)
+                selectedTab = 3 // Переключение на вкладку карт
             }
         } label: {
             ZStack {
@@ -236,79 +252,235 @@ struct DashboardView: View {
         }
     }
     
-    // MARK: - Шторка с транзакциями (интегрирована в общий скролл)
-    private var transactionsSection: some View {
-        VStack(spacing: 0) {
-            // Заголовок шторки
-            HStack {
-                Button {
-                    HapticManager.shared.impact(.light)
-                } label: {
-                    Image(systemName: "line.3.horizontal.decrease")
-                        .foregroundColor(.black.opacity(0.6))
-                        .font(.system(size: isSmallScreen ? 16 : 18))
-                }
+    // MARK: - Графики расходов (Swift Charts)
+    private var analyticsSection: some View {
+        VStack(spacing: 20) {
+            // График 1: Линейный график динамики расходов
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Динамика расходов за неделю")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white.opacity(0.85))
                 
-                Spacer()
-                
-                Text("Transactions")
-                    .font(.system(size: isSmallScreen ? 15 : 17, weight: .bold))
-                    .foregroundColor(.black)
-                
-                Spacer()
-                
-                Button {
-                    HapticManager.shared.impact(.light)
-                } label: {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.black.opacity(0.6))
-                        .font(.system(size: isSmallScreen ? 16 : 18))
+                if chartData.isEmpty || financeService.totalSpending == 0 {
+                    emptyChartPlaceholder
+                } else {
+                    Chart {
+                        ForEach(chartData) { item in
+                            // Градиентная зона под линией
+                            AreaMark(
+                                x: .value("Дата", item.date, unit: .day),
+                                y: .value("Траты", item.amount)
+                            )
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color(hex: "#00F2FE").opacity(0.25), Color(hex: "#00F2FE").opacity(0.0)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .interpolationMethod(.catmullRom)
+                            
+                            // Линия графика
+                            LineMark(
+                                x: .value("Дата", item.date, unit: .day),
+                                y: .value("Траты", item.amount)
+                            )
+                            .foregroundStyle(Color(hex: "#00F2FE"))
+                            .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
+                            .interpolationMethod(.catmullRom)
+                        }
+                    }
+                    .chartXAxis {
+                        AxisMarks(values: .stride(by: .day, count: 1)) { _ in
+                            AxisValueLabel(format: .dateTime.day().month(), textColor: .gray.opacity(0.8))
+                        }
+                    }
+                    .chartYAxis {
+                        AxisMarks { value in
+                            AxisValueLabel(textColor: .gray.opacity(0.8))
+                            AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [4, 4])).foregroundColor(.white.opacity(0.06))
+                        }
+                    }
+                    .frame(height: 160)
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 24)
-            .padding(.bottom, 16)
+            .padding(18)
+            .background(Color.white.opacity(0.04))
+            .cornerRadius(24)
+            .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.04), lineWidth: 1))
             
-            // Список транзакций
-            if financeService.transactions.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "tray.fill")
-                        .font(.system(size: 40))
-                        .foregroundColor(.gray.opacity(0.35))
-                        .symbolRenderingMode(.hierarchical)
-                    
-                    Text("No transactions yet")
-                        .font(.headline)
-                        .foregroundColor(.black.opacity(0.5))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 48)
-            } else {
-                VStack(spacing: isSmallScreen ? 14 : 18) {
-                    ForEach(financeService.transactions) { transaction in
-                        TransactionRowView(transaction: transaction)
-                            .contextMenu {
-                                Button(role: .destructive) {
-                                    HapticManager.shared.trigger(.warning)
-                                    withAnimation(.spring()) {
-                                        financeService.deleteTransaction(transaction)
-                                    }
-                                } label: {
-                                    Label("Удалить", systemImage: "trash")
+            // График 2: Круговая диаграмма по категориям трат
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Распределение по категориям")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white.opacity(0.85))
+                
+                if categoryData.isEmpty {
+                    emptyChartPlaceholder
+                } else {
+                    HStack(spacing: 20) {
+                        Chart {
+                            ForEach(categoryData) { item in
+                                SectorMark(
+                                    angle: .value("Траты", item.amount),
+                                    innerRadius: .ratio(0.65),
+                                    angularInset: 2
+                                )
+                                .cornerRadius(4)
+                                .foregroundStyle(item.color)
+                            }
+                        }
+                        .frame(width: 140, height: 140)
+                        
+                        // Легенда
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(categoryData.prefix(4)) { item in
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(item.color)
+                                        .frame(width: 8, height: 8)
+                                    Text(item.category)
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                    Spacer()
+                                    Text("$\(Int(item.amount))")
+                                        .font(.caption.bold())
+                                        .foregroundColor(.white)
                                 }
                             }
+                        }
                     }
+                    .frame(height: 140)
                 }
-                .padding(.horizontal, 24)
             }
+            .padding(18)
+            .background(Color.white.opacity(0.04))
+            .cornerRadius(24)
+            .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.04), lineWidth: 1))
+        }
+    }
+    
+    private var emptyChartPlaceholder: some View {
+        VStack {
+            Spacer()
+            Image(systemName: "chart.pie.fill")
+                .font(.system(size: 32))
+                .foregroundColor(.white.opacity(0.1))
+            Text("Нет данных для отображения")
+                .font(.caption)
+                .foregroundColor(.gray)
+            Spacer()
         }
         .frame(maxWidth: .infinity)
-        .background(Color.white)
-        .clipShape(.rect(topLeadingRadius: 32, topTrailingRadius: 32))
-        .padding(.bottom, isSmallScreen ? 80 : 100) // Отступ снизу для плавающего таб-бара
+        .frame(height: 130)
+    }
+    
+    // MARK: - СМС Распознаватель из Буфера обмена (Dynamic Island Notification)
+    private func smsNotificationBanner(parsed: ParsedSMSTransaction) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "banknote.fill")
+                .font(.title2)
+                .foregroundColor(.green)
+                .padding(10)
+                .background(Color.green.opacity(0.15))
+                .clipShape(Circle())
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Найдена СМС в буфере")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.gray)
+                
+                Text("\(parsed.title) — \(parsed.type == .income ? "+" : "-")\(Int(parsed.amount)) $")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            
+            Spacer()
+            
+            // Кнопка Отклонить
+            Button {
+                HapticManager.shared.impact(.light)
+                withAnimation {
+                    showSMSBanner = false
+                    detectedSMSTransaction = nil
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white.opacity(0.5))
+                    .padding(8)
+                    .background(Color.white.opacity(0.08))
+                    .clipShape(Circle())
+            }
+            
+            // Кнопка Записать
+            Button {
+                addDetectedTransaction()
+            } label: {
+                Text("Записать")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.white)
+                    .clipShape(Capsule())
+            }
+        }
+        .padding(14)
+        .background(Color(hex: "#1E1F22"))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
+        .padding(.horizontal, 24)
+        .padding(.top, isSmallScreen ? 12 : 24)
+        .shadow(color: Color.black.opacity(0.5), radius: 15, x: 0, y: 10)
     }
     
     // MARK: - Вспомогательные методы
+    
+    private func checkClipboardForSMS() {
+        guard let clipboardString = UIPasteboard.general.string,
+              !clipboardString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              clipboardString != lastCheckedClipboardString else { return }
+        
+        lastCheckedClipboardString = clipboardString
+        
+        if let parsed = SMSParser.parse(text: clipboardString) {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
+                detectedSMSTransaction = parsed
+                showSMSBanner = true
+            }
+        }
+    }
+    
+    private func addDetectedTransaction() {
+        guard let parsed = detectedSMSTransaction else { return }
+        
+        let category = financeService.categories.first(where: { $0.name == parsed.categoryName }) ?? financeService.categories[0]
+        
+        let transaction = Transaction(
+            title: parsed.title,
+            amount: parsed.amount,
+            type: parsed.type,
+            category: category,
+            date: Date(),
+            notes: "Автоматически распознано из СМС",
+            brandName: parsed.brandName,
+            brandIcon: parsed.brandIcon ?? category.icon,
+            brandColorHex: parsed.brandColorHex ?? category.colorHex
+        )
+        
+        financeService.addTransaction(transaction)
+        
+        HapticManager.shared.trigger(.success)
+        
+        // Очищаем буфер обмена для предотвращения повторного предложения
+        UIPasteboard.general.string = ""
+        
+        withAnimation {
+            showSMSBanner = false
+            detectedSMSTransaction = nil
+        }
+    }
     
     private func brandMiniIcon(name: String, color: Color, bgColor: Color) -> some View {
         Image(systemName: name)
@@ -344,58 +516,61 @@ struct DashboardView: View {
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: value)) ?? "$\(value)"
     }
-}
-
-/// Строка транзакции на белой шторке
-struct TransactionRowView: View {
-    let transaction: Transaction
     
-    var body: some View {
-        HStack(spacing: 16) {
-            // Иконка бренда с цветной точкой в правом нижнем углу
-            ZStack(alignment: .bottomTrailing) {
-                Circle()
-                    .fill(transaction.type == .income ? Color.green.opacity(0.12) : Color.black.opacity(0.05))
-                    .frame(width: 44, height: 44)
-                
-                Image(systemName: transaction.brandIcon ?? transaction.category.icon)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(transaction.type == .income ? .green : .black)
-                
-                // Цветная точка бренда
-                if let colorHex = transaction.brandColorHex {
-                    Circle()
-                        .fill(Color(hex: colorHex))
-                        .frame(width: 10, height: 10)
-                        .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
-                        .offset(x: 2, y: 2)
-                }
-            }
-            
-            // Название бренда и категория
-            VStack(alignment: .leading, spacing: 4) {
-                Text(transaction.brandName ?? transaction.title)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.black)
-                
-                Text(transaction.category.name)
-                    .font(.system(size: 12))
-                    .foregroundColor(.gray)
-            }
-            
-            Spacer()
-            
-            // Сумма
-            Text(transaction.type == .income ? "+\(formatAmount(transaction.amount)) $" : "-\(formatAmount(transaction.amount)) $")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundColor(transaction.type == .income ? .green : .black)
-        }
+    // MARK: - Вычисления для графиков Swift Charts
+    
+    struct SpendingChartData: Identifiable {
+        let id = UUID()
+        let date: Date
+        let amount: Double
+    }
+
+    struct CategorySpendingData: Identifiable {
+        let id = UUID()
+        let category: String
+        let amount: Double
+        let color: Color
     }
     
-    private func formatAmount(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+    private var chartData: [SpendingChartData] {
+        let expenses = financeService.transactions.filter { $0.type == .expense }
+        let calendar = Calendar.current
+        var dateMap: [Date: Double] = [:]
+        
+        for i in 0..<7 {
+            if let date = calendar.date(byAdding: .day, value: -i, to: Date()) {
+                let startOfDay = calendar.startOfDay(for: date)
+                dateMap[startOfDay] = 0.0
+            }
+        }
+        
+        for transaction in expenses {
+            let startOfDay = calendar.startOfDay(for: transaction.date)
+            if dateMap[startOfDay] != nil {
+                dateMap[startOfDay]? += transaction.amount
+            }
+        }
+        
+        return dateMap.map { SpendingChartData(date: $0.key, amount: $0.value) }
+            .sorted(by: { $0.date < $1.date })
+    }
+    
+    private var categoryData: [CategorySpendingData] {
+        let expenses = financeService.transactions.filter { $0.type == .expense }
+        var categoryMap: [String: Double] = [:]
+        var colorMap: [String: String] = [:]
+        
+        for transaction in expenses {
+            categoryMap[transaction.category.name, default: 0.0] += transaction.amount
+            colorMap[transaction.category.name] = transaction.category.colorHex
+        }
+        
+        return categoryMap.map { key, value in
+            CategorySpendingData(
+                category: key,
+                amount: value,
+                color: Color(hex: colorMap[key] ?? "#FFFFFF")
+            )
+        }
     }
 }
