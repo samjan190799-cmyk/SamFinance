@@ -206,7 +206,7 @@ public final class FinanceService {
     private func saveData() {
         do {
             let encoder = JSONEncoder()
-            encoder.dateDecodingStrategy = .iso8601
+            encoder.dateEncodingStrategy = .iso8601
             encoder.outputFormatting = .prettyPrinted
             let data = try encoder.encode(transactions)
             try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
@@ -229,7 +229,7 @@ public final class FinanceService {
     private func saveDebts() {
         do {
             let encoder = JSONEncoder()
-            encoder.dateDecodingStrategy = .iso8601
+            encoder.dateEncodingStrategy = .iso8601
             encoder.outputFormatting = .prettyPrinted
             let data = try encoder.encode(debts)
             try data.write(to: debtsURL, options: [.atomic, .completeFileProtection])
