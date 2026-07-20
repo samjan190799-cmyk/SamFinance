@@ -59,22 +59,30 @@ public struct Card: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-/// Долг (взаиморасчеты с контактами)
+/// Тип долга: кредит организации или долг физическому лицу
+public enum DebtType: String, Codable, Sendable {
+    case credit = "credit"
+    case person = "person"
+}
+
+/// Долг (взаиморасчеты с контактами или кредиты банкам)
 public struct Debt: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
-    public var name: String // Имя человека
+    public var name: String // Имя человека или банка
     public var amount: Double
     public var dueDate: Date
     public var isLent: Bool // true - мне должны (Lent), false - я должен (Borrowed)
     public var isPaid: Bool // Статус погашения
+    public var type: DebtType
     
-    public init(id: UUID = UUID(), name: String, amount: Double, dueDate: Date = Date(), isLent: Bool, isPaid: Bool = false) {
+    public init(id: UUID = UUID(), name: String, amount: Double, dueDate: Date = Date(), isLent: Bool, isPaid: Bool = false, type: DebtType = .person) {
         self.id = id
         self.name = name
         self.amount = amount
         self.dueDate = dueDate
         self.isLent = isLent
         self.isPaid = isPaid
+        self.type = type
     }
 }
 

@@ -1,8 +1,10 @@
 import SwiftUI
 import Charts
 
-/// Главный экран приложения с дизайном по макету 2, адаптированным под все размеры экранов iPhone
-/// и включающим новый раздел накопительных копилок (Savings Goals).
+/// Главный экран приложения с дизайном по макету 2.
+/// Все элементы (баланс, карты, spending, копилки, транзакции) скроллируются в единой ленте,
+/// что гарантирует идеальное отображение на любых экранах iPhone (включая iPhone 15 Pro и SE)
+/// и предотвращает сжатие списка транзакций.
 struct DashboardView: View {
     let financeService: FinanceService
     @Binding var selectedTab: Int
@@ -19,35 +21,37 @@ struct DashboardView: View {
             Color(hex: "#0E0F12") // Глубокий темный фон
                 .ignoresSafeArea()
             
-            VStack(spacing: 0) {
-                // Шапка (Профиль и уведомления)
-                headerView
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    // Шапка (Профиль и уведомления)
+                    headerView
+                        .padding(.horizontal, 24)
+                        .padding(.top, isSmallScreen ? 8 : 16)
+                    
+                    // Сводка баланса и выглядывающие карты справа
+                    HStack(alignment: .center, spacing: 0) {
+                        balanceSection
+                        
+                        Spacer()
+                        
+                        miniCardsStack
+                    }
                     .padding(.horizontal, 24)
-                    .padding(.top, isSmallScreen ? 4 : 8)
-                
-                // Сводка баланса и выглядывающие карты справа
-                HStack(alignment: .center, spacing: 0) {
-                    balanceSection
+                    .padding(.top, isSmallScreen ? 12 : 20)
                     
-                    Spacer()
+                    // Блок расходов Spending
+                    spendingSection
+                        .padding(.horizontal, 24)
+                        .padding(.top, isSmallScreen ? 16 : 24)
                     
-                    miniCardsStack
+                    // Раздел Копилок (Savings Goals)
+                    savingsGoalsSection
+                        .padding(.top, isSmallScreen ? 16 : 24)
+                    
+                    // Белая шторка с транзакциями (теперь плавно выкатывается снизу в общем скролле)
+                    transactionsSection
+                        .padding(.top, isSmallScreen ? 20 : 28)
                 }
-                .padding(.horizontal, 24)
-                .padding(.top, isSmallScreen ? 12 : 24)
-                
-                // Блок расходов Spending
-                spendingSection
-                    .padding(.horizontal, 24)
-                    .padding(.top, isSmallScreen ? 12 : 24)
-                    .padding(.bottom, isSmallScreen ? 14 : 20)
-                
-                // Раздел Копилок (Savings Goals)
-                savingsGoalsSection
-                    .padding(.bottom, isSmallScreen ? 16 : 24)
-                
-                // Белая шторка с транзакциями
-                transactionsBottomSheet
             }
         }
         .preferredColorScheme(.dark)
@@ -292,8 +296,8 @@ struct DashboardView: View {
         }
     }
     
-    // MARK: - Белая шторка с транзакциями
-    private var transactionsBottomSheet: some View {
+    // MARK: - Шторка с транзакциями (интегрирована в общий скролл)
+    private var transactionsSection: some View {
         VStack(spacing: 0) {
             // Заголовок шторки
             HStack {
@@ -322,8 +326,8 @@ struct DashboardView: View {
                 }
             }
             .padding(.horizontal, 24)
-            .padding(.top, isSmallScreen ? 16 : 24)
-            .padding(.bottom, isSmallScreen ? 12 : 16)
+            .padding(.top, 24)
+            .padding(.bottom, 16)
             
             // Список транзакций
             if financeService.transactions.isEmpty {
@@ -337,37 +341,31 @@ struct DashboardView: View {
                         .font(.headline)
                         .foregroundColor(.black.opacity(0.5))
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.white)
-                .clipShape(.rect(topLeadingRadius: isSmallScreen ? 24 : 32, topTrailingRadius: isSmallScreen ? 24 : 32))
-                .ignoresSafeArea(edges: .bottom)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 48)
             } else {
-                ScrollView {
-                    VStack(spacing: isSmallScreen ? 14 : 18) {
-                        ForEach(financeService.transactions) { transaction in
-                            TransactionRowView(transaction: transaction)
-                                .contextMenu {
-                                    Button(role: .destructive) {
-                                        HapticManager.shared.trigger(.warning)
-                                        withAnimation(.spring()) {
-                                            financeService.deleteTransaction(transaction)
-                                        }
-                                    } label: {
-                                        Label("Удалить", systemImage: "trash")
+                VStack(spacing: isSmallScreen ? 14 : 18) {
+                    ForEach(financeService.transactions) { transaction in
+                        TransactionRowView(transaction: transaction)
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    HapticManager.shared.trigger(.warning)
+                                    withAnimation(.spring()) {
+                                        financeService.deleteTransaction(transaction)
                                     }
+                                } label: {
+                                    Label("Удалить", systemImage: "trash")
                                 }
-                        }
+                            }
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 4)
-                    .padding(.bottom, isSmallScreen ? 90 : 110) // Динамический сдвиг под плавающий таб-бар
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.white)
-                .clipShape(.rect(topLeadingRadius: isSmallScreen ? 24 : 32, topTrailingRadius: isSmallScreen ? 24 : 32))
-                .ignoresSafeArea(edges: .bottom)
+                .padding(.horizontal, 24)
             }
         }
+        .frame(maxWidth: .infinity)
+        .background(Color.white)
+        .clipShape(.rect(topLeadingRadius: 32, topTrailingRadius: 32))
+        .padding(.bottom, isSmallScreen ? 80 : 100) // Отступ снизу для плавающего таб-бара
     }
     
     // MARK: - Вспомогательные методы
@@ -391,15 +389,11 @@ struct DashboardView: View {
         formatter.maximumFractionDigits = 2
         formatter.minimumFractionDigits = 2
         
-        guard let formattedString = formatter.string(from: NSNumber(value: balance)) else {
-            return ("$0", ".00")
-        }
-        
-        let components = formattedString.components(separatedBy: ".")
+        let components = formatter.string(from: NSNumber(value: balance))?.components(separatedBy: ".") ?? ["$0", "00"]
         if components.count == 2 {
             return (components[0], "." + components[1])
         }
-        return (formattedString, "")
+        return (components[0], ".00")
     }
     
     private func formatSpendingAmount(_ value: Double) -> String {

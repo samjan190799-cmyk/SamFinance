@@ -1,10 +1,9 @@
 import SwiftUI
 
-/// Экран управления взаиморасчетами (долгами) с поддержкой сегмент-контроля,
-/// создания новых долгов и отметки о выплате.
+/// Экран управления долгами с вкладками «Кредиты» и «Люди» в соответствии со стилем приложения.
 struct DebtsView: View {
     let financeService: FinanceService
-    @State private var selectedSegment = 0 // 0: Мне должны (Lent), 1: Я должен (Borrowed)
+    @State private var selectedSegment = 0 // 0: Кредиты, 1: Люди
     @State private var isShowingAddSheet = false
     
     private var isSmallScreen: Bool {
@@ -14,7 +13,7 @@ struct DebtsView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
-                Color(hex: "#0E0F12") // Стильный темный фон
+                Color(hex: "#0E0F12") // Глубокий темный фон
                     .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
@@ -23,7 +22,7 @@ struct DebtsView: View {
                         .padding(.horizontal, 24)
                         .padding(.top, isSmallScreen ? 4 : 8)
                     
-                    // Переключатель сегментов
+                    // Переключатель сегментов «Кредиты / Люди»
                     customSegmentControl
                         .padding(.horizontal, 24)
                         .padding(.top, isSmallScreen ? 12 : 20)
@@ -64,7 +63,7 @@ struct DebtsView: View {
         }
     }
     
-    // MARK: - Переключатель "Lent / Borrowed"
+    // MARK: - Переключатель "Кредиты / Люди"
     private var customSegmentControl: some View {
         HStack(spacing: 0) {
             Button {
@@ -73,7 +72,7 @@ struct DebtsView: View {
                     selectedSegment = 0
                 }
             } label: {
-                Text("Lent")
+                Text("Кредиты")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(selectedSegment == 0 ? .black : .white.opacity(0.45))
                     .frame(maxWidth: .infinity, minHeight: 38)
@@ -87,7 +86,7 @@ struct DebtsView: View {
                     selectedSegment = 1
                 }
             } label: {
-                Text("Borrowed")
+                Text("Люди")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(selectedSegment == 1 ? .black : .white.opacity(0.45))
                     .frame(maxWidth: .infinity, minHeight: 38)
@@ -104,23 +103,29 @@ struct DebtsView: View {
         }
     }
     
-    // MARK: - Шторка списка долгов
+    // MARK: - Шторка списка
     private var debtsBottomSheet: some View {
-        let filteredDebts = financeService.debts.filter { $0.isLent == (selectedSegment == 0) }
+        let filteredDebts = financeService.debts.filter { debt in
+            if selectedSegment == 0 {
+                return debt.type == .credit
+            } else {
+                return debt.type == .person
+            }
+        }
         
         return VStack(spacing: 0) {
             if filteredDebts.isEmpty {
                 VStack(spacing: 12) {
-                    Image(systemName: "hand.thumbsup.fill")
+                    Image(systemName: selectedSegment == 0 ? "building.columns.fill" : "person.2.fill")
                         .font(.system(size: 40))
                         .foregroundColor(.gray.opacity(0.35))
                         .symbolRenderingMode(.hierarchical)
                     
-                    Text("No active debts")
+                    Text("Пусто")
                         .font(.headline)
                         .foregroundColor(.black.opacity(0.6))
                     
-                    Text(selectedSegment == 0 ? "No one owes you money right now." : "You don't owe money to anyone right now.")
+                    Text(selectedSegment == 0 ? "У вас нет активных кредитов." : "У вас нет активных долгов людям.")
                         .font(.subheadline)
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
@@ -160,20 +165,20 @@ struct DebtsView: View {
     }
 }
 
-/// Строка конкретного долга
+/// Строка долга на шторке
 struct DebtRowView: View {
     let debt: Debt
     let financeService: FinanceService
     
     var body: some View {
         HStack(spacing: 16) {
-            // Иконка контакта с цветной точкой статуса
+            // Иконка в зависимости от типа долга с точкой статуса
             ZStack(alignment: .bottomTrailing) {
                 Circle()
                     .fill(Color.black.opacity(0.05))
                     .frame(width: 44, height: 44)
                 
-                Image(systemName: "person.fill")
+                Image(systemName: debt.type == .credit ? "building.columns.fill" : "person.fill")
                     .font(.system(size: 16))
                     .foregroundColor(.black.opacity(0.5))
                 
@@ -190,7 +195,7 @@ struct DebtRowView: View {
                     .foregroundColor(debt.isPaid ? .gray : .black)
                     .strikethrough(debt.isPaid)
                 
-                Text("Due: \(formatDate(debt.dueDate))")
+                Text("Срок: \(formatDate(debt.dueDate))")
                     .font(.system(size: 12))
                     .foregroundColor(.gray)
             }
@@ -202,7 +207,6 @@ struct DebtRowView: View {
                 .foregroundColor(debt.isPaid ? .gray : (debt.isLent ? .green : .red))
                 .strikethrough(debt.isPaid)
             
-            // Кнопка переключения выплаты
             Button {
                 HapticManager.shared.trigger(.success)
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
@@ -219,7 +223,7 @@ struct DebtRowView: View {
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "d MMMM"
-        formatter.locale = Locale(identifier: "en_US")
+        formatter.locale = Locale(identifier: "ru_RU")
         return formatter.string(from: date)
     }
     
@@ -237,49 +241,71 @@ struct AddDebtView: View {
     
     @State private var name: String = ""
     @State private var amountString: String = ""
-    @State private var isLent: Bool = true
+    @State private var isLent: Bool = false // Для Кредита всегда false (я должен), для Людей переключается
+    @State private var selectedType: DebtType = .credit
     @State private var dueDate: Date = Date()
     
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Name", text: $name)
+                    Picker("Категория долга", selection: $selectedType) {
+                        Text("Кредит").tag(DebtType.credit)
+                        Text("Человек").tag(DebtType.person)
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: selectedType) { _, newValue in
+                        if newValue == .credit {
+                            isLent = false // Кредит - всегда "Я должен"
+                        }
+                    }
+                } header: {
+                    Text("Категория")
+                }
+                
+                Section {
+                    TextField(selectedType == .credit ? "Название банка / кредитора" : "Имя человека", text: $name)
                         .textInputAutocapitalization(.words)
                     
                     HStack {
-                        Text("Amount ($)")
+                        Text("Сумма ($)")
                         Spacer()
                         TextField("0", text: $amountString)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                     }
                 } header: {
-                    Text("Debt Info")
+                    Text("Информация о долге")
+                }
+                
+                if selectedType == .person {
+                    Section {
+                        Picker("Направление", selection: $isLent) {
+                            Text("Мне должны").tag(true)
+                            Text("Я должен").tag(false)
+                        }
+                        .pickerStyle(.segmented)
+                    } header: {
+                        Text("Кто кому должен")
+                    }
                 }
                 
                 Section {
-                    Picker("Type", selection: $isLent) {
-                        Text("I lent (Мне должны)").tag(true)
-                        Text("I borrowed (Я должен)").tag(false)
-                    }
-                    .pickerStyle(.segmented)
-                    
-                    DatePicker("Due Date", selection: $dueDate, displayedComponents: .date)
+                    DatePicker("Срок возврата", selection: $dueDate, displayedComponents: .date)
                 } header: {
-                    Text("Details")
+                    Text("Сроки")
                 }
             }
-            .navigationTitle("New Debt")
+            .navigationTitle("Новый долг")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    Button("Отмена") {
                         dismiss()
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button("Сохранить") {
                         saveDebt()
                     }
                     .disabled(isSaveDisabled)
@@ -299,7 +325,9 @@ struct AddDebtView: View {
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             amount: amount,
             dueDate: dueDate,
-            isLent: isLent
+            isLent: selectedType == .credit ? false : isLent, // Кредиты всегда "Я должен"
+            isPaid: false,
+            type: selectedType
         )
         financeService.addDebt(debt)
         HapticManager.shared.trigger(.success)
