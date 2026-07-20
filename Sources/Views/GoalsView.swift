@@ -219,3 +219,110 @@ struct GoalItemRowView: View {
         return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
     }
 }
+
+/// Модальный экран создания новой копилки
+struct AddGoalView: View {
+    @Environment(\.dismiss) private var dismiss
+    let financeService: FinanceService
+    
+    @State private var title: String = ""
+    @State private var targetAmountString: String = ""
+    @State private var selectedColorIndex = 0
+    
+    // Предопределенные градиенты для копилок
+    let colorOptions = [
+        (colorHex: "#FFD200", gradient: ["#FFE259", "#FFA751"]), // Золотой
+        (colorHex: "#00F2FE", gradient: ["#00F2FE", "#4FACFE"]), // Бирюзовый
+        (colorHex: "#FF2D55", gradient: ["#FF2D55", "#FF5E62"]), // Розовый
+        (colorHex: "#AF52DE", gradient: ["#AF52DE", "#D100F3"])  // Фиолетовый
+    ]
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Goal Title (e.g. New Car)", text: $title)
+                        .textInputAutocapitalization(.sentences)
+                    
+                    HStack {
+                        Text("Target Amount ($)")
+                        Spacer()
+                        TextField("0", text: $targetAmountString)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                    }
+                } header: {
+                    Text("Goal Details")
+                }
+                
+                Section {
+                    HStack(spacing: 16) {
+                        ForEach(0..<colorOptions.count, id: \.self) { index in
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: colorOptions[index].gradient.map { Color(hex: $0) },
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 44, height: 44)
+                                .overlay {
+                                    if selectedColorIndex == index {
+                                        Circle()
+                                            .stroke(Color.white, lineWidth: 3)
+                                            .shadow(radius: 4)
+                                    }
+                                }
+                                .scaleEffect(selectedColorIndex == index ? 1.1 : 1.0)
+                                .onTapGesture {
+                                    HapticManager.shared.impact(.light)
+                                    withAnimation(.spring()) {
+                                        selectedColorIndex = index
+                                    }
+                                }
+                        }
+                    }
+                    .padding(.vertical, 8)
+                } header: {
+                    Text("Select Theme")
+                }
+            }
+            .navigationTitle("New Savings Goal")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        saveGoal()
+                    }
+                    .disabled(isSaveDisabled)
+                }
+            }
+        }
+    }
+    
+    private var isSaveDisabled: Bool {
+        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        Double(targetAmountString.replacingOccurrences(of: ",", with: ".")) ?? 0 <= 0
+    }
+    
+    private func saveGoal() {
+        guard let targetAmount = Double(targetAmountString.replacingOccurrences(of: ",", with: ".")) else { return }
+        let option = colorOptions[selectedColorIndex]
+        let goal = Goal(
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            targetAmount: targetAmount,
+            currentAmount: 0.0,
+            colorHex: option.colorHex,
+            gradientColors: option.gradient
+        )
+        financeService.addGoal(goal)
+        HapticManager.shared.trigger(.success)
+        dismiss()
+    }
+}
