@@ -59,6 +59,44 @@ public struct Card: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+/// Долг (взаиморасчеты с контактами)
+public struct Debt: Codable, Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public var name: String // Имя человека
+    public var amount: Double
+    public var dueDate: Date
+    public var isLent: Bool // true - мне должны (Lent), false - я должен (Borrowed)
+    public var isPaid: Bool // Статус погашения
+    
+    public init(id: UUID = UUID(), name: String, amount: Double, dueDate: Date = Date(), isLent: Bool, isPaid: Bool = false) {
+        self.id = id
+        self.name = name
+        self.amount = amount
+        self.dueDate = dueDate
+        self.isLent = isLent
+        self.isPaid = isPaid
+    }
+}
+
+/// Накопительная цель (Копилка)
+public struct Goal: Codable, Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public var title: String // Название цели (например, "На автомобиль")
+    public var targetAmount: Double // Целевая сумма
+    public var currentAmount: Double // Накоплено на данный момент
+    public var colorHex: String // Цвет свечения
+    public var gradientColors: [String] // Цвета градиента карточки цели
+    
+    public init(id: UUID = UUID(), title: String, targetAmount: Double, currentAmount: Double = 0.0, colorHex: String, gradientColors: [String]) {
+        self.id = id
+        self.title = title
+        self.targetAmount = targetAmount
+        self.currentAmount = currentAmount
+        self.colorHex = colorHex
+        self.gradientColors = gradientColors
+    }
+}
+
 /// Модель финансовой транзакции
 public struct Transaction: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID

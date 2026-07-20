@@ -1,13 +1,15 @@
 import SwiftUI
 import Charts
 
-/// Главный экран приложения с дизайном по макету 2, адаптированным под все размеры экранов iPhone (включая SE и mini).
+/// Главный экран приложения с дизайном по макету 2, адаптированным под все размеры экранов iPhone
+/// и включающим новый раздел накопительных копилок (Savings Goals).
 struct DashboardView: View {
     let financeService: FinanceService
     @Binding var selectedTab: Int
     @State private var isShowingAddSheet = false
+    @State private var isShowingAddGoalSheet = false
     
-    /// Определение компактных экранов (iPhone SE, 8, 7 и т.д.) для динамической адаптации верстки
+    /// Определение компактных экранов для динамической адаптации верстки
     private var isSmallScreen: Bool {
         UIScreen.main.bounds.height < 750
     }
@@ -38,6 +40,10 @@ struct DashboardView: View {
                 spendingSection
                     .padding(.horizontal, 24)
                     .padding(.top, isSmallScreen ? 12 : 24)
+                    .padding(.bottom, isSmallScreen ? 14 : 20)
+                
+                // Раздел Копилок (Savings Goals)
+                savingsGoalsSection
                     .padding(.bottom, isSmallScreen ? 16 : 24)
                 
                 // Белая шторка с транзакциями
@@ -47,6 +53,9 @@ struct DashboardView: View {
         .preferredColorScheme(.dark)
         .sheet(isPresented: $isShowingAddSheet) {
             AddTransactionView(financeService: financeService)
+        }
+        .sheet(isPresented: $isShowingAddGoalSheet) {
+            AddGoalView(financeService: financeService)
         }
     }
     
@@ -184,7 +193,7 @@ struct DashboardView: View {
         }
     }
     
-    // MARK: - Блок Spending (Расходы)
+    // MARK: - Блок расходов Spending
     private var spendingSection: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
@@ -199,20 +208,25 @@ struct DashboardView: View {
             
             Spacer()
             
-            // Наползающие друг на друга иконки брендов
-            HStack(spacing: -8) {
-                brandMiniIcon(name: "apple.logo", color: .white, bgColor: .black)
-                brandMiniIcon(name: "at", color: .white, bgColor: .black)
-                brandMiniIcon(name: "calendar", color: .white, bgColor: Color(hex: "#34C759"))
-                
-                // Счетчик
-                Text("+2")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: isSmallScreen ? 24 : 28, height: isSmallScreen ? 24 : 28)
-                    .background(Color(hex: "#1E1F22"))
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Color(hex: "#0E0F12"), lineWidth: 1.5))
+            // Наползающие друг на друга иконки брендов (если есть расходы)
+            if financeService.transactions.filter({ $0.type == .expense }).isEmpty {
+                Text("No spending yet")
+                    .font(.system(size: 12))
+                    .foregroundColor(.gray)
+            } else {
+                HStack(spacing: -8) {
+                    brandMiniIcon(name: "apple.logo", color: .white, bgColor: .black)
+                    brandMiniIcon(name: "at", color: .white, bgColor: .black)
+                    brandMiniIcon(name: "calendar", color: .white, bgColor: Color(hex: "#34C759"))
+                    
+                    Text("+2")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: isSmallScreen ? 24 : 28, height: isSmallScreen ? 24 : 28)
+                        .background(Color(hex: "#1E1F22"))
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(Color(hex: "#0E0F12"), lineWidth: 1.5))
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -222,6 +236,59 @@ struct DashboardView: View {
         .overlay {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.white.opacity(0.04), lineWidth: 1)
+        }
+    }
+    
+    // MARK: - Секция копилок (Savings Goals)
+    private var savingsGoalsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Savings Goals")
+                .font(.system(size: isSmallScreen ? 12 : 14))
+                .foregroundColor(.gray)
+                .padding(.horizontal, 24)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    // Кнопка добавления новой копилки
+                    Button {
+                        HapticManager.shared.impact(.light)
+                        isShowingAddGoalSheet = true
+                    } label: {
+                        VStack(spacing: 8) {
+                            Image(systemName: "plus")
+                                .font(.title3.bold())
+                                .foregroundColor(.white)
+                            Text("New Goal")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        .frame(width: 140, height: 95)
+                        .background(Color.white.opacity(0.05))
+                        .cornerRadius(20)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(Color.white.opacity(0.08), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .bevel, dash: [4, 4]))
+                        }
+                    }
+                    
+                    // Список созданных копилок
+                    ForEach(financeService.goals) { goal in
+                        GoalCardView(goal: goal, financeService: financeService)
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    HapticManager.shared.trigger(.warning)
+                                    withAnimation(.spring()) {
+                                        financeService.deleteGoal(id: goal.id)
+                                    }
+                                } label: {
+                                    Label("Delete Goal", systemImage: "trash")
+                                }
+                            }
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 4)
+            }
         }
     }
     
@@ -259,31 +326,48 @@ struct DashboardView: View {
             .padding(.bottom, isSmallScreen ? 12 : 16)
             
             // Список транзакций
-            ScrollView {
-                VStack(spacing: isSmallScreen ? 14 : 18) {
-                    ForEach(financeService.transactions) { transaction in
-                        TransactionRowView(transaction: transaction)
-                            .contextMenu {
-                                Button(role: .destructive) {
-                                    HapticManager.shared.trigger(.warning)
-                                    withAnimation(.spring()) {
-                                        financeService.deleteTransaction(transaction)
-                                    }
-                                } label: {
-                                    Label("Удалить", systemImage: "trash")
-                                }
-                            }
-                    }
+            if financeService.transactions.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "tray.fill")
+                        .font(.system(size: 40))
+                        .foregroundColor(.gray.opacity(0.35))
+                        .symbolRenderingMode(.hierarchical)
+                    
+                    Text("No transactions yet")
+                        .font(.headline)
+                        .foregroundColor(.black.opacity(0.5))
                 }
-                .padding(.horizontal, 24)
-                .padding(.top, 4)
-                .padding(.bottom, isSmallScreen ? 90 : 110) // Динамический сдвиг под плавающий таб-бар
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.white)
+                .clipShape(.rect(topLeadingRadius: isSmallScreen ? 24 : 32, topTrailingRadius: isSmallScreen ? 24 : 32))
+                .ignoresSafeArea(edges: .bottom)
+            } else {
+                ScrollView {
+                    VStack(spacing: isSmallScreen ? 14 : 18) {
+                        ForEach(financeService.transactions) { transaction in
+                            TransactionRowView(transaction: transaction)
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        HapticManager.shared.trigger(.warning)
+                                        withAnimation(.spring()) {
+                                            financeService.deleteTransaction(transaction)
+                                        }
+                                    } label: {
+                                        Label("Удалить", systemImage: "trash")
+                                    }
+                                }
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 4)
+                    .padding(.bottom, isSmallScreen ? 90 : 110) // Динамический сдвиг под плавающий таб-бар
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.white)
+                .clipShape(.rect(topLeadingRadius: isSmallScreen ? 24 : 32, topTrailingRadius: isSmallScreen ? 24 : 32))
+                .ignoresSafeArea(edges: .bottom)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.white)
-        .clipShape(.rect(topLeadingRadius: isSmallScreen ? 24 : 32, topTrailingRadius: isSmallScreen ? 24 : 32))
-        .ignoresSafeArea(edges: .bottom)
     }
     
     // MARK: - Вспомогательные методы
@@ -325,5 +409,211 @@ struct DashboardView: View {
         formatter.locale = Locale(identifier: "en_US")
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: value)) ?? "$\(value)"
+    }
+}
+
+/// Карточка накопительной цели (Копилки) с вводом суммы пополнения по нажатию
+struct GoalCardView: View {
+    let goal: Goal
+    let financeService: FinanceService
+    @State private var isShowingDepositAlert = false
+    @State private var depositAmountString = ""
+    
+    var body: some View {
+        Button {
+            HapticManager.shared.impact(.light)
+            isShowingDepositAlert = true
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                // Заголовок и процент выполнения
+                HStack {
+                    Text(goal.title)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    
+                    Spacer()
+                    
+                    Text("\(Int(progressPercent * 100))%")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white.opacity(0.9))
+                }
+                
+                Spacer()
+                
+                // Суммы накоплений
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("$\(formatAmount(goal.currentAmount))")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.white)
+                    
+                    Text("of $\(formatAmount(goal.targetAmount))")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.7))
+                }
+                
+                // Прогресс-бар
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color.white.opacity(0.2))
+                            .frame(height: 4)
+                        
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color.white)
+                            .frame(width: max(0, min(geo.size.width * CGFloat(progressPercent), geo.size.width)), height: 4)
+                    }
+                }
+                .frame(height: 4)
+            }
+            .padding(14)
+            .frame(width: 145, height: 95)
+            .background {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(
+                        LinearGradient(
+                            colors: goal.gradientColors.map { Color(hex: $0) },
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .shadow(color: Color(hex: goal.colorHex).opacity(0.35), radius: 10, x: 0, y: 6)
+        }
+        .alert("Deposit to \(goal.title)", isPresented: $isShowingDepositAlert) {
+            TextField("Amount ($)", text: $depositAmountString)
+                .keyboardType(.decimalPad)
+            Button("Cancel", role: .cancel) {
+                depositAmountString = ""
+            }
+            Button("Deposit") {
+                if let amount = Double(depositAmountString.replacingOccurrences(of: ",", with: ".")) {
+                    HapticManager.shared.trigger(.success)
+                    financeService.addFundsToGoal(id: goal.id, amount: amount)
+                }
+                depositAmountString = ""
+            }
+        } message: {
+            Text("Enter the amount you want to add to your savings goal.")
+        }
+    }
+    
+    private var progressPercent: Double {
+        guard goal.targetAmount > 0 else { return 0.0 }
+        return goal.currentAmount / goal.targetAmount
+    }
+    
+    private func formatAmount(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+    }
+}
+
+/// Модальный экран создания новой копилки
+struct AddGoalView: View {
+    @Environment(\.dismiss) private var dismiss
+    let financeService: FinanceService
+    
+    @State private var title: String = ""
+    @State private var targetAmountString: String = ""
+    @State private var selectedColorIndex = 0
+    
+    // Предопределенные градиенты для копилок
+    let colorOptions = [
+        (colorHex: "#FFD200", gradient: ["#FFE259", "#FFA751"]), // Золотой
+        (colorHex: "#00F2FE", gradient: ["#00F2FE", "#4FACFE"]), // Бирюзовый
+        (colorHex: "#FF2D55", gradient: ["#FF2D55", "#FF5E62"]), // Розовый
+        (colorHex: "#AF52DE", gradient: ["#AF52DE", "#D100F3"])  // Фиолетовый
+    ]
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Goal Title (e.g. New Car)", text: $title)
+                        .textInputAutocapitalization(.sentences)
+                    
+                    HStack {
+                        Text("Target Amount ($)")
+                        Spacer()
+                        TextField("0", text: $targetAmountString)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                    }
+                } header: {
+                    Text("Goal Details")
+                }
+                
+                Section {
+                    HStack(spacing: 16) {
+                        ForEach(0..<colorOptions.count, id: \.self) { index in
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: colorOptions[index].gradient.map { Color(hex: $0) },
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 44, height: 44)
+                                .overlay {
+                                    if selectedColorIndex == index {
+                                        Circle()
+                                            .stroke(Color.white, lineWidth: 3)
+                                            .shadow(radius: 4)
+                                    }
+                                }
+                                .scaleEffect(selectedColorIndex == index ? 1.1 : 1.0)
+                                .onTapGesture {
+                                    HapticManager.shared.impact(.light)
+                                    withAnimation(.spring()) {
+                                        selectedColorIndex = index
+                                    }
+                                }
+                        }
+                    }
+                    .padding(.vertical, 8)
+                } header: {
+                    Text("Select Theme")
+                }
+            }
+            .navigationTitle("New Savings Goal")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        saveGoal()
+                    }
+                    .disabled(isSaveDisabled)
+                }
+            }
+        }
+    }
+    
+    private var isSaveDisabled: Bool {
+        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        Double(targetAmountString.replacingOccurrences(of: ",", with: ".")) ?? 0 <= 0
+    }
+    
+    private func saveGoal() {
+        guard let targetAmount = Double(targetAmountString.replacingOccurrences(of: ",", with: ".")) else { return }
+        let option = colorOptions[selectedColorIndex]
+        let goal = Goal(
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            targetAmount: targetAmount,
+            currentAmount: 0.0,
+            colorHex: option.colorHex,
+            gradientColors: option.gradient
+        )
+        financeService.addGoal(goal)
+        HapticManager.shared.trigger(.success)
+        dismiss()
     }
 }

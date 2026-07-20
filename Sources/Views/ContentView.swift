@@ -1,12 +1,12 @@
 import SwiftUI
 
 /// Главный контейнер приложения. Управляет кастомным Floating Tab Bar (плавающей пилюлей)
-/// и переключением экранов (Контакты, Главная, Карты). Адаптирован под все типы экранов.
+/// и переключением экранов (Долги, Главная, Карты). Адаптирован под все типы экранов.
 struct ContentView: View {
     @State private var financeService = FinanceService()
     @State private var selectedTab = 1 // По умолчанию открыт главный экран (индекс 1)
     
-    /// Определение компактных экранов (iPhone SE, 8, 7 и т.д.) для динамической адаптации верстки
+    /// Определение компактных экранов для динамической адаптации верстки
     private var isSmallScreen: Bool {
         UIScreen.main.bounds.height < 750
     }
@@ -17,7 +17,7 @@ struct ContentView: View {
             ZStack {
                 switch selectedTab {
                 case 0:
-                    FriendsView()
+                    DebtsView(financeService: financeService)
                 case 1:
                     DashboardView(financeService: financeService, selectedTab: $selectedTab)
                 case 2:
@@ -30,7 +30,7 @@ struct ContentView: View {
             
             // Кастомный плавающий таб-бар
             customTabBar
-                .padding(.bottom, isSmallScreen ? 12 : 24) // Адаптивный отступ снизу (12 для экранов с кнопкой Home, 24 для безрамочных)
+                .padding(.bottom, isSmallScreen ? 12 : 24) // Адаптивный отступ снизу
         }
         .background(Color(hex: "#0E0F12")) // Темный фон на уровне всего контейнера
         .ignoresSafeArea(edges: .bottom)
@@ -39,7 +39,7 @@ struct ContentView: View {
     // MARK: - Панель таб-бара (Floating Tab Bar)
     private var customTabBar: some View {
         HStack(spacing: 0) {
-            // Таб 0: Друзья
+            // Таб 0: Долги
             tabButton(index: 0, activeIcon: "person.2.fill", inactiveIcon: "person.2")
             
             Spacer()
@@ -53,7 +53,7 @@ struct ContentView: View {
             tabButton(index: 2, activeIcon: "creditcard.fill", inactiveIcon: "creditcard")
         }
         .padding(.horizontal, 8)
-        .frame(width: isSmallScreen ? 200 : 220, height: isSmallScreen ? 52 : 58) // Более компактный размер на iPhone SE
+        .frame(width: isSmallScreen ? 200 : 220, height: isSmallScreen ? 52 : 58) // Компактный размер на iPhone SE
         .background(Color(hex: "#17181A")) // Темно-серый матовый фон
         .clipShape(Capsule())
         .overlay {
