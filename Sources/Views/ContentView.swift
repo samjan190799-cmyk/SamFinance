@@ -1,10 +1,10 @@
 import SwiftUI
 
 /// Главный контейнер приложения. Управляет кастомным Floating Tab Bar (плавающей пилюлей)
-/// и переключением экранов (Долги, Главная, Карты). Адаптирован под все типы экранов.
+/// и переключением экранов (Долги, Копилки, Главная, Карты). Адаптирован под все типы экранов.
 struct ContentView: View {
     @State private var financeService = FinanceService()
-    @State private var selectedTab = 1 // По умолчанию открыт главный экран (индекс 1)
+    @State private var selectedTab = 2 // По умолчанию открыт главный экран (индекс 2)
     
     /// Определение компактных экранов для динамической адаптации верстки
     private var isSmallScreen: Bool {
@@ -19,8 +19,10 @@ struct ContentView: View {
                 case 0:
                     DebtsView(financeService: financeService)
                 case 1:
-                    DashboardView(financeService: financeService, selectedTab: $selectedTab)
+                    GoalsView(financeService: financeService)
                 case 2:
+                    DashboardView(financeService: financeService, selectedTab: $selectedTab)
+                case 3:
                     CardsView(financeService: financeService)
                 default:
                     DashboardView(financeService: financeService, selectedTab: $selectedTab)
@@ -44,16 +46,21 @@ struct ContentView: View {
             
             Spacer()
             
-            // Таб 1: Главная
-            tabButton(index: 1, activeIcon: "house.fill", inactiveIcon: "house")
+            // Таб 1: Копилки
+            tabButton(index: 1, activeIcon: "star.fill", inactiveIcon: "star")
             
             Spacer()
             
-            // Таб 2: Карты
-            tabButton(index: 2, activeIcon: "creditcard.fill", inactiveIcon: "creditcard")
+            // Таб 2: Главная
+            tabButton(index: 2, activeIcon: "house.fill", inactiveIcon: "house")
+            
+            Spacer()
+            
+            // Таб 3: Карты
+            tabButton(index: 3, activeIcon: "creditcard.fill", inactiveIcon: "creditcard")
         }
         .padding(.horizontal, 8)
-        .frame(width: isSmallScreen ? 200 : 220, height: isSmallScreen ? 52 : 58) // Компактный размер на iPhone SE
+        .frame(width: isSmallScreen ? 240 : 280, height: isSmallScreen ? 52 : 58) // Немного шире для размещения 4 кнопок
         .background(Color(hex: "#17181A")) // Темно-серый матовый фон
         .clipShape(Capsule())
         .overlay {
@@ -79,15 +86,15 @@ struct ContentView: View {
                     // Белая подложка под активной иконкой
                     Capsule()
                         .fill(Color.white)
-                        .frame(width: isSmallScreen ? 44 : 50, height: isSmallScreen ? 34 : 40)
+                        .frame(width: isSmallScreen ? 42 : 48, height: isSmallScreen ? 34 : 40)
                         .transition(.scale.combined(with: .opacity))
                 }
                 
                 Image(systemName: isSelected ? activeIcon : inactiveIcon)
-                    .font(.system(size: isSmallScreen ? 16 : 18, weight: .bold))
+                    .font(.system(size: isSmallScreen ? 15 : 17, weight: .bold))
                     .foregroundColor(isSelected ? .black : .white.opacity(0.4))
             }
-            .frame(width: isSmallScreen ? 54 : 60, height: isSmallScreen ? 42 : 48)
+            .frame(width: isSmallScreen ? 50 : 56, height: isSmallScreen ? 42 : 48)
         }
     }
 }

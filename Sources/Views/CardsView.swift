@@ -1,80 +1,96 @@
 import SwiftUI
 
-/// Управление банковскими картами пользователя.
-/// Адаптировано под все размеры экранов iPhone.
+/// Экран управления банковскими картами пользователя с неоновым свечением и стеклянными кнопками управления.
+/// Без лишнего пространства сверху и с фоном, уходящим до самого низа.
 struct CardsView: View {
     let financeService: FinanceService
-
+    
     private var isSmallScreen: Bool {
         UIScreen.main.bounds.height < 750
     }
-
+    
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: isSmallScreen ? 16 : 24) {
-                    ForEach(financeService.cards) { card in
-                        CardItemView(card: card, financeService: financeService)
+        ZStack(alignment: .top) {
+            Color(hex: "#0E0F12") // Темный глубокий фон
+                .ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // Кастомная шапка
+                headerView
+                    .padding(.horizontal, 24)
+                    .padding(.top, isSmallScreen ? 12 : 20)
+                    .padding(.bottom, isSmallScreen ? 16 : 24)
+                
+                // Список карт
+                ScrollView {
+                    VStack(spacing: isSmallScreen ? 16 : 24) {
+                        ForEach(financeService.cards) { card in
+                            CardItemView(card: card, financeService: financeService)
+                        }
                     }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 4)
+                    .padding(.bottom, isSmallScreen ? 90 : 110) // Сдвиг под плавающий таб-бар
                 }
-                .padding(.horizontal)
-                .padding(.top, 16)
-                .padding(.bottom, isSmallScreen ? 90 : 110) // Сдвиг под плавающий таб-бар
             }
-            .background(Color(hex: "#0E0F12")) // Темный глубокий фон
-            .preferredColorScheme(.dark)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Text("Cards")
-                        .font(.system(size: isSmallScreen ? 28 : 32, weight: .bold))
-                        .foregroundColor(.white)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        HapticManager.shared.trigger(.success)
-                    } label: {
-                        Text("Order a card")
-                            .font(.system(size: isSmallScreen ? 11 : 13, weight: .semibold))
-                            .foregroundColor(.black)
-                            .padding(.horizontal, isSmallScreen ? 12 : 16)
-                            .padding(.vertical, isSmallScreen ? 6 : 8)
-                            .background(Color.white)
-                            .clipShape(Capsule())
-                    }
-                }
+            .ignoresSafeArea(edges: .bottom)
+        }
+        .preferredColorScheme(.dark)
+    }
+    
+    // MARK: - Шапка
+    private var headerView: some View {
+        HStack {
+            Text("Cards")
+                .font(.system(size: isSmallScreen ? 28 : 32, weight: .bold))
+                .foregroundColor(.white)
+            
+            Spacer()
+            
+            Button {
+                HapticManager.shared.trigger(.success)
+            } label: {
+                Text("Order a card")
+                    .font(.system(size: isSmallScreen ? 11 : 13, weight: .semibold))
+                    .foregroundColor(.black)
+                    .padding(.horizontal, isSmallScreen ? 12 : 16)
+                    .padding(.vertical, isSmallScreen ? 6 : 8)
+                    .background(Color.white)
+                    .clipShape(Capsule())
             }
         }
     }
 }
 
-/// Представление карты.
+/// Визуальное представление банковской карты с поддержкой градиентов, неонового свечения и эффекта заморозки.
 struct CardItemView: View {
     let card: Card
     let financeService: FinanceService
-
+    
     private var isSmallScreen: Bool {
         UIScreen.main.bounds.height < 750
     }
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Верхняя часть (Тип и последние цифры номера)
+            // Верхняя часть (Тип карты и последние цифры)
             HStack {
                 Text(card.type)
                     .font(.system(size: isSmallScreen ? 14 : 16, weight: .medium))
                     .foregroundColor(.white.opacity(0.85))
+                
                 Spacer()
+                
                 Text("•••• \(card.number)")
                     .font(.system(size: isSmallScreen ? 14 : 16, weight: .semibold, design: .monospaced))
                     .foregroundColor(.white)
             }
             .padding(.horizontal, 24)
             .padding(.top, isSmallScreen ? 18 : 24)
-
+            
             Spacer()
-
-            // Нижняя часть
+            
+            // Нижняя часть (Управляющие кнопки и логотип платежной системы)
             HStack(alignment: .bottom) {
                 HStack(spacing: 10) {
                     // Кнопка заморозки
@@ -85,18 +101,20 @@ struct CardItemView: View {
                         }
                     }
                     .foregroundColor(card.isFrozen ? .blue : .white)
-
-                    // Кнопка реквизитов
+                    
+                    // Кнопка показа реквизитов (иконка карты с цифрами)
                     CardActionButton(iconName: "creditcard") {
                         HapticManager.shared.impact(.light)
                     }
-
+                    
                     // Кнопка настроек
                     CardActionButton(iconName: "gearshape") {
                         HapticManager.shared.impact(.light)
                     }
                 }
+                
                 Spacer()
+                
                 // Логотип MasterCard
                 MasterCardLogoView()
             }
@@ -121,7 +139,7 @@ struct CardItemView: View {
                     .stroke(Color.blue.opacity(0.35), lineWidth: 2)
             }
         }
-        // Неоновое свечение
+        // Неоновое свечение (тень с цветом карты)
         .shadow(color: Color(hex: card.colorHex).opacity(card.isFrozen ? 0.12 : 0.38), radius: isSmallScreen ? 12 : 18, x: 0, y: isSmallScreen ? 6 : 10)
     }
 }
@@ -130,7 +148,7 @@ struct CardItemView: View {
 struct CardActionButton: View {
     let iconName: String
     let action: () -> Void
-
+    
     var body: some View {
         Button(action: action) {
             Image(systemName: iconName)

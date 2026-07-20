@@ -2,14 +2,13 @@ import SwiftUI
 import Charts
 
 /// Главный экран приложения с дизайном по макету 2.
-/// Все элементы (баланс, карты, spending, копилки, транзакции) скроллируются в единой ленте,
+/// Все элементы (баланс, карты, spending, транзакции) скроллируются в единой ленте,
 /// что гарантирует идеальное отображение на любых экранах iPhone (включая iPhone 15 Pro и SE)
 /// и предотвращает сжатие списка транзакций.
 struct DashboardView: View {
     let financeService: FinanceService
     @Binding var selectedTab: Int
     @State private var isShowingAddSheet = false
-    @State private var isShowingAddGoalSheet = false
     
     /// Определение компактных экранов для динамической адаптации верстки
     private var isSmallScreen: Bool {
@@ -26,7 +25,7 @@ struct DashboardView: View {
                     // Шапка (Профиль и уведомления)
                     headerView
                         .padding(.horizontal, 24)
-                        .padding(.top, isSmallScreen ? 8 : 16)
+                        .padding(.top, isSmallScreen ? 12 : 20)
                     
                     // Сводка баланса и выглядывающие карты справа
                     HStack(alignment: .center, spacing: 0) {
@@ -44,22 +43,16 @@ struct DashboardView: View {
                         .padding(.horizontal, 24)
                         .padding(.top, isSmallScreen ? 16 : 24)
                     
-                    // Раздел Копилок (Savings Goals)
-                    savingsGoalsSection
-                        .padding(.top, isSmallScreen ? 16 : 24)
-                    
                     // Белая шторка с транзакциями (теперь плавно выкатывается снизу в общем скролле)
                     transactionsSection
                         .padding(.top, isSmallScreen ? 20 : 28)
                 }
             }
+            .ignoresSafeArea(edges: .bottom) // Позволяет скроллу и плашке уходить до низа экрана
         }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $isShowingAddSheet) {
             AddTransactionView(financeService: financeService)
-        }
-        .sheet(isPresented: $isShowingAddGoalSheet) {
-            AddGoalView(financeService: financeService)
         }
     }
     
@@ -166,7 +159,7 @@ struct DashboardView: View {
         Button {
             HapticManager.shared.trigger(.success)
             withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                selectedTab = 2 // Переключение на вкладку карт
+                selectedTab = 3 // Переключение на вкладку карт (теперь это вкладка 3)
             }
         } label: {
             ZStack {
@@ -240,59 +233,6 @@ struct DashboardView: View {
         .overlay {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.white.opacity(0.04), lineWidth: 1)
-        }
-    }
-    
-    // MARK: - Секция копилок (Savings Goals)
-    private var savingsGoalsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Savings Goals")
-                .font(.system(size: isSmallScreen ? 12 : 14))
-                .foregroundColor(.gray)
-                .padding(.horizontal, 24)
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    // Кнопка добавления новой копилки
-                    Button {
-                        HapticManager.shared.impact(.light)
-                        isShowingAddGoalSheet = true
-                    } label: {
-                        VStack(spacing: 8) {
-                            Image(systemName: "plus")
-                                .font(.title3.bold())
-                                .foregroundColor(.white)
-                            Text("New Goal")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(.white)
-                        }
-                        .frame(width: 140, height: 95)
-                        .background(Color.white.opacity(0.05))
-                        .cornerRadius(20)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(Color.white.opacity(0.08), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .bevel, dash: [4, 4]))
-                        }
-                    }
-                    
-                    // Список созданных копилок
-                    ForEach(financeService.goals) { goal in
-                        GoalCardView(goal: goal, financeService: financeService)
-                            .contextMenu {
-                                Button(role: .destructive) {
-                                    HapticManager.shared.trigger(.warning)
-                                    withAnimation(.spring()) {
-                                        financeService.deleteGoal(id: goal.id)
-                                    }
-                                } label: {
-                                    Label("Delete Goal", systemImage: "trash")
-                                }
-                            }
-                    }
-                }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 4)
-            }
         }
     }
     
@@ -403,265 +343,5 @@ struct DashboardView: View {
         formatter.locale = Locale(identifier: "en_US")
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: value)) ?? "$\(value)"
-    }
-}
-
-/// Карточка накопительной цели (Копилки) с вводом суммы пополнения по нажатию
-struct GoalCardView: View {
-    let goal: Goal
-    let financeService: FinanceService
-    @State private var isShowingDepositAlert = false
-    @State private var depositAmountString = ""
-    
-    var body: some View {
-        Button {
-            HapticManager.shared.impact(.light)
-            isShowingDepositAlert = true
-        } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                // Заголовок и процент выполнения
-                HStack {
-                    Text(goal.title)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                    
-                    Spacer()
-                    
-                    Text("\(Int(progressPercent * 100))%")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.white.opacity(0.9))
-                }
-                
-                Spacer()
-                
-                // Суммы накоплений
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("$\(formatAmount(goal.currentAmount))")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(.white)
-                    
-                    Text("of $\(formatAmount(goal.targetAmount))")
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.7))
-                }
-                
-                // Прогресс-бар
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.white.opacity(0.2))
-                            .frame(height: 4)
-                        
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.white)
-                            .frame(width: max(0, min(geo.size.width * CGFloat(progressPercent), geo.size.width)), height: 4)
-                    }
-                }
-                .frame(height: 4)
-            }
-            .padding(14)
-            .frame(width: 145, height: 95)
-            .background {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(
-                        LinearGradient(
-                            colors: goal.gradientColors.map { Color(hex: $0) },
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-            .shadow(color: Color(hex: goal.colorHex).opacity(0.35), radius: 10, x: 0, y: 6)
-        }
-        .alert("Deposit to \(goal.title)", isPresented: $isShowingDepositAlert) {
-            TextField("Amount ($)", text: $depositAmountString)
-                .keyboardType(.decimalPad)
-            Button("Cancel", role: .cancel) {
-                depositAmountString = ""
-            }
-            Button("Deposit") {
-                if let amount = Double(depositAmountString.replacingOccurrences(of: ",", with: ".")) {
-                    HapticManager.shared.trigger(.success)
-                    financeService.addFundsToGoal(id: goal.id, amount: amount)
-                }
-                depositAmountString = ""
-            }
-        } message: {
-            Text("Enter the amount you want to add to your savings goal.")
-        }
-    }
-    
-    private var progressPercent: Double {
-        guard goal.targetAmount > 0 else { return 0.0 }
-        return goal.currentAmount / goal.targetAmount
-    }
-    
-    private func formatAmount(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
-    }
-}
-
-/// Модальный экран создания новой копилки
-struct AddGoalView: View {
-    @Environment(\.dismiss) private var dismiss
-    let financeService: FinanceService
-    
-    @State private var title: String = ""
-    @State private var targetAmountString: String = ""
-    @State private var selectedColorIndex = 0
-    
-    // Предопределенные градиенты для копилок
-    let colorOptions = [
-        (colorHex: "#FFD200", gradient: ["#FFE259", "#FFA751"]), // Золотой
-        (colorHex: "#00F2FE", gradient: ["#00F2FE", "#4FACFE"]), // Бирюзовый
-        (colorHex: "#FF2D55", gradient: ["#FF2D55", "#FF5E62"]), // Розовый
-        (colorHex: "#AF52DE", gradient: ["#AF52DE", "#D100F3"])  // Фиолетовый
-    ]
-    
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("Goal Title (e.g. New Car)", text: $title)
-                        .textInputAutocapitalization(.sentences)
-                    
-                    HStack {
-                        Text("Target Amount ($)")
-                        Spacer()
-                        TextField("0", text: $targetAmountString)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                    }
-                } header: {
-                    Text("Goal Details")
-                }
-                
-                Section {
-                    HStack(spacing: 16) {
-                        ForEach(0..<colorOptions.count, id: \.self) { index in
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: colorOptions[index].gradient.map { Color(hex: $0) },
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .frame(width: 44, height: 44)
-                                .overlay {
-                                    if selectedColorIndex == index {
-                                        Circle()
-                                            .stroke(Color.white, lineWidth: 3)
-                                            .shadow(radius: 4)
-                                    }
-                                }
-                                .scaleEffect(selectedColorIndex == index ? 1.1 : 1.0)
-                                .onTapGesture {
-                                    HapticManager.shared.impact(.light)
-                                    withAnimation(.spring()) {
-                                        selectedColorIndex = index
-                                    }
-                                }
-                        }
-                    }
-                    .padding(.vertical, 8)
-                } header: {
-                    Text("Select Theme")
-                }
-            }
-            .navigationTitle("New Savings Goal")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        saveGoal()
-                    }
-                    .disabled(isSaveDisabled)
-                }
-            }
-        }
-    }
-    
-    private var isSaveDisabled: Bool {
-        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-        Double(targetAmountString.replacingOccurrences(of: ",", with: ".")) ?? 0 <= 0
-    }
-    
-    private func saveGoal() {
-        guard let targetAmount = Double(targetAmountString.replacingOccurrences(of: ",", with: ".")) else { return }
-        let option = colorOptions[selectedColorIndex]
-        let goal = Goal(
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            targetAmount: targetAmount,
-            currentAmount: 0.0,
-            colorHex: option.colorHex,
-            gradientColors: option.gradient
-        )
-        financeService.addGoal(goal)
-        HapticManager.shared.trigger(.success)
-        dismiss()
-    }
-}
-
-/// Строка транзакции на белой шторке
-struct TransactionRowView: View {
-    let transaction: Transaction
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            // Иконка бренда с цветной точкой в правом нижнем углу
-            ZStack(alignment: .bottomTrailing) {
-                Circle()
-                    .fill(transaction.type == .income ? Color.green.opacity(0.12) : Color.black.opacity(0.05))
-                    .frame(width: 44, height: 44)
-                
-                Image(systemName: transaction.brandIcon ?? transaction.category.icon)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(transaction.type == .income ? .green : .black)
-                
-                // Цветная точка бренда
-                if let colorHex = transaction.brandColorHex {
-                    Circle()
-                        .fill(Color(hex: colorHex))
-                        .frame(width: 10, height: 10)
-                        .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
-                        .offset(x: 2, y: 2)
-                }
-            }
-            
-            // Название бренда и категория
-            VStack(alignment: .leading, spacing: 4) {
-                Text(transaction.brandName ?? transaction.title)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.black)
-                
-                Text(transaction.category.name)
-                    .font(.system(size: 12))
-                    .foregroundColor(.gray)
-            }
-            
-            Spacer()
-            
-            // Сумма
-            Text(transaction.type == .income ? "+\(formatAmount(transaction.amount)) $" : "-\(formatAmount(transaction.amount)) $")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundColor(transaction.type == .income ? .green : .black)
-        }
-    }
-    
-    private func formatAmount(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
     }
 }

@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Экран управления долгами с вкладками «Кредиты» и «Люди» в соответствии со стилем приложения.
+/// Без лишнего пустого пространства сверху и с белой шторкой, уходящей до низа экрана.
 struct DebtsView: View {
     let financeService: FinanceService
     @State private var selectedSegment = 0 // 0: Кредиты, 1: Люди
@@ -11,31 +12,30 @@ struct DebtsView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            ZStack(alignment: .top) {
-                Color(hex: "#0E0F12") // Глубокий темный фон
-                    .ignoresSafeArea()
+        ZStack(alignment: .top) {
+            Color(hex: "#0E0F12") // Глубокий темный фон
+                .ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // Шапка
+                headerView
+                    .padding(.horizontal, 24)
+                    .padding(.top, isSmallScreen ? 12 : 20)
                 
-                VStack(spacing: 0) {
-                    // Шапка
-                    headerView
-                        .padding(.horizontal, 24)
-                        .padding(.top, isSmallScreen ? 4 : 8)
-                    
-                    // Переключатель сегментов «Кредиты / Люди»
-                    customSegmentControl
-                        .padding(.horizontal, 24)
-                        .padding(.top, isSmallScreen ? 12 : 20)
-                        .padding(.bottom, isSmallScreen ? 16 : 24)
-                    
-                    // Белая шторка со списком
-                    debtsBottomSheet
-                }
+                // Переключатель сегментов «Кредиты / Люди»
+                customSegmentControl
+                    .padding(.horizontal, 24)
+                    .padding(.top, isSmallScreen ? 12 : 20)
+                    .padding(.bottom, isSmallScreen ? 16 : 24)
+                
+                // Белая шторка со списком
+                debtsBottomSheet
             }
-            .preferredColorScheme(.dark)
-            .sheet(isPresented: $isShowingAddSheet) {
-                AddDebtView(financeService: financeService)
-            }
+            .ignoresSafeArea(edges: .bottom) // Позволяет белой шторке уходить до низа экрана
+        }
+        .preferredColorScheme(.dark)
+        .sheet(isPresented: $isShowingAddSheet) {
+            AddDebtView(financeService: financeService)
         }
     }
     
@@ -134,7 +134,6 @@ struct DebtsView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.white)
                 .clipShape(.rect(topLeadingRadius: isSmallScreen ? 24 : 32, topTrailingRadius: isSmallScreen ? 24 : 32))
-                .ignoresSafeArea(edges: .bottom)
             } else {
                 ScrollView {
                     VStack(spacing: 18) {
@@ -159,178 +158,7 @@ struct DebtsView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.white)
                 .clipShape(.rect(topLeadingRadius: isSmallScreen ? 24 : 32, topTrailingRadius: isSmallScreen ? 24 : 32))
-                .ignoresSafeArea(edges: .bottom)
             }
         }
-    }
-}
-
-/// Строка долга на шторке
-struct DebtRowView: View {
-    let debt: Debt
-    let financeService: FinanceService
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            // Иконка в зависимости от типа долга с точкой статуса
-            ZStack(alignment: .bottomTrailing) {
-                Circle()
-                    .fill(Color.black.opacity(0.05))
-                    .frame(width: 44, height: 44)
-                
-                Image(systemName: debt.type == .credit ? "building.columns.fill" : "person.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(.black.opacity(0.5))
-                
-                Circle()
-                    .fill(debt.isLent ? Color.green : Color.red)
-                    .frame(width: 10, height: 10)
-                    .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
-                    .offset(x: 2, y: 2)
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(debt.name)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(debt.isPaid ? .gray : .black)
-                    .strikethrough(debt.isPaid)
-                
-                Text("Срок: \(formatDate(debt.dueDate))")
-                    .font(.system(size: 12))
-                    .foregroundColor(.gray)
-            }
-            
-            Spacer()
-            
-            Text("\(formatAmount(debt.amount)) $")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundColor(debt.isPaid ? .gray : (debt.isLent ? .green : .red))
-                .strikethrough(debt.isPaid)
-            
-            Button {
-                HapticManager.shared.trigger(.success)
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                    financeService.togglePayDebt(id: debt.id)
-                }
-            } label: {
-                Image(systemName: debt.isPaid ? "checkmark.circle.fill" : "checkmark.circle")
-                    .font(.title3)
-                    .foregroundColor(debt.isPaid ? .green : .gray)
-            }
-        }
-    }
-    
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "d MMMM"
-        formatter.locale = Locale(identifier: "ru_RU")
-        return formatter.string(from: date)
-    }
-    
-    private func formatAmount(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
-    }
-}
-
-/// Модальный экран создания нового долга
-struct AddDebtView: View {
-    @Environment(\.dismiss) private var dismiss
-    let financeService: FinanceService
-    
-    @State private var name: String = ""
-    @State private var amountString: String = ""
-    @State private var isLent: Bool = false // Для Кредита всегда false (я должен), для Людей переключается
-    @State private var selectedType: DebtType = .credit
-    @State private var dueDate: Date = Date()
-    
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Picker("Категория долга", selection: $selectedType) {
-                        Text("Кредит").tag(DebtType.credit)
-                        Text("Человек").tag(DebtType.person)
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: selectedType) { _, newValue in
-                        if newValue == .credit {
-                            isLent = false // Кредит - всегда "Я должен"
-                        }
-                    }
-                } header: {
-                    Text("Категория")
-                }
-                
-                Section {
-                    TextField(selectedType == .credit ? "Название банка / кредитора" : "Имя человека", text: $name)
-                        .textInputAutocapitalization(.words)
-                    
-                    HStack {
-                        Text("Сумма ($)")
-                        Spacer()
-                        TextField("0", text: $amountString)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                    }
-                } header: {
-                    Text("Информация о долге")
-                }
-                
-                if selectedType == .person {
-                    Section {
-                        Picker("Направление", selection: $isLent) {
-                            Text("Мне должны").tag(true)
-                            Text("Я должен").tag(false)
-                        }
-                        .pickerStyle(.segmented)
-                    } header: {
-                        Text("Кто кому должен")
-                    }
-                }
-                
-                Section {
-                    DatePicker("Срок возврата", selection: $dueDate, displayedComponents: .date)
-                } header: {
-                    Text("Сроки")
-                }
-            }
-            .navigationTitle("Новый долг")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Отмена") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Сохранить") {
-                        saveDebt()
-                    }
-                    .disabled(isSaveDisabled)
-                }
-            }
-        }
-    }
-    
-    private var isSaveDisabled: Bool {
-        name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-        Double(amountString.replacingOccurrences(of: ",", with: ".")) ?? 0 <= 0
-    }
-    
-    private func saveDebt() {
-        guard let amount = Double(amountString.replacingOccurrences(of: ",", with: ".")) else { return }
-        let debt = Debt(
-            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-            amount: amount,
-            dueDate: dueDate,
-            isLent: selectedType == .credit ? false : isLent, // Кредиты всегда "Я должен"
-            isPaid: false,
-            type: selectedType
-        )
-        financeService.addDebt(debt)
-        HapticManager.shared.trigger(.success)
-        dismiss()
     }
 }
