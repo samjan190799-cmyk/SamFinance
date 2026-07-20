@@ -1,6 +1,7 @@
 name: SamFinance
 options:
   bundleIdPrefix: com.samvel.samfinance
+  xcodeVersion: "15.0"
 targets:
   SamFinance:
     type: application
