@@ -30,7 +30,7 @@ struct CardsView: View {
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 4)
-                    .padding(.bottom, isSmallScreen ? 90 : 110) // Сдвиг под плавающий таб-бар
+                    .padding(.bottom, isSmallScreen ? 110 : 140) // Сдвиг под плавающий таб-бар
                 }
             }
             .ignoresSafeArea(edges: .bottom)

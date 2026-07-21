@@ -50,7 +50,7 @@ struct DashboardView: View {
                     analyticsSection
                         .padding(.horizontal, 24)
                         .padding(.top, isSmallScreen ? 18 : 28)
-                        .padding(.bottom, isSmallScreen ? 90 : 110) // Отступ под таб-бар
+                        .padding(.bottom, isSmallScreen ? 110 : 140) // Отступ под таб-бар
                 }
             }
             .ignoresSafeArea(edges: .bottom)

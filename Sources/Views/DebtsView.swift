@@ -153,7 +153,7 @@ struct DebtsView: View {
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 24)
-                    .padding(.bottom, isSmallScreen ? 90 : 110)
+                    .padding(.bottom, isSmallScreen ? 110 : 140)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.white)
