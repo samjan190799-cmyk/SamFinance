@@ -180,13 +180,7 @@ struct GoalItemRowView: View {
             .frame(height: 120)
             .background {
                 RoundedRectangle(cornerRadius: 24)
-                    .fill(
-                        LinearGradient(
-                            colors: goal.gradientColors.map { Color(hex: $0) },
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(cardGradient)
             }
             .shadow(color: Color(hex: goal.colorHex).opacity(0.35), radius: 12, x: 0, y: 8)
         }
@@ -211,6 +205,14 @@ struct GoalItemRowView: View {
     private var progressPercent: Double {
         guard goal.targetAmount > 0 else { return 0.0 }
         return goal.currentAmount / goal.targetAmount
+    }
+    
+    private var cardGradient: LinearGradient {
+        LinearGradient(
+            colors: goal.gradientColors.map { Color(hex: $0) },
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
     
     private func formatAmount(_ value: Double) -> String {

@@ -255,109 +255,114 @@ struct DashboardView: View {
     // MARK: - Графики расходов (Swift Charts)
     private var analyticsSection: some View {
         VStack(spacing: 20) {
-            // График 1: Линейный график динамики расходов
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Динамика расходов за неделю")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white.opacity(0.85))
-                
-                if chartData.isEmpty || financeService.totalSpending == 0 {
-                    emptyChartPlaceholder
-                } else {
-                    Chart {
-                        ForEach(chartData) { item in
-                            // Градиентная зона под линией
-                            AreaMark(
-                                x: .value("Дата", item.date, unit: .day),
-                                y: .value("Траты", item.amount)
-                            )
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [Color(hex: "#00F2FE").opacity(0.25), Color(hex: "#00F2FE").opacity(0.0)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            .interpolationMethod(.catmullRom)
-                            
-                            // Линия графика
-                            LineMark(
-                                x: .value("Дата", item.date, unit: .day),
-                                y: .value("Траты", item.amount)
-                            )
-                            .foregroundStyle(Color(hex: "#00F2FE"))
-                            .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
-                            .interpolationMethod(.catmullRom)
-                        }
-                    }
-                    .chartXAxis {
-                        AxisMarks(values: .stride(by: .day, count: 1)) { _ in
-                            AxisValueLabel(format: .dateTime.day().month(), textColor: .gray.opacity(0.8))
-                        }
-                    }
-                    .chartYAxis {
-                        AxisMarks { value in
-                            AxisValueLabel(textColor: .gray.opacity(0.8))
-                            AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [4, 4])).foregroundColor(.white.opacity(0.06))
-                        }
-                    }
-                    .frame(height: 160)
-                }
-            }
-            .padding(18)
-            .background(Color.white.opacity(0.04))
-            .cornerRadius(24)
-            .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.04), lineWidth: 1))
-            
-            // График 2: Круговая диаграмма по категориям трат
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Распределение по категориям")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white.opacity(0.85))
-                
-                if categoryData.isEmpty {
-                    emptyChartPlaceholder
-                } else {
-                    HStack(spacing: 20) {
-                        Chart {
-                            ForEach(categoryData) { item in
-                                SectorMark(
-                                    angle: .value("Траты", item.amount),
-                                    innerRadius: .ratio(0.65),
-                                    angularInset: 2
-                                )
-                                .cornerRadius(4)
-                                .foregroundStyle(item.color)
-                            }
-                        }
-                        .frame(width: 140, height: 140)
-                        
-                        // Легенда
-                        VStack(alignment: .leading, spacing: 8) {
-                            ForEach(categoryData.prefix(4)) { item in
-                                HStack(spacing: 6) {
-                                    Circle()
-                                        .fill(item.color)
-                                        .frame(width: 8, height: 8)
-                                    Text(item.category)
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                    Spacer()
-                                    Text("$\(Int(item.amount))")
-                                        .font(.caption.bold())
-                                        .foregroundColor(.white)
-                                }
-                            }
-                        }
-                    }
-                    .frame(height: 140)
-                }
-            }
-            .padding(18)
-            .background(Color.white.opacity(0.04))
-            .cornerRadius(24)
-            .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.04), lineWidth: 1))
+            lineChartCard
+            donutChartCard
         }
+    }
+    
+    private var lineChartCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Динамика расходов за неделю")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.white.opacity(0.85))
+            
+            if chartData.isEmpty || financeService.totalSpending == 0 {
+                emptyChartPlaceholder
+            } else {
+                Chart {
+                    ForEach(chartData) { item in
+                        // Area
+                        AreaMark(
+                            x: .value("Дата", item.date, unit: .day),
+                            y: .value("Траты", item.amount)
+                        )
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color(hex: "#00F2FE").opacity(0.25), Color(hex: "#00F2FE").opacity(0.0)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .interpolationMethod(.catmullRom)
+                        
+                        // Line
+                        LineMark(
+                            x: .value("Дата", item.date, unit: .day),
+                            y: .value("Траты", item.amount)
+                        )
+                        .foregroundStyle(Color(hex: "#00F2FE"))
+                        .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .interpolationMethod(.catmullRom)
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .day, count: 1)) { _ in
+                        AxisValueLabel(format: .dateTime.day().month(), textColor: .gray.opacity(0.8))
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks { value in
+                        AxisValueLabel(textColor: .gray.opacity(0.8))
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [4, 4])).foregroundColor(.white.opacity(0.06))
+                    }
+                }
+                .frame(height: 160)
+            }
+        }
+        .padding(18)
+        .background(Color.white.opacity(0.04))
+        .cornerRadius(24)
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.04), lineWidth: 1))
+    }
+    
+    private var donutChartCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Распределение по категориям")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.white.opacity(0.85))
+            
+            if categoryData.isEmpty {
+                emptyChartPlaceholder
+            } else {
+                HStack(spacing: 20) {
+                    Chart {
+                        ForEach(categoryData) { item in
+                            SectorMark(
+                                angle: .value("Траты", item.amount),
+                                innerRadius: .ratio(0.65),
+                                angularInset: 2
+                            )
+                            .cornerRadius(4)
+                            .foregroundStyle(item.color)
+                        }
+                    }
+                    .frame(width: 140, height: 140)
+                    
+                    // Легенда
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(categoryData.prefix(4)) { item in
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(item.color)
+                                    .frame(width: 8, height: 8)
+                                Text(item.category)
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                Spacer()
+                                Text("$\(Int(item.amount))")
+                                    .font(.caption.bold())
+                                    .foregroundColor(.white)
+                            }
+                        }
+                    }
+                }
+                .frame(height: 140)
+            }
+        }
+        .padding(18)
+        .background(Color.white.opacity(0.04))
+        .cornerRadius(24)
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.04), lineWidth: 1))
     }
     
     private var emptyChartPlaceholder: some View {
@@ -465,8 +470,8 @@ struct DashboardView: View {
             date: Date(),
             notes: "Автоматически распознано из СМС",
             brandName: parsed.brandName,
-            brandIcon: parsed.brandIcon ?? category.icon,
-            brandColorHex: parsed.brandColorHex ?? category.colorHex
+            brandIcon: category.icon,
+            brandColorHex: category.colorHex
         )
         
         financeService.addTransaction(transaction)

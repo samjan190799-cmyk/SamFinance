@@ -197,3 +197,36 @@ struct AddTransactionView: View {
         }
     }
 }
+
+/// Элемент выбора категории в виде пилюли
+struct CategoryBubble: View {
+    let category: Category
+    let isSelected: Bool
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: category.icon)
+                .font(.body.bold())
+            Text(category.name)
+                .font(.subheadline)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background {
+            if isSelected {
+                Color(hex: category.colorHex)
+            } else {
+                Color(.systemGray6)
+            }
+        }
+        .foregroundColor(isSelected ? .white : .primary)
+        .clipShape(Capsule())
+        .overlay {
+            if isSelected {
+                Capsule()
+                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
+            }
+        }
+        .scaleEffect(isSelected ? 1.05 : 1.0)
+    }
+}
