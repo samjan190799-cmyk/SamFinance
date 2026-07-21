@@ -260,6 +260,18 @@ struct DashboardView: View {
         }
     }
     
+    private var areaGradient: LinearGradient {
+        LinearGradient(
+            colors: [Color(hex: "#00F2FE").opacity(0.25), Color(hex: "#00F2FE").opacity(0.0)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+    
+    private var lineColor: Color {
+        Color(hex: "#00F2FE")
+    }
+
     private var lineChartCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Динамика расходов за неделю")
@@ -276,13 +288,7 @@ struct DashboardView: View {
                             x: .value("Дата", item.date, unit: .day),
                             y: .value("Траты", item.amount)
                         )
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color(hex: "#00F2FE").opacity(0.25), Color(hex: "#00F2FE").opacity(0.0)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
+                        .foregroundStyle(areaGradient)
                         .interpolationMethod(.catmullRom)
                         
                         // Line
@@ -290,7 +296,7 @@ struct DashboardView: View {
                             x: .value("Дата", item.date, unit: .day),
                             y: .value("Траты", item.amount)
                         )
-                        .foregroundStyle(Color(hex: "#00F2FE"))
+                        .foregroundStyle(lineColor)
                         .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
                         .interpolationMethod(.catmullRom)
                     }
