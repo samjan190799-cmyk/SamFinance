@@ -308,7 +308,7 @@ struct DashboardView: View {
             AxisMarks { value in
                 AxisValueLabel()
                     .foregroundStyle(Color.gray.opacity(0.8))
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [4, 4])).foregroundColor(.white.opacity(0.06))
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [4, 4])).foregroundStyle(Color.white.opacity(0.06))
             }
         }
         .frame(height: 160)
