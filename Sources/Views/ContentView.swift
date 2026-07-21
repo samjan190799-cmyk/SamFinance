@@ -4,7 +4,7 @@ import SwiftUI
 /// и переключением экранов (Долги, Копилки, Главная, Карты).
 /// Растянут на весь физический экран (ignoresSafeArea) для премиального отображения.
 struct ContentView: View {
-    @State private var financeService = FinanceService()
+    @State private var financeService = FinanceService.shared
     @State private var selectedTab = 2 // По умолчанию открыт главный экран (индекс 2)
     
     /// Определение компактных экранов для динамической адаптации верстки
