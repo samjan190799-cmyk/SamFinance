@@ -272,7 +272,8 @@ struct DashboardView: View {
         Color(hex: "#00F2FE")
     }
 
-    private var chartContent: some View {
+    @ChartContentBuilder
+    private var chartContent: some ChartContent {
         ForEach(chartData) { item in
             // Area
             AreaMark(
@@ -325,7 +326,8 @@ struct DashboardView: View {
         .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.04), lineWidth: 1))
     }
     
-    private var sectorContent: some View {
+    @ChartContentBuilder
+    private var sectorContent: some ChartContent {
         ForEach(categoryData) { item in
             SectorMark(
                 angle: .value("Траты", item.amount),
