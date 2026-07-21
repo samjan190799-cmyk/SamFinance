@@ -294,6 +294,24 @@ struct DashboardView: View {
         }
     }
 
+    private func makeLineChart() -> some View {
+        Chart {
+            chartContent
+        }
+        .chartXAxis {
+            AxisMarks(values: .stride(by: .day, count: 1)) { _ in
+                AxisValueLabel(format: .dateTime.day().month(), textColor: .gray.opacity(0.8))
+            }
+        }
+        .chartYAxis {
+            AxisMarks { value in
+                AxisValueLabel(textColor: .gray.opacity(0.8))
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [4, 4])).foregroundColor(.white.opacity(0.06))
+            }
+        }
+        .frame(height: 160)
+    }
+
     private var lineChartCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Динамика расходов за неделю")
@@ -303,21 +321,7 @@ struct DashboardView: View {
             if chartData.isEmpty || financeService.totalSpending == 0 {
                 emptyChartPlaceholder
             } else {
-                Chart {
-                    chartContent
-                }
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: .day, count: 1)) { _ in
-                        AxisValueLabel(format: .dateTime.day().month(), textColor: .gray.opacity(0.8))
-                    }
-                }
-                .chartYAxis {
-                    AxisMarks { value in
-                        AxisValueLabel(textColor: .gray.opacity(0.8))
-                        AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [4, 4])).foregroundColor(.white.opacity(0.06))
-                    }
-                }
-                .frame(height: 160)
+                makeLineChart()
             }
         }
         .padding(18)
@@ -339,6 +343,13 @@ struct DashboardView: View {
         }
     }
 
+    private func makeDonutChart() -> some View {
+        Chart {
+            sectorContent
+        }
+        .frame(width: 140, height: 140)
+    }
+
     private var donutChartCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Распределение по категориям")
@@ -349,10 +360,7 @@ struct DashboardView: View {
                 emptyChartPlaceholder
             } else {
                 HStack(spacing: 20) {
-                    Chart {
-                        sectorContent
-                    }
-                    .frame(width: 140, height: 140)
+                    makeDonutChart()
                     
                     // Легенда
                     VStack(alignment: .leading, spacing: 8) {
