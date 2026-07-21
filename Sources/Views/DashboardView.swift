@@ -272,6 +272,27 @@ struct DashboardView: View {
         Color(hex: "#00F2FE")
     }
 
+    private var chartContent: some View {
+        ForEach(chartData) { item in
+            // Area
+            AreaMark(
+                x: .value("Дата", item.date, unit: .day),
+                y: .value("Траты", item.amount)
+            )
+            .foregroundStyle(areaGradient)
+            .interpolationMethod(.catmullRom)
+            
+            // Line
+            LineMark(
+                x: .value("Дата", item.date, unit: .day),
+                y: .value("Траты", item.amount)
+            )
+            .foregroundStyle(lineColor)
+            .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
+            .interpolationMethod(.catmullRom)
+        }
+    }
+
     private var lineChartCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Динамика расходов за неделю")
@@ -282,24 +303,7 @@ struct DashboardView: View {
                 emptyChartPlaceholder
             } else {
                 Chart {
-                    ForEach(chartData) { item in
-                        // Area
-                        AreaMark(
-                            x: .value("Дата", item.date, unit: .day),
-                            y: .value("Траты", item.amount)
-                        )
-                        .foregroundStyle(areaGradient)
-                        .interpolationMethod(.catmullRom)
-                        
-                        // Line
-                        LineMark(
-                            x: .value("Дата", item.date, unit: .day),
-                            y: .value("Траты", item.amount)
-                        )
-                        .foregroundStyle(lineColor)
-                        .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
-                        .interpolationMethod(.catmullRom)
-                    }
+                    chartContent
                 }
                 .chartXAxis {
                     AxisMarks(values: .stride(by: .day, count: 1)) { _ in
@@ -321,6 +325,18 @@ struct DashboardView: View {
         .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.04), lineWidth: 1))
     }
     
+    private var sectorContent: some View {
+        ForEach(categoryData) { item in
+            SectorMark(
+                angle: .value("Траты", item.amount),
+                innerRadius: .ratio(0.65),
+                angularInset: 2
+            )
+            .cornerRadius(4)
+            .foregroundStyle(item.color)
+        }
+    }
+
     private var donutChartCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Распределение по категориям")
@@ -332,15 +348,7 @@ struct DashboardView: View {
             } else {
                 HStack(spacing: 20) {
                     Chart {
-                        ForEach(categoryData) { item in
-                            SectorMark(
-                                angle: .value("Траты", item.amount),
-                                innerRadius: .ratio(0.65),
-                                angularInset: 2
-                            )
-                            .cornerRadius(4)
-                            .foregroundStyle(item.color)
-                        }
+                        sectorContent
                     }
                     .frame(width: 140, height: 140)
                     
