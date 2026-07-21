@@ -300,12 +300,14 @@ struct DashboardView: View {
         }
         .chartXAxis {
             AxisMarks(values: .stride(by: .day, count: 1)) { _ in
-                AxisValueLabel(format: .dateTime.day().month(), textColor: .gray.opacity(0.8))
+                AxisValueLabel(format: .dateTime.day().month())
+                    .foregroundStyle(Color.gray.opacity(0.8))
             }
         }
         .chartYAxis {
             AxisMarks { value in
-                AxisValueLabel(textColor: .gray.opacity(0.8))
+                AxisValueLabel()
+                    .foregroundStyle(Color.gray.opacity(0.8))
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [4, 4])).foregroundColor(.white.opacity(0.06))
             }
         }
