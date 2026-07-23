@@ -1,8 +1,17 @@
 import SwiftUI
 import Charts
 
-/// Главный экран приложения с дизайном по макету 2, переработанный под темную тему без шторки транзакций.
-/// Содержит графики аналитики расходов (Swift Charts) и систему автоматического распознавания СМС из буфера обмена.
+/// Перечисление временных интервалов для точного фильтра дат и трат
+public enum TimePeriodFilter: String, CaseIterable, Identifiable {
+    case today = "Сегодня"
+    case week = "Неделя"
+    case month = "Месяц"
+    case allTime = "Всё время"
+    
+    public var id: String { rawValue }
+}
+
+/// Главный экран приложения с интеллектуальным ИИ-Советником и фильтрацией трат по датам.
 @MainActor
 struct DashboardView: View {
     let financeService: FinanceService
@@ -10,6 +19,9 @@ struct DashboardView: View {
     @State private var isShowingAddSheet = false
     @State private var isShowingSettingsSheet = false
     @State private var isShowingConverter = false
+    @State private var isShowingAIAdvisorSheet = false
+    
+    @State private var selectedPeriod: TimePeriodFilter = .month
     
     // Распознавание СМС
     @State private var detectedSMSTransaction: ParsedSMSTransaction? = nil
@@ -40,13 +52,21 @@ struct DashboardView: View {
                     .padding(.horizontal, 24)
                     .padding(.top, isSmallScreen ? 12 : 20)
                     
+                    periodPickerView
+                        .padding(.horizontal, 24)
+                        .padding(.top, 16)
+                    
                     spendingSection
                         .padding(.horizontal, 24)
-                        .padding(.top, isSmallScreen ? 16 : 24)
+                        .padding(.top, 14)
+                    
+                    aiAdvisorBannerCard
+                        .padding(.horizontal, 24)
+                        .padding(.top, 16)
                     
                     analyticsSection
                         .padding(.horizontal, 24)
-                        .padding(.top, isSmallScreen ? 18 : 28)
+                        .padding(.top, 18)
                         .padding(.bottom, isSmallScreen ? 110 : 140)
                 }
             }
@@ -70,6 +90,9 @@ struct DashboardView: View {
         }
         .sheet(isPresented: $isShowingConverter) {
             CurrencyConverterView()
+        }
+        .sheet(isPresented: $isShowingAIAdvisorSheet) {
+            AIFinancialAdvisorSheet(financeService: financeService)
         }
     }
     
@@ -123,6 +146,28 @@ struct DashboardView: View {
                         .frame(width: isSmallScreen ? 34 : 40, height: isSmallScreen ? 34 : 40)
                         .background(Color.white.opacity(0.06))
                         .clipShape(Circle())
+                }
+            }
+        }
+    }
+    
+    // MARK: - Переключатель периодов времени (Сегодня, Неделя, Месяц, Всё время)
+    private var periodPickerView: some View {
+        HStack(spacing: 6) {
+            ForEach(TimePeriodFilter.allCases) { period in
+                Button {
+                    HapticManager.shared.impact(.light)
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                        selectedPeriod = period
+                    }
+                } label: {
+                    Text(period.rawValue)
+                        .font(.system(size: 12, weight: selectedPeriod == period ? .bold : .medium))
+                        .foregroundColor(selectedPeriod == period ? .black : .white.opacity(0.7))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(selectedPeriod == period ? Color.white : Color.white.opacity(0.06))
+                        .clipShape(Capsule())
                 }
             }
         }
@@ -219,39 +264,44 @@ struct DashboardView: View {
         }
     }
     
-    // MARK: - Блок расходов
+    // MARK: - Блок расходов за период
+    private var filteredSpendingAmount: Double {
+        let calendar = Calendar.current
+        let now = Date()
+        let expenses = financeService.transactions.filter { $0.type == .expense }
+        
+        switch selectedPeriod {
+        case .today:
+            return expenses.filter { calendar.isDateInToday($0.date) }.reduce(0) { $0 + $1.amount }
+        case .week:
+            let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+            return expenses.filter { $0.date >= weekAgo }.reduce(0) { $0 + $1.amount }
+        case .month:
+            let monthAgo = calendar.date(byAdding: .day, value: -30, to: now) ?? now
+            return expenses.filter { $0.date >= monthAgo }.reduce(0) { $0 + $1.amount }
+        case .allTime:
+            return financeService.totalSpending
+        }
+    }
+    
     private var spendingSection: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("spending".localized)
+                Text("Траты (\(selectedPeriod.rawValue.lowercased()))")
                     .font(.system(size: isSmallScreen ? 11 : 13))
                     .foregroundColor(.gray)
                 
-                Text(formatSpendingAmount(financeService.totalSpending))
+                Text(formatSpendingAmount(filteredSpendingAmount))
                     .font(.system(size: isSmallScreen ? 18 : 20, weight: .bold))
                     .foregroundColor(.white)
             }
             
             Spacer()
             
-            if financeService.transactions.filter({ $0.type == .expense }).isEmpty {
-                Text("no_spending".localized)
-                    .font(.system(size: 12))
-                    .foregroundColor(.gray)
-            } else {
-                HStack(spacing: -8) {
-                    brandMiniIcon(name: "apple.logo", color: .white, bgColor: .black)
-                    brandMiniIcon(name: "at", color: .white, bgColor: .black)
-                    brandMiniIcon(name: "calendar", color: .white, bgColor: Color(hex: "#34C759"))
-                    
-                    Text("+2")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: isSmallScreen ? 24 : 28, height: isSmallScreen ? 24 : 28)
-                        .background(Color(hex: "#1E1F22"))
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color(hex: "#0E0F12"), lineWidth: 1.5))
-                }
+            HStack(spacing: -8) {
+                brandMiniIcon(name: "apple.logo", color: .white, bgColor: .black)
+                brandMiniIcon(name: "at", color: .white, bgColor: .black)
+                brandMiniIcon(name: "calendar", color: .white, bgColor: Color(hex: "#34C759"))
             }
         }
         .padding(.horizontal, 16)
@@ -264,11 +314,57 @@ struct DashboardView: View {
         }
     }
     
+    // MARK: - Карточка ИИ-Советника
+    private var aiAdvisorBannerCard: some View {
+        Button {
+            HapticManager.shared.trigger(.success)
+            isShowingAIAdvisorSheet = true
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: "#8E2DE2"), Color(hex: "#4A00E0")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 42, height: 42)
+                    
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.white)
+                }
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("💡 ИИ-Финансовый Советник")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white)
+                    
+                    Text("Глубокий анализ истории трат и умные советы")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.7))
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.4))
+            }
+            .padding(14)
+            .background(Color(hex: "#17181A"))
+            .cornerRadius(18)
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.purple.opacity(0.25), lineWidth: 1))
+        }
+    }
+    
     // MARK: - Секция аналитики
     private var analyticsSection: some View {
         VStack(spacing: 16) {
-            DashboardLineChartCard(financeService: financeService)
-            DashboardDonutChartCard(financeService: financeService)
+            DashboardLineChartCard(financeService: financeService, selectedPeriod: selectedPeriod)
+            DashboardDonutChartCard(financeService: financeService, selectedPeriod: selectedPeriod)
         }
     }
     
@@ -359,7 +455,7 @@ struct DashboardView: View {
                 amount: parsed.amount,
                 type: parsed.type,
                 category: category,
-                date: Date(),
+                date: parsed.date ?? Date(),
                 notes: "Автоматически распознано из СМС",
                 brandName: parsed.brandName,
                 brandIcon: category.icon,
@@ -406,10 +502,11 @@ struct DashboardView: View {
     }
 }
 
-/// Выделенный под-компонент линейного графика для быстрой проверки типов компилятором
+/// Выделенный под-компонент линейного графика для динамической фильтрации
 @MainActor
 struct DashboardLineChartCard: View {
     let financeService: FinanceService
+    let selectedPeriod: TimePeriodFilter
     
     struct SpendingChartData: Identifiable {
         let id = UUID()
@@ -421,8 +518,9 @@ struct DashboardLineChartCard: View {
         let expenses = financeService.transactions.filter { $0.type == .expense }
         let calendar = Calendar.current
         var dateMap: [Date: Double] = [:]
+        let daysCount = selectedPeriod == .today ? 1 : (selectedPeriod == .week ? 7 : 30)
         
-        for i in 0..<7 {
+        for i in 0..<daysCount {
             if let date = calendar.date(byAdding: .day, value: -i, to: Date()) {
                 let startOfDay = calendar.startOfDay(for: date)
                 dateMap[startOfDay] = 0.0
@@ -442,7 +540,7 @@ struct DashboardLineChartCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("weekly_spending".localized)
+            Text("График расходов (\(selectedPeriod.rawValue.lowercased()))")
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(.white.opacity(0.85))
             
@@ -478,7 +576,7 @@ struct DashboardLineChartCard: View {
             }
         }
         .chartXAxis {
-            AxisMarks(values: .stride(by: .day, count: 1)) { value in
+            AxisMarks(values: .stride(by: .day, count: selectedPeriod == .month ? 5 : 1)) { value in
                 AxisValueLabel(format: .dateTime.day().month())
                     .foregroundStyle(Color.gray.opacity(0.8))
             }
@@ -509,10 +607,11 @@ struct DashboardLineChartCard: View {
     }
 }
 
-/// Выделенный под-компонент круговой диаграммы категорий
+/// Выделенный под-компонент круговой диаграммы
 @MainActor
 struct DashboardDonutChartCard: View {
     let financeService: FinanceService
+    let selectedPeriod: TimePeriodFilter
     
     struct CategorySpendingData: Identifiable {
         let id = UUID()
@@ -522,7 +621,25 @@ struct DashboardDonutChartCard: View {
     }
     
     private var categoryData: [CategorySpendingData] {
-        let expenses = financeService.transactions.filter { $0.type == .expense }
+        let calendar = Calendar.current
+        let now = Date()
+        
+        let expenses = financeService.transactions.filter { exp in
+            guard exp.type == .expense else { return false }
+            switch selectedPeriod {
+            case .today:
+                return calendar.isDateInToday(exp.date)
+            case .week:
+                let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+                return exp.date >= weekAgo
+            case .month:
+                let monthAgo = calendar.date(byAdding: .day, value: -30, to: now) ?? now
+                return exp.date >= monthAgo
+            case .allTime:
+                return true
+            }
+        }
+        
         var categoryMap: [String: Double] = [:]
         var colorMap: [String: String] = [:]
         
@@ -542,7 +659,7 @@ struct DashboardDonutChartCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("category_distribution".localized)
+            Text("Категории (\(selectedPeriod.rawValue.lowercased()))")
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(.white.opacity(0.85))
             
@@ -606,5 +723,99 @@ struct DashboardDonutChartCard: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 130)
+    }
+}
+
+/// Экран ИИ-Советника с персональными рекомендациями
+@MainActor
+struct AIFinancialAdvisorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let financeService: FinanceService
+    
+    private var insights: [AIFinancialInsight] {
+        AIService.shared.generateInsights(financeService: financeService)
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color(hex: "#0E0F12")
+                    .ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(LinearGradient(colors: [Color(hex: "#8E2DE2"), Color(hex: "#4A00E0")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .frame(width: 50, height: 50)
+                                Image(systemName: "sparkles")
+                                    .font(.title2.bold())
+                                    .foregroundColor(.white)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("SamFinance AI Advisor")
+                                    .font(.title3.bold())
+                                    .foregroundColor(.white)
+                                Text("Умный финансовый помощник")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                        .padding(.horizontal, 4)
+                        
+                        Text("Персональный анализ бюджета:")
+                            .font(.headline)
+                            .foregroundColor(.white.opacity(0.85))
+                            .padding(.top, 4)
+                        
+                        VStack(spacing: 14) {
+                            ForEach(insights) { insight in
+                                HStack(alignment: .top, spacing: 14) {
+                                    Image(systemName: insight.iconName)
+                                        .font(.title3)
+                                        .foregroundColor(colorForType(insight.type))
+                                        .frame(width: 24)
+                                    
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(insight.title)
+                                            .font(.subheadline.bold())
+                                            .foregroundColor(.white)
+                                        
+                                        Text(insight.message)
+                                            .font(.caption)
+                                            .foregroundColor(.white.opacity(0.75))
+                                    }
+                                    Spacer()
+                                }
+                                .padding(16)
+                                .background(Color(hex: "#17181A"))
+                                .cornerRadius(18)
+                                .overlay(RoundedRectangle(cornerRadius: 18).stroke(colorForType(insight.type).opacity(0.2), lineWidth: 1))
+                            }
+                        }
+                    }
+                    .padding(24)
+                }
+            }
+            .navigationTitle("ИИ-Советник")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Закрыть") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func colorForType(_ type: AIFinancialInsight.InsightType) -> Color {
+        switch type {
+        case .positive: return .green
+        case .warning: return .orange
+        case .info: return Color(hex: "#00F2FE")
+        }
     }
 }

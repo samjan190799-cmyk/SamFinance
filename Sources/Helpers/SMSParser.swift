@@ -7,6 +7,7 @@ public struct ParsedSMSTransaction: Sendable, Hashable {
     public let type: TransactionType
     public let brandName: String?
     public let categoryName: String
+    public let date: Date?
 }
 
 /// Продвинутый помощник для автоматического парсинга СМС-сообщений банков Армении, России и мира
@@ -128,6 +129,7 @@ public struct SMSParser {
             brandName = extractPossibleBrand(from: text)
         }
         
+        let parsedDate = extractDate(from: text)
         let title = brandName ?? (type == .income ? "Пополнение счета" : "Операция по карте")
         
         return ParsedSMSTransaction(
@@ -135,7 +137,8 @@ public struct SMSParser {
             amount: amount,
             type: type,
             brandName: brandName,
-            categoryName: categoryName
+            categoryName: categoryName,
+            date: parsedDate
         )
     }
     
@@ -200,6 +203,41 @@ public struct SMSParser {
                     let brand = text[range].trimmingCharacters(in: .whitespacesAndNewlines)
                     if brand.count >= 3 {
                         return brand
+                    }
+                }
+            }
+        }
+        
+    /// Извлекает точную дату и время операции из текста СМС
+    private static func extractDate(from text: String) -> Date? {
+        let patterns = [
+            #"\b(\d{2}[./-]\d{2}[./-]\d{2,4}(?:\s+\d{2}:\d{2}(?::\d{2})?)?)\b"#,
+            #"\b(\d{4}[./-]\d{2}[./-]\d{2}(?:\s+\d{2}:\d{2}(?::\d{2})?)?)\b"#
+        ]
+        
+        let formatters: [DateFormatter] = {
+            let formats = [
+                "dd.MM.yyyy HH:mm", "dd.MM.yyyy HH:mm:ss", "dd.MM.yyyy",
+                "dd/MM/yyyy HH:mm", "dd/MM/yy HH:mm", "dd.MM.yy HH:mm",
+                "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd"
+            ]
+            return formats.map { format in
+                let df = DateFormatter()
+                df.dateFormat = format
+                df.locale = Locale(identifier: "en_US_POSIX")
+                return df
+            }
+        }()
+        
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: []),
+               let match = regex.firstMatch(in: text, options: [], range: NSRange(text.startIndex..., in: text)) {
+                if let range = Range(match.range(at: 1), in: text) {
+                    let dateStr = String(text[range])
+                    for df in formatters {
+                        if let date = df.date(from: dateStr) {
+                            return date
+                        }
                     }
                 }
             }
