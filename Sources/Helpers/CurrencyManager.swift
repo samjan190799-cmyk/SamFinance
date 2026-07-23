@@ -30,12 +30,16 @@ public enum AppCurrency: String, CaseIterable, Identifiable, Codable, Sendable {
     }
 }
 
-/// Менеджер глобальной валюты приложения SamFinance
+/// Менеджер глобальной валюты приложения SamFinance с автоматическим пересчетом по курсу
 @Observable
 @MainActor
 public final class CurrencyManager {
     @MainActor public static let shared = CurrencyManager()
     
+    /// Базовая валюта сохранения сумм в приложении (Армянский драм AMD)
+    public var baseCurrency: AppCurrency = .amd
+    
+    /// Текущая выбранная пользователем валюта отображения (AMD, RUB, USD, EUR)
     public var currentCurrency: AppCurrency {
         didSet {
             UserDefaults.standard.set(currentCurrency.rawValue, forKey: "app_currency")
@@ -43,19 +47,24 @@ public final class CurrencyManager {
     }
     
     private init() {
-        // По умолчанию выставляем Армянский Драм (֏ / AMD)
         let saved = UserDefaults.standard.string(forKey: "app_currency") ?? AppCurrency.amd.rawValue
         self.currentCurrency = AppCurrency(rawValue: saved) ?? .amd
     }
     
-    /// Форматирование суммы с символом выбранной валюты (например: "֏ 15,000" или "15,000 ֏")
-    public func format(_ amount: Double) -> String {
+    /// Пересчитывает сумму из базовой валюты в текущую выбранную пользователем по онлайн-курсу
+    public func convertFromBase(_ amountInBase: Double) -> Double {
+        return CurrencyService.shared.convert(amount: amountInBase, from: baseCurrency, to: currentCurrency)
+    }
+    
+    /// Форматирование суммы с символом выбранной валюты и автопересчетом по курсу
+    public func format(_ amountInBase: Double) -> String {
+        let converted = convertFromBase(amountInBase)
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 0
+        formatter.maximumFractionDigits = (currentCurrency == .usd || currentCurrency == .eur) ? 2 : 0
         formatter.groupingSeparator = " "
         
-        let formattedNum = formatter.string(from: NSNumber(value: amount)) ?? "\(Int(amount))"
+        let formattedNum = formatter.string(from: NSNumber(value: converted)) ?? "\(Int(converted))"
         return "\(currentCurrency.symbol)\(formattedNum)"
     }
 }

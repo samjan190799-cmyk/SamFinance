@@ -8,6 +8,7 @@ struct DashboardView: View {
     @Binding var selectedTab: Int
     @State private var isShowingAddSheet = false
     @State private var isShowingSettingsSheet = false
+    @State private var isShowingConverter = false
     
     // Распознавание СМС
     @State private var detectedSMSTransaction: ParsedSMSTransaction? = nil
@@ -73,6 +74,9 @@ struct DashboardView: View {
         .sheet(isPresented: $isShowingSettingsSheet) {
             SettingsView(financeService: financeService)
         }
+        .sheet(isPresented: $isShowingConverter) {
+            CurrencyConverterView()
+        }
     }
     
     // MARK: - Шапка
@@ -103,17 +107,32 @@ struct DashboardView: View {
             
             Spacer()
             
-            // Колокольчик
-            Button {
-                HapticManager.shared.impact(.light)
-                checkClipboardForSMS() // Принудительная проверка буфера
-            } label: {
-                Image(systemName: "bell")
-                    .font(.system(size: isSmallScreen ? 16 : 18))
-                    .foregroundColor(.white.opacity(0.8))
-                    .frame(width: isSmallScreen ? 34 : 40, height: isSmallScreen ? 34 : 40)
-                    .background(Color.white.opacity(0.06))
-                    .clipShape(Circle())
+            HStack(spacing: 8) {
+                // Кнопка Онлайн Конвертера
+                Button {
+                    HapticManager.shared.impact(.light)
+                    isShowingConverter = true
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: isSmallScreen ? 14 : 16, weight: .bold))
+                        .foregroundColor(.white.opacity(0.85))
+                        .frame(width: isSmallScreen ? 34 : 40, height: isSmallScreen ? 34 : 40)
+                        .background(Color.white.opacity(0.06))
+                        .clipShape(Circle())
+                }
+                
+                // Колокольчик
+                Button {
+                    HapticManager.shared.impact(.light)
+                    checkClipboardForSMS()
+                } label: {
+                    Image(systemName: "bell")
+                        .font(.system(size: isSmallScreen ? 16 : 18))
+                        .foregroundColor(.white.opacity(0.8))
+                        .frame(width: isSmallScreen ? 34 : 40, height: isSmallScreen ? 34 : 40)
+                        .background(Color.white.opacity(0.06))
+                        .clipShape(Circle())
+                }
             }
         }
     }

@@ -5,6 +5,7 @@ struct SettingsView: View {
     let financeService: FinanceService
     @State private var languageManager = LanguageManager.shared
     @State private var currencyManager = CurrencyManager.shared
+    @State private var isShowingConverter = false
     @State private var isShowingDeleteAlert = false
     @State private var exportMessage: String? = nil
     
@@ -59,6 +60,18 @@ struct SettingsView: View {
                     }
                     
                     Button {
+                        HapticManager.shared.impact(.light)
+                        isShowingConverter = true
+                    } label: {
+                        HStack {
+                            Label("Онлайн конвертер валют", systemImage: "arrow.triangle.2.circlepath")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    Button {
                         HapticManager.shared.trigger(.success)
                         exportDataToClipboard()
                     } label: {
@@ -107,7 +120,9 @@ struct SettingsView: View {
                     Text("reset_footer".localized)
                 }
             }
-            .navigationTitle("settings_title".localized)
+            .sheet(isPresented: $isShowingConverter) {
+                CurrencyConverterView()
+            }
             .confirmationDialog(
                 "reset_data".localized,
                 isPresented: $isShowingDeleteAlert,
