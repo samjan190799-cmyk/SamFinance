@@ -67,6 +67,26 @@ struct SettingsView: View {
                     Text("preferences".localized)
                 }
                 
+                // Авто-импорт СМС в фоне
+                Section {
+                    Button {
+                        if let url = URL(string: "shortcuts://") {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        HStack {
+                            Label("Фоновые команды СМС (Siri Shortcuts)", systemImage: "bolt.horizontal.fill")
+                            Spacer()
+                            Image(systemName: "arrow.up.forward.app")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Авто-импорт СМС")
+                } footer: {
+                    Text("В Быстрых командах iOS добавьте правило: При получении СМС -> вызывать ProcessSMSIntent для автозаписи в фоне.")
+                }
+                
                 // Опасная зона
                 Section {
                     Button(role: .destructive) {

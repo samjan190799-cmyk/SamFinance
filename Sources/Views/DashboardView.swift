@@ -427,11 +427,11 @@ struct DashboardView: View {
                 .clipShape(Circle())
             
             VStack(alignment: .leading, spacing: 2) {
-                Text("Найдена СМС в буфере")
+                Text(detectedBatchTransactions.count > 1 ? "Найдено СМС в буфере: \(detectedBatchTransactions.count)" : "Найдена СМС в буфере")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.gray)
                 
-                Text("\(parsed.title) — \(parsed.type == .income ? "+" : "-")\(Int(parsed.amount)) $")
+                Text(detectedBatchTransactions.count > 1 ? "Всего на сумму: $\(Int(detectedBatchTransactions.reduce(0) { $0 + $1.amount }))" : "\(parsed.title) — \(parsed.type == .income ? "+" : "-")\(Int(parsed.amount)) $")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white)
             }
@@ -444,6 +444,7 @@ struct DashboardView: View {
                 withAnimation {
                     showSMSBanner = false
                     detectedSMSTransaction = nil
+                    detectedBatchTransactions = []
                 }
             } label: {
                 Image(systemName: "xmark")
@@ -458,7 +459,7 @@ struct DashboardView: View {
             Button {
                 addDetectedTransaction()
             } label: {
-                Text("Записать")
+                Text(detectedBatchTransactions.count > 1 ? "Записать все (\(detectedBatchTransactions.count))" : "Записать")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(.black)
                     .padding(.horizontal, 14)
@@ -476,6 +477,8 @@ struct DashboardView: View {
         .shadow(color: Color.black.opacity(0.5), radius: 15, x: 0, y: 10)
     }
     
+    @State private var detectedBatchTransactions: [ParsedSMSTransaction] = []
+    
     // MARK: - Вспомогательные методы
     
     private func checkClipboardForSMS() {
@@ -485,41 +488,45 @@ struct DashboardView: View {
         
         lastCheckedClipboardString = clipboardString
         
-        if let parsed = SMSParser.parse(text: clipboardString) {
+        let batch = SMSParser.parseBatch(text: clipboardString)
+        if !batch.isEmpty {
             withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
-                detectedSMSTransaction = parsed
+                detectedBatchTransactions = batch
+                detectedSMSTransaction = batch.first
                 showSMSBanner = true
             }
         }
     }
     
     private func addDetectedTransaction() {
-        guard let parsed = detectedSMSTransaction else { return }
+        let itemsToAdd = detectedBatchTransactions.isEmpty ? (detectedSMSTransaction != nil ? [detectedSMSTransaction!] : []) : detectedBatchTransactions
+        guard !itemsToAdd.isEmpty else { return }
         
-        let category = financeService.categories.first(where: { $0.name == parsed.categoryName }) ?? financeService.categories[0]
-        
-        let transaction = Transaction(
-            title: parsed.title,
-            amount: parsed.amount,
-            type: parsed.type,
-            category: category,
-            date: Date(),
-            notes: "Автоматически распознано из СМС",
-            brandName: parsed.brandName,
-            brandIcon: category.icon,
-            brandColorHex: category.colorHex
-        )
-        
-        financeService.addTransaction(transaction)
+        for parsed in itemsToAdd {
+            let category = financeService.categories.first(where: { $0.name == parsed.categoryName }) ?? financeService.categories[0]
+            
+            let transaction = Transaction(
+                title: parsed.title,
+                amount: parsed.amount,
+                type: parsed.type,
+                category: category,
+                date: Date(),
+                notes: "Автоматически распознано из СМС",
+                brandName: parsed.brandName,
+                brandIcon: category.icon,
+                brandColorHex: category.colorHex
+            )
+            
+            financeService.addTransaction(transaction)
+        }
         
         HapticManager.shared.trigger(.success)
-        
-        // Очищаем буфер обмена для предотвращения повторного предложения
         UIPasteboard.general.string = ""
         
         withAnimation {
             showSMSBanner = false
             detectedSMSTransaction = nil
+            detectedBatchTransactions = []
         }
     }
     
