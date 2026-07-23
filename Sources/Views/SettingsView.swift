@@ -1,14 +1,16 @@
 import SwiftUI
 
-/// Экран настроек приложения. Позволяет управлять данными, экспортировать информацию и сбрасывать состояние.
+/// Экран настроек приложения. Позволяет переключать язык (Русский, English, Հայերեն), экспортировать информацию и сбрасывать состояние.
 struct SettingsView: View {
     let financeService: FinanceService
+    @State private var languageManager = LanguageManager.shared
     @State private var isShowingDeleteAlert = false
     @State private var exportMessage: String? = nil
     
     var body: some View {
         NavigationStack {
             List {
+                // Секция профиля
                 Section {
                     HStack(spacing: 16) {
                         Image(systemName: "person.crop.circle.fill")
@@ -17,21 +19,34 @@ struct SettingsView: View {
                             .symbolRenderingMode(.hierarchical)
                         
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Пользователь SamFinance")
-                               .font(.headline)
-                            Text("Тариф: Premium Pro")
-                               .font(.subheadline)
-                               .foregroundColor(.secondary)
+                            Text("user_name".localized)
+                                .font(.headline)
+                            Text("tariff".localized)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
                         }
                     }
                     .padding(.vertical, 4)
                 } header: {
-                    Text("Профиль")
+                    Text("profile".localized)
                 }
                 
+                // Секция предпочтений и выбора языка
                 Section {
+                    Picker(selection: $languageManager.currentLanguage) {
+                        ForEach(AppLanguage.allCases) { lang in
+                            Text("\(lang.flagIcon)  \(lang.displayName)")
+                                .tag(lang)
+                        }
+                    } label: {
+                        Label("app_language".localized, systemImage: "globe")
+                    }
+                    .onChange(of: languageManager.currentLanguage) { _, _ in
+                        HapticManager.shared.selection()
+                    }
+                    
                     HStack {
-                        Label("Основная валюта", systemImage: "dollarsign.circle.fill")
+                        Label("main_currency".localized, systemImage: "dollarsign.circle.fill")
                         Spacer()
                         Text("USD ($)")
                             .foregroundColor(.secondary)
@@ -42,39 +57,40 @@ struct SettingsView: View {
                         exportDataToClipboard()
                     } label: {
                         HStack {
-                            Label("Экспорт данных", systemImage: "doc.arrow.up.fill")
+                            Label("export_data".localized, systemImage: "doc.arrow.up.fill")
                             Spacer()
-                            Text(exportMessage ?? "Скопировать CSV")
+                            Text(exportMessage ?? "CSV")
                                 .foregroundColor(exportMessage != nil ? .green : .secondary)
                         }
                     }
                 } header: {
-                    Text("Предпочтения")
+                    Text("preferences".localized)
                 }
                 
+                // Опасная зона
                 Section {
                     Button(role: .destructive) {
                         HapticManager.shared.trigger(.warning)
                         isShowingDeleteAlert = true
                     } label: {
-                        Label("Сбросить все данные", systemImage: "trash.fill")
+                        Label("reset_data".localized, systemImage: "trash.fill")
                     }
                 } header: {
-                    Text("Опасная зона")
+                    Text("danger_zone".localized)
                 } footer: {
-                    Text("Все карты, транзакции, долги и накопительные цели будут очищены из памяти.")
+                    Text("reset_footer".localized)
                 }
             }
-            .navigationTitle("Настройки")
+            .navigationTitle("settings_title".localized)
             .confirmationDialog(
-                "Вы уверены, что хотите сбросить все данные?",
+                "reset_data".localized,
                 isPresented: $isShowingDeleteAlert,
                 titleVisibility: .visible
             ) {
-                Button("Очистить полностью", role: .destructive) {
+                Button("reset_data".localized, role: .destructive) {
                     resetAllData()
                 }
-                Button("Отмена", role: .cancel) {
+                Button("Cancel", role: .cancel) {
                     HapticManager.shared.impact(.light)
                 }
             }
@@ -93,7 +109,7 @@ struct SettingsView: View {
         
         UIPasteboard.general.string = csvText
         withAnimation {
-            exportMessage = "Скопировано в буфер!"
+            exportMessage = "Copied!"
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             exportMessage = nil
@@ -101,23 +117,18 @@ struct SettingsView: View {
     }
     
     private func resetAllData() {
-        // Очищаем транзакции
         for t in financeService.transactions {
             financeService.deleteTransaction(t)
         }
-        // Очищаем карты
         for c in financeService.cards {
             financeService.deleteCard(id: c.id)
         }
-        // Очищаем долги
         for d in financeService.debts {
             financeService.deleteDebt(id: d.id)
         }
-        // Очищаем копилки
         for g in financeService.goals {
             financeService.deleteGoal(id: g.id)
         }
-        
         HapticManager.shared.trigger(.success)
     }
 }
