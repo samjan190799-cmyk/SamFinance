@@ -1,11 +1,13 @@
 import SwiftUI
 
-/// Экран управления банковскими картами пользователя с привязанными накопительными целями (копилочками).
+/// Экран управления банковскими картами пользователя с привязанными накопительными целями (копилочками)
+/// и полной поддержкой локализации (Русский, English, Հայերեն).
 struct CardsView: View {
     let financeService: FinanceService
     @State private var isShowingAddCardSheet = false
     @State private var selectedCardForDetails: Card? = nil
     @State private var selectedCardForNewGoal: Card? = nil
+    @State private var languageManager = LanguageManager.shared
     
     private var isSmallScreen: Bool {
         UIScreen.main.bounds.height < 750
@@ -182,7 +184,7 @@ struct CardWithGoalsSection: View {
                                 .font(.caption.bold())
                                 .foregroundColor(.gray)
                             
-                            Text("Цели карты (\(goals.count))")
+                            Text("\("card_goals_title".localized) (\(goals.count))")
                                 .font(.system(size: 13, weight: .bold))
                                 .foregroundColor(.white.opacity(0.85))
                         }
@@ -193,7 +195,7 @@ struct CardWithGoalsSection: View {
                     Button(action: onAddGoal) {
                         HStack(spacing: 4) {
                             Image(systemName: "plus.circle.fill")
-                            Text("Цель")
+                            Text("goal".localized)
                         }
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.black)
@@ -209,7 +211,7 @@ struct CardWithGoalsSection: View {
                 if isShowingGoals {
                     if goals.isEmpty {
                         HStack {
-                            Text("К этой карте пока не привязано целей.")
+                            Text("no_card_goals".localized)
                                 .font(.caption)
                                 .foregroundColor(.gray)
                             Spacer()
@@ -300,13 +302,13 @@ struct CardGoalRowView: View {
             Button(role: .destructive) {
                 financeService.deleteGoal(id: goal.id)
             } label: {
-                Label("Удалить цель", systemImage: "trash")
+                Label("delete_card".localized, systemImage: "trash")
             }
         }
-        .alert("Пополнить копилку \(goal.title)", isPresented: $isShowingDepositAlert) {
+        .alert(goal.title, isPresented: $isShowingDepositAlert) {
             TextField("Сумма ($)", text: $depositAmountString)
                 .keyboardType(.decimalPad)
-            Button("Cancel", role: .cancel) {
+            Button("cancel".localized, role: .cancel) {
                 depositAmountString = ""
             }
             Button("deposit".localized) {
@@ -330,6 +332,15 @@ struct CardItemView: View {
         UIScreen.main.bounds.height < 750
     }
     
+    /// Отображает последние 4 цифры карты
+    private var lastFourDigits: String {
+        let clean = card.number.replacingOccurrences(of: " ", with: "")
+        if clean.count >= 4 {
+            return String(clean.suffix(4))
+        }
+        return card.number
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
@@ -338,14 +349,14 @@ struct CardItemView: View {
                         .font(.system(size: isSmallScreen ? 15 : 17, weight: .bold))
                         .foregroundColor(.white)
                     
-                    Text("Баланс: $\(Int(card.balance))")
+                    Text("\( "total_balance".localized ): $\(Int(card.balance))")
                         .font(.system(size: 12))
                         .foregroundColor(.white.opacity(0.85))
                 }
                 
                 Spacer()
                 
-                Text("•••• \(card.number)")
+                Text("•••• \(lastFourDigits)")
                     .font(.system(size: isSmallScreen ? 14 : 16, weight: .semibold, design: .monospaced))
                     .foregroundColor(.white)
             }
@@ -422,23 +433,27 @@ struct CardActionButton: View {
     }
 }
 
-/// Модальный экран создания/выпуска новой карты с назначением
+/// Модальный экран создания/выпуска новой карты с вводом полных 16-значных реквизитов
 struct AddCardView: View {
     @Environment(\.dismiss) private var dismiss
     let financeService: FinanceService
     
-    @State private var cardPurpose: String = "Карта для подарков"
+    @State private var cardPurpose: String = "card_for_gifts".localized
     @State private var holderName: String = "SAMVEL USER"
     @State private var balanceString: String = "1000"
-    @State private var cardNumber: String = String(Int.random(in: 1000...9999))
+    @State private var cardNumberRaw: String = "5244872190127642"
+    @State private var expiryDate: String = "08/29"
+    @State private var cvv: String = "123"
     @State private var selectedThemeIndex = 0
     
-    let defaultPurposes = [
-        "Карта для подарков",
-        "Карта для онлайн покупок",
-        "Карта для путешествий",
-        "Основная карта"
-    ]
+    var defaultPurposes: [String] {
+        [
+            "card_for_gifts".localized,
+            "card_for_online".localized,
+            "card_for_travel".localized,
+            "main_card".localized
+        ]
+    }
     
     let themes = [
         (colorHex: "#FF2D55", gradient: ["#FF2D55", "#FF5E62"]),
@@ -447,11 +462,24 @@ struct AddCardView: View {
         (colorHex: "#34C759", gradient: ["#34C759", "#11998E"])
     ]
     
+    /// Маска формата карточного номера: 5244 8721 9012 7642
+    private var formattedCardNumber: String {
+        let clean = cardNumberRaw.filter { $0.isNumber }
+        var result = ""
+        for (index, char) in clean.prefix(16).enumerated() {
+            if index > 0 && index % 4 == 0 {
+                result.append(" ")
+            }
+            result.append(char)
+        }
+        return result
+    }
+    
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Назначение карты (напр. Карта для подарков)", text: $cardPurpose)
+                    TextField("card_purpose".localized, text: $cardPurpose)
                     
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
@@ -470,15 +498,15 @@ struct AddCardView: View {
                         }
                     }
                 } header: {
-                    Text("Назначение карты")
+                    Text("card_purpose".localized)
                 }
                 
                 Section {
-                    TextField("Владелец карты", text: $holderName)
+                    TextField("card_holder".localized, text: $holderName)
                         .textInputAutocapitalization(.characters)
                     
                     HStack {
-                        Text("Базовый баланс ($)")
+                        Text("base_balance".localized)
                         Spacer()
                         TextField("0", text: $balanceString)
                             .keyboardType(.decimalPad)
@@ -486,14 +514,30 @@ struct AddCardView: View {
                     }
                     
                     HStack {
-                        Text("Последние 4 цифры")
+                        Text("full_card_number".localized)
                         Spacer()
-                        TextField("7642", text: $cardNumber)
+                        TextField("5244 8721 9012 7642", text: $cardNumberRaw)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    
+                    HStack {
+                        Text("expiry_date".localized)
+                        Spacer()
+                        TextField("08/29", text: $expiryDate)
+                            .keyboardType(.numbersAndPunctuation)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    
+                    HStack {
+                        Text("cvv_code".localized)
+                        Spacer()
+                        TextField("123", text: $cvv)
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.trailing)
                     }
                 } header: {
-                    Text("Реквизиты")
+                    Text("card_requisites".localized)
                 }
                 
                 Section {
@@ -526,22 +570,22 @@ struct AddCardView: View {
                     }
                     .padding(.vertical, 8)
                 } header: {
-                    Text("Цветовая гамма карты")
+                    Text("card_color_theme".localized)
                 }
             }
-            .navigationTitle("Новая карта")
+            .navigationTitle("new_card".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Отмена") {
+                    Button("cancel".localized) {
                         dismiss()
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Сохранить") {
+                    Button("save".localized) {
                         saveCard()
                     }
-                    .disabled(cardPurpose.isEmpty || balanceString.isEmpty)
+                    .disabled(cardPurpose.isEmpty || balanceString.isEmpty || cardNumberRaw.isEmpty)
                 }
             }
         }
@@ -551,13 +595,15 @@ struct AddCardView: View {
         guard let balance = Double(balanceString.replacingOccurrences(of: ",", with: ".")) else { return }
         let theme = themes[selectedThemeIndex]
         let card = Card(
-            number: cardNumber.isEmpty ? "7642" : cardNumber,
+            number: formattedCardNumber.isEmpty ? "5244 8721 9012 7642" : formattedCardNumber,
             holderName: holderName.isEmpty ? "SAMVEL USER" : holderName,
             balance: balance,
             type: cardPurpose,
             colorHex: theme.colorHex,
             gradientColors: theme.gradient,
-            isFrozen: false
+            isFrozen: false,
+            expiryDate: expiryDate.isEmpty ? "08/29" : expiryDate,
+            cvv: cvv.isEmpty ? "123" : cvv
         )
         financeService.addCard(card)
         HapticManager.shared.trigger(.success)
@@ -586,25 +632,25 @@ struct AddGoalForCardView: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("Карта: \(card.type) (•••• \(card.number))")
+                    Text("\(card.type) (•••• \(String(card.number.suffix(4))))")
                         .font(.subheadline.bold())
                         .foregroundColor(.gray)
                 } header: {
-                    Text("Привязка")
+                    Text("card_purpose".localized)
                 }
                 
                 Section {
-                    TextField("Название цели (напр., На наушники)", text: $title)
+                    TextField("goal".localized, text: $title)
                     
                     HStack {
-                        Text("Целевая сумма ($)")
+                        Text("base_balance".localized)
                         Spacer()
                         TextField("0", text: $targetAmountString)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                     }
                 } header: {
-                    Text("Детали копилки")
+                    Text("goal".localized)
                 }
                 
                 Section {
@@ -637,19 +683,19 @@ struct AddGoalForCardView: View {
                     }
                     .padding(.vertical, 8)
                 } header: {
-                    Text("Цветовая гамма цели")
+                    Text("card_color_theme".localized)
                 }
             }
-            .navigationTitle("Новая цель карты")
+            .navigationTitle("new_card_goal".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Отмена") {
+                    Button("cancel".localized) {
                         dismiss()
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Сохранить") {
+                    Button("save".localized) {
                         saveGoal()
                     }
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || Double(targetAmountString.replacingOccurrences(of: ",", with: ".")) ?? 0 <= 0)
@@ -675,7 +721,7 @@ struct AddGoalForCardView: View {
     }
 }
 
-/// Модальный экран просмотра реквизитов карты
+/// Модальный экран просмотра полного 16-значного номера и реквизитов карты
 struct CardDetailsSheet: View {
     @Environment(\.dismiss) private var dismiss
     let card: Card
@@ -692,19 +738,19 @@ struct CardDetailsSheet: View {
                 .font(.headline)
             
             VStack(alignment: .leading, spacing: 16) {
-                detailRow(title: "Назначение карты", value: card.type)
-                detailRow(title: "Владелец", value: card.holderName)
-                detailRow(title: "Номер карты", value: "5244 8721 9012 \(card.number)")
-                detailRow(title: "Срок действия", value: "08/29")
-                detailRow(title: "CVV код", value: "•••")
-                detailRow(title: "Статус", value: card.isFrozen ? "Заморожена" : "Активна")
+                detailRow(title: "card_purpose".localized, value: card.type)
+                detailRow(title: "card_holder".localized, value: card.holderName)
+                detailRow(title: "full_card_number".localized, value: card.number)
+                detailRow(title: "expiry_date".localized, value: card.expiryDate)
+                detailRow(title: "cvv_code".localized, value: card.cvv)
+                detailRow(title: "Статус", value: card.isFrozen ? "freeze".localized : "Активна")
             }
             .padding()
             .background(Color.white.opacity(0.05))
             .cornerRadius(16)
             
             Button {
-                UIPasteboard.general.string = "524487219012\(card.number)"
+                UIPasteboard.general.string = card.number.replacingOccurrences(of: " ", with: "")
                 HapticManager.shared.trigger(.success)
                 withAnimation {
                     isCopied = true

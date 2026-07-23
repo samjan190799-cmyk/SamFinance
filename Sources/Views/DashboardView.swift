@@ -121,7 +121,7 @@ struct DashboardView: View {
     // MARK: - Раздел баланса
     private var balanceSection: some View {
         VStack(alignment: .leading, spacing: isSmallScreen ? 6 : 10) {
-            Text("Total balance")
+            Text("total_balance".localized)
                 .font(.system(size: isSmallScreen ? 12 : 14))
                 .foregroundColor(.gray)
             
@@ -153,7 +153,7 @@ struct DashboardView: View {
                                 .font(.system(size: isSmallScreen ? 8 : 10, weight: .bold))
                                 .foregroundColor(.white)
                         }
-                        Text("Send")
+                        Text("send".localized)
                             .font(.system(size: isSmallScreen ? 11 : 13, weight: .bold))
                             .foregroundColor(.black)
                     }
@@ -168,7 +168,7 @@ struct DashboardView: View {
                     HapticManager.shared.impact(.light)
                     isShowingAddSheet = true
                 } label: {
-                    Text("Request")
+                    Text("request".localized)
                         .font(.system(size: isSmallScreen ? 11 : 13, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.horizontal, isSmallScreen ? 12 : 16)
@@ -185,7 +185,7 @@ struct DashboardView: View {
         Button {
             HapticManager.shared.trigger(.success)
             withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                selectedTab = 3 // Переключение на вкладку карт
+                selectedTab = 2 // Переключение на вкладку карт
             }
         } label: {
             ZStack {
@@ -220,7 +220,7 @@ struct DashboardView: View {
     private var spendingSection: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Spending")
+                Text("spending".localized)
                     .font(.system(size: isSmallScreen ? 11 : 13))
                     .foregroundColor(.gray)
                 
@@ -233,7 +233,7 @@ struct DashboardView: View {
             
             // Наползающие друг на друга иконки брендов (если есть расходы)
             if financeService.transactions.filter({ $0.type == .expense }).isEmpty {
-                Text("No spending yet")
+                Text("no_spending".localized)
                     .font(.system(size: 12))
                     .foregroundColor(.gray)
             } else {
@@ -326,7 +326,7 @@ struct DashboardView: View {
 
     private var lineChartCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Динамика расходов за неделю")
+            Text("weekly_spending".localized)
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(.white.opacity(0.85))
             
@@ -346,7 +346,7 @@ struct DashboardView: View {
     private var sectorContent: some ChartContent {
         ForEach(categoryData) { item in
             SectorMark(
-                angle: .value("Траты", item.amount),
+                angle: .value("spending".localized, item.amount),
                 innerRadius: .ratio(0.65),
                 angularInset: 2
             )
@@ -364,7 +364,7 @@ struct DashboardView: View {
 
     private var donutChartCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Распределение по категориям")
+            Text("category_distribution".localized)
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(.white.opacity(0.85))
             

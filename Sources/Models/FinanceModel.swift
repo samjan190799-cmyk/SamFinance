@@ -39,15 +39,17 @@ public struct Category: Codable, Identifiable, Hashable, Sendable {
 /// Банковская карта пользователя
 public struct Card: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
-    public var number: String // Например, "7642"
+    public var number: String // Полный 16-значный номер карты или 4 цифры
     public var holderName: String
     public var balance: Double
-    public var type: String // "Digital card"
+    public var type: String // Назначение карты ("Карта для покупок")
     public var colorHex: String // Основной цвет свечения
     public var gradientColors: [String] // Цвета для градиентного фона
     public var isFrozen: Bool
+    public var expiryDate: String // Срок действия (MM/YY)
+    public var cvv: String // CVV код (3 цифры)
     
-    public init(id: UUID = UUID(), number: String, holderName: String, balance: Double, type: String = "Digital card", colorHex: String, gradientColors: [String], isFrozen: Bool = false) {
+    public init(id: UUID = UUID(), number: String, holderName: String, balance: Double, type: String = "Digital card", colorHex: String, gradientColors: [String], isFrozen: Bool = false, expiryDate: String = "08/29", cvv: String = "123") {
         self.id = id
         self.number = number
         self.holderName = holderName
@@ -56,6 +58,8 @@ public struct Card: Codable, Identifiable, Hashable, Sendable {
         self.colorHex = colorHex
         self.gradientColors = gradientColors
         self.isFrozen = isFrozen
+        self.expiryDate = expiryDate
+        self.cvv = cvv
     }
 }
 

@@ -56,7 +56,7 @@ public final class LanguageManager {
         return dict[currentLanguage] ?? dict[.russian] ?? key
     }
     
-    // MARK: - Словарь переводов
+    // MARK: - Полный словарь переводов для Русского, Английского и Армянского
     private let translations: [String: [AppLanguage: String]] = [
         // Табы и навигация
         "tab_debts": [.russian: "Долги", .english: "Debts", .armenian: "Պարտքեր"],
@@ -75,6 +75,29 @@ public final class LanguageManager {
         "category_distribution": [.russian: "Распределение по категориям", .english: "Category Breakdown", .armenian: "Բաշխում ըստ կատեգորիաների"],
         "no_chart_data": [.russian: "Нет данных для отображения", .english: "No data available", .armenian: "Տվյալներ չկան"],
         
+        // Форма карты и полные реквизиты
+        "new_card": [.russian: "Новая карта", .english: "New Card", .armenian: "Նոր քարտ"],
+        "card_purpose": [.russian: "Назначение карты", .english: "Card Purpose", .armenian: "Քարտի նպատակը"],
+        "card_requisites": [.russian: "Реквизиты карты", .english: "Card Requisites", .armenian: "Քարտի տվյալները"],
+        "card_holder": [.russian: "Владелец карты", .english: "Card Holder", .armenian: "Քարտապան"],
+        "base_balance": [.russian: "Базовый баланс ($)", .english: "Starting Balance ($)", .armenian: "Սկզբնական հաշվեկշիռ ($)"],
+        "full_card_number": [.russian: "Номер карты (16 цифр)", .english: "Card Number (16 digits)", .armenian: "Քարտի համարը (16 նիշ)"],
+        "expiry_date": [.russian: "Срок действия (MM/YY)", .english: "Expiry Date (MM/YY)", .armenian: "Գործողության ժամկետ (ԱՄ/ՏԱ)"],
+        "cvv_code": [.russian: "CVV код", .english: "CVV Code", .armenian: "CVV Կոդ"],
+        "card_color_theme": [.russian: "Цветовая гамма карты", .english: "Card Color Theme", .armenian: "Քարտի գույնը"],
+        "cancel": [.russian: "Отмена", .english: "Cancel", .armenian: "Չեղարկել"],
+        "save": [.russian: "Сохранить", .english: "Save", .armenian: "Պահպանել"],
+        
+        "card_for_gifts": [.russian: "Карта для подарков", .english: "Gift Card", .armenian: "Քարտ նվերների համար"],
+        "card_for_online": [.russian: "Карта для онлайн покупок", .english: "Online Shopping Card", .armenian: "Քարտ օնլայն գնումների համար"],
+        "card_for_travel": [.russian: "Карта для путешествий", .english: "Travel Card", .armenian: "Քարտ ճանապարհորդության համար"],
+        "main_card": [.russian: "Основная карта", .english: "Main Card", .armenian: "Հիմնական քարտ"],
+        
+        "card_goals_title": [.russian: "Цели карты", .english: "Card Goals", .armenian: "Քարտի նպատակները"],
+        "no_card_goals": [.russian: "К этой карте пока не привязано целей.", .english: "No goals attached to this card yet.", .armenian: "Այս քարտին դեռ նպատակներ կցված չեն:"],
+        "goal": [.russian: "Цель", .english: "Goal", .armenian: "Նպատակ"],
+        "new_card_goal": [.russian: "Новая цель карты", .english: "New Card Goal", .armenian: "Քարտի նոր նպատակ"],
+
         // Карты
         "cards_title": [.russian: "Карты", .english: "Cards", .armenian: "Քարտեր"],
         "add_card": [.russian: "Добавить карту", .english: "Add card", .armenian: "Ավելացնել քարտ"],

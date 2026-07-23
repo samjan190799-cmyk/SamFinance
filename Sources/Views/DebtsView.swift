@@ -42,7 +42,7 @@ struct DebtsView: View {
     // MARK: - Шапка
     private var headerView: some View {
         HStack {
-            Text("Debts")
+            Text("debts_title".localized)
                 .font(.system(size: isSmallScreen ? 28 : 32, weight: .bold))
                 .foregroundColor(.white)
             
@@ -52,7 +52,7 @@ struct DebtsView: View {
                 HapticManager.shared.impact(.light)
                 isShowingAddSheet = true
             } label: {
-                Text("Add debt")
+                Text("add_debt".localized)
                     .font(.system(size: isSmallScreen ? 11 : 13, weight: .semibold))
                     .foregroundColor(.black)
                     .padding(.horizontal, isSmallScreen ? 12 : 16)
@@ -72,7 +72,7 @@ struct DebtsView: View {
                     selectedSegment = 0
                 }
             } label: {
-                Text("Кредиты")
+                Text("credits_tab".localized)
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(selectedSegment == 0 ? .black : .white.opacity(0.45))
                     .frame(maxWidth: .infinity, minHeight: 38)
@@ -86,7 +86,7 @@ struct DebtsView: View {
                     selectedSegment = 1
                 }
             } label: {
-                Text("Люди")
+                Text("people_tab".localized)
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(selectedSegment == 1 ? .black : .white.opacity(0.45))
                     .frame(maxWidth: .infinity, minHeight: 38)
