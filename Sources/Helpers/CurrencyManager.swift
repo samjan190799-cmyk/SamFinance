@@ -34,7 +34,7 @@ public enum AppCurrency: String, CaseIterable, Identifiable, Codable, Sendable {
 @Observable
 @MainActor
 public final class CurrencyManager {
-    @MainActor public static let shared = CurrencyManager()
+    public static let shared = CurrencyManager()
     
     /// Базовая валюта сохранения сумм в приложении (Армянский драм AMD)
     public var baseCurrency: AppCurrency = .amd

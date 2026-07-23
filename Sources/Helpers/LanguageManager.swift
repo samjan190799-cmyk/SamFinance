@@ -37,7 +37,7 @@ public enum AppLanguage: String, CaseIterable, Identifiable, Codable, Sendable {
 @Observable
 @MainActor
 public final class LanguageManager {
-    @MainActor public static let shared = LanguageManager()
+    public static let shared = LanguageManager()
     
     public var currentLanguage: AppLanguage {
         didSet {

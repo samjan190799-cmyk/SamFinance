@@ -6,7 +6,7 @@ import Observation
 @Observable
 @MainActor
 public final class CurrencyService {
-    @MainActor public static let shared = CurrencyService()
+    public static let shared = CurrencyService()
     
     // Курсы обмена относительно 1 USD (базовые значения по умолчанию + онлайн автообновление)
     public var exchangeRates: [AppCurrency: Double] = [
