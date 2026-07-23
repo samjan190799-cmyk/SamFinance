@@ -31,7 +31,7 @@ public final class CurrencyService {
             return
         }
         
-        Task {
+        Task { @MainActor in
             do {
                 let (data, _) = try await URLSession.shared.data(from: url)
                 if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
