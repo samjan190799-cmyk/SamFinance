@@ -19,7 +19,7 @@ struct GoalsView: View {
                 // Шапка
                 headerView
                     .padding(.horizontal, 24)
-                    .padding(.top, isSmallScreen ? 12 : 20)
+                    .padding(.top, isSmallScreen ? 34 : 54)
                     .padding(.bottom, isSmallScreen ? 16 : 24)
                 
                 // Белая шторка со списком копилок

@@ -20,7 +20,7 @@ struct DebtsView: View {
                 // Шапка
                 headerView
                     .padding(.horizontal, 24)
-                    .padding(.top, isSmallScreen ? 12 : 20)
+                    .padding(.top, isSmallScreen ? 34 : 54)
                 
                 // Переключатель сегментов «Кредиты / Люди»
                 customSegmentControl
