@@ -34,6 +34,7 @@ jobs:
 
       - name: Build App (Release / Unsigned)
         run: |
+          set -o pipefail
           xcodebuild -project SamFinance.xcodeproj \
                      -scheme SamFinance \
                      -destination 'generic/platform=iOS' \
@@ -44,7 +45,12 @@ jobs:
                      CODE_SIGNING_ALLOWED=NO \
                      VALIDATE_PRODUCT=NO \
                      AD_HOC_CODE_SIGNING_ALLOWED=YES \
-                     clean build
+                     clean build 2>&1 | tee build.log || {
+                       grep -E "error:" build.log | while read -r line; do
+                         echo "::error::$line"
+                       done
+                       exit 1
+                     }
 
       - name: Package as IPA
         run: |
