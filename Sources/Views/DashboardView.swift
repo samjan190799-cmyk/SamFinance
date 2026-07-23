@@ -299,7 +299,7 @@ struct DashboardView: View {
             chartContent
         }
         .chartXAxis {
-            AxisMarks(values: .stride(by: .day, count: 1)) { _ in
+            AxisMarks(values: .stride(by: .day, count: 1)) { value in
                 AxisValueLabel(format: .dateTime.day().month())
                     .foregroundStyle(Color.gray.opacity(0.8))
             }
