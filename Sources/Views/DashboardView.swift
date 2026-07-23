@@ -3,6 +3,7 @@ import Charts
 
 /// Главный экран приложения с дизайном по макету 2, переработанный под темную тему без шторки транзакций.
 /// Содержит графики аналитики расходов (Swift Charts) и систему автоматического распознавания СМС из буфера обмена.
+@MainActor
 struct DashboardView: View {
     let financeService: FinanceService
     @Binding var selectedTab: Int

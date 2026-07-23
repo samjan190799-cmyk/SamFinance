@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Экран управления банковскими картами пользователя с привязанными накопительными целями (копилочками)
 /// и полной поддержкой локализации (Русский, English, Հայերեն).
+@MainActor
 struct CardsView: View {
     let financeService: FinanceService
     @State private var isShowingAddCardSheet = false
