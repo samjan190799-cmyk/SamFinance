@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Экран Онлайн Конвертера Валют с актуальными курсами валют ЦБ
+@MainActor
 struct CurrencyConverterView: View {
     @Environment(\.dismiss) private var dismiss
     
