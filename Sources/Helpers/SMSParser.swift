@@ -206,8 +206,9 @@ public struct SMSParser {
                     }
                 }
             }
-        }
-        
+        return nil
+    }
+    
     /// Извлекает точную дату и время операции из текста СМС
     private static func extractDate(from text: String) -> Date? {
         let patterns = [

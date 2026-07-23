@@ -91,7 +91,7 @@ public final class AIService {
         // 4. Анализ привязанных банковских карт и копилок
         let cards = financeService.cards
         let goals = financeService.goals
-        let activeGoalsCount = goals.filter { !$0.isReached }.count
+        let activeGoalsCount = goals.filter { $0.currentAmount < $0.targetAmount }.count
         
         if !cards.isEmpty {
             insights.append(AIFinancialInsight(
