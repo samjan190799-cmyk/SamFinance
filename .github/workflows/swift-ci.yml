@@ -54,6 +54,12 @@ jobs:
           name: xcodebuild-log
           path: xcodebuild.log
 
+      - name: Print Xcode Error Output
+        if: failure()
+        run: |
+          echo "=== XCODEBUILD ERROR LOG ==="
+          cat xcodebuild.log | grep -E "error:" -C 3 || tail -n 100 xcodebuild.log
+
       - name: Package as IPA
         run: |
           mkdir -p build/Payload
