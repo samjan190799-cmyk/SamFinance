@@ -45,7 +45,14 @@ jobs:
                      CODE_SIGNING_ALLOWED=NO \
                      VALIDATE_PRODUCT=NO \
                      AD_HOC_CODE_SIGNING_ALLOWED=YES \
-                     clean build
+                     clean build 2>&1 | tee xcodebuild.log
+
+      - name: Upload Build Log on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: xcodebuild.log
 
       - name: Package as IPA
         run: |

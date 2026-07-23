@@ -5,7 +5,7 @@ import Foundation
 @available(iOS 16.0, *)
 public struct ProcessSMSIntent: AppIntent {
     public static var title: LocalizedStringResource = "Распознать СМС транзакцию"
-    public static var description = IntentDescription("Парсит текст банковской СМС и автоматически сохраняет транзакцию в SamFinance.")
+    public static var description = IntentDescription(stringLiteral: "Парсит текст банковской СМС и автоматически сохраняет транзакцию в SamFinance.")
     
     // Входной параметр — текст СМС, передаваемый из приложения "Быстрые команды"
     @Parameter(title: "Текст СМС")
@@ -24,7 +24,7 @@ public struct ProcessSMSIntent: AppIntent {
     }
     
     @MainActor
-    public func perform() async throws -> some IntentResult & ReturnsValue<String> {
+    public func perform() async throws -> some IntentResult {
         // Парсим СМС через наш SMSParser
         if let parsed = SMSParser.parse(text: smsText) {
             let financeService = FinanceService.shared
