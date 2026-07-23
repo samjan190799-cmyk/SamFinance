@@ -247,3 +247,4 @@ public struct SMSParser {
         return nil
     }
 }
+
