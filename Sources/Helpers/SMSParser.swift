@@ -55,7 +55,7 @@ public struct SMSParser {
     private static func isHeaderOfSMS(_ text: String) -> Bool {
         let lower = text.lowercased()
         let bankKeywords = [
-            "inecobank", "ameriabank", "acba", "ardshinbank", "evocabank", "idbank", "converse", "vcharum", "poxancum", "vcharvel", "сбербанк", "т-банк", "тинькофф", "втб", "альфа", "списание", "зачисление", "покупка", "оплата", "card", "kart"
+            "inecobank", "ameriabank", "acba", "ardshinbank", "evocabank", "idbank", "converse", "arca", "amio", "amio bank", "elq hashvic", "mutq hashvin", "vcharum", "poxancum", "vcharvel", "сбербанк", "т-банк", "тинькофф", "втб", "альфа", "списание", "зачисление", "покупка", "оплата", "card", "kart"
         ]
         return bankKeywords.contains { lower.contains($0) }
     }
@@ -88,6 +88,19 @@ public struct SMSParser {
         // 3. Определение бренда и категории
         var brandName: String? = nil
         var categoryName = type == .income ? "Зарплата" : "Продукты"
+        
+        // Банки Армении (IDBank, ARCA, AMIO BANK, Inecobank и др)
+        if lowercased.contains("idbank") || lowercased.contains("elq hashvic") || lowercased.contains("mutq hashvin") {
+            brandName = "IDBank"
+            if lowercased.contains("elq hashvic") { type = .expense }
+            if lowercased.contains("mutq hashvin") { type = .income }
+        } else if lowercased.contains("arca") || lowercased.contains("not enough funds") {
+            brandName = "ARCA System"
+            categoryName = "Продукты"
+        } else if lowercased.contains("amio") || lowercased.contains("varky") || lowercased.contains("vark") {
+            brandName = "AMIO Bank (Кредит)"
+            categoryName = "Долги"
+        }
         
         if lowercased.contains("sas") || lowercased.contains("yerevan city") || lowercased.contains("ереван сити") || lowercased.contains("nor zovq") || lowercased.contains("carrefour") || lowercased.contains("kaiser") || lowercased.contains("evrika") || lowercased.contains("магнит") || lowercased.contains("пятерочка") || lowercased.contains("перекресток") || lowercased.contains("lenta") || lowercased.contains("grocery") || lowercased.contains("supermarket") {
             if lowercased.contains("sas") { brandName = "SAS Supermarket" }
