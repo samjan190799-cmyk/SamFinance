@@ -116,6 +116,7 @@ public final class LanguageManager {
 
 /// Расширение String для удобного обращения string.localized
 public extension String {
+    @MainActor
     var localized: String {
         LanguageManager.shared.localizedString(for: self)
     }
