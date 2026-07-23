@@ -12,7 +12,7 @@ public struct ProcessSMSIntent: AppIntent {
     public var smsText: String
     
     public static var parameterSummary: some ParameterSummary {
-        Summary("Распознать транзакцию из \(\.$smsText)")
+        Summary("Распознать транзакцию из \($smsText)")
     }
     
     public init() {

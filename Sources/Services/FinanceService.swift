@@ -6,7 +6,7 @@ import Observation
 @Observable
 @MainActor
 public final class FinanceService {
-    public static let shared = FinanceService()
+    @MainActor public static let shared = FinanceService()
     
     public private(set) var transactions: [Transaction] = []
     public private(set) var cards: [Card] = []
