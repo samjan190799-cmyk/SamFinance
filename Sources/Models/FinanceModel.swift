@@ -86,17 +86,19 @@ public struct Debt: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-/// Накопительная цель (Копилка)
+/// Накопительная цель (Копилка), привязанная к карте
 public struct Goal: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
-    public var title: String // Название цели (например, "На автомобиль")
+    public var cardId: UUID? // Привязка копилки к конкретной карте
+    public var title: String // Название цели (например, "На подарки")
     public var targetAmount: Double // Целевая сумма
     public var currentAmount: Double // Накоплено на данный момент
     public var colorHex: String // Цвет свечения
     public var gradientColors: [String] // Цвета градиента карточки цели
     
-    public init(id: UUID = UUID(), title: String, targetAmount: Double, currentAmount: Double = 0.0, colorHex: String, gradientColors: [String]) {
+    public init(id: UUID = UUID(), cardId: UUID? = nil, title: String, targetAmount: Double, currentAmount: Double = 0.0, colorHex: String, gradientColors: [String]) {
         self.id = id
+        self.cardId = cardId
         self.title = title
         self.targetAmount = targetAmount
         self.currentAmount = currentAmount

@@ -105,6 +105,10 @@ public final class FinanceService {
         saveGoals()
     }
     
+    public func goalsForCard(cardId: UUID) -> [Goal] {
+        goals.filter { $0.cardId == cardId }
+    }
+    
     public func addFundsToGoal(id: UUID, amount: Double) {
         if let index = goals.firstIndex(where: { $0.id == id }) {
             goals[index].currentAmount += amount
