@@ -20,6 +20,15 @@ public enum AppCurrency: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
     
+    public var flagIcon: String {
+        switch self {
+        case .amd: return "🇦🇲"
+        case .rub: return "🇷🇺"
+        case .usd: return "🇺🇸"
+        case .eur: return "🇪🇺"
+        }
+    }
+    
     public var displayName: String {
         switch self {
         case .amd: return "Армянский драм (֏)"
