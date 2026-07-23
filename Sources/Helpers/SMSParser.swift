@@ -12,6 +12,32 @@ public struct ParsedSMSTransaction: Sendable, Hashable {
 /// Помощник для автоматического парсинга СМС-сообщений от банков
 public struct SMSParser {
     
+    /// Парсит блок текста со множеством СМС сообщений (историю СМС)
+    public static func parseBatch(text: String) -> [ParsedSMSTransaction] {
+        let lines = text.components(separatedBy: .newlines)
+        var results: [ParsedSMSTransaction] = []
+        var currentChunk = ""
+        
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { continue }
+            
+            // Пробуем скомпоновать блок СМС или распознать отдельной строкой
+            if let singleParsed = parse(text: trimmed) {
+                results.append(singleParsed)
+                currentChunk = ""
+            } else {
+                currentChunk += " " + trimmed
+                if let chunkParsed = parse(text: currentChunk) {
+                    results.append(chunkParsed)
+                    currentChunk = ""
+                }
+            }
+        }
+        
+        return results
+    }
+    
     /// Парсит текст сообщения и пытается извлечь сумму, тип транзакции и бренд/категорию
     public static func parse(text: String) -> ParsedSMSTransaction? {
         let lowercased = text.lowercased()

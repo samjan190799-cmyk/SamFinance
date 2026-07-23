@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Экран создания новой финансовой транзакции с валидацией, тактильной отдачей
-/// и поддержкой быстрого импорта/распознавания СМС из буфера обмена.
+/// и поддержкой быстрого одиночного и пакетного распознавания ранних СМС из буфера/истории.
 struct AddTransactionView: View {
     @Environment(\.dismiss) private var dismiss
     let financeService: FinanceService
@@ -12,13 +12,13 @@ struct AddTransactionView: View {
     @State private var selectedCategory: Category
     @State private var date: Date = Date()
     @State private var notes: String = ""
+    @State private var isShowingBatchImport = false
     
     // Результат распознавания
     @State private var recognitionMessage: String? = nil
     
     init(financeService: FinanceService) {
         self.financeService = financeService
-        // По умолчанию выбираем первую категорию расходов
         let defaultCategory = financeService.categories.first { $0.type == .expense } ?? financeService.categories[0]
         _selectedCategory = State(initialValue: defaultCategory)
     }
@@ -40,13 +40,27 @@ struct AddTransactionView: View {
                     }
                     .foregroundColor(.white)
                     
+                    Button {
+                        HapticManager.shared.impact(.light)
+                        isShowingBatchImport = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "text.badge.plus")
+                                .foregroundColor(.blue)
+                            Text("Импорт ранней истории СМС")
+                                .fontWeight(.semibold)
+                            Spacer()
+                        }
+                    }
+                    .foregroundColor(.white)
+                    
                     if let msg = recognitionMessage {
                         Text(msg)
                             .font(.caption)
                             .foregroundColor(msg.contains("Успешно") ? .green : .red)
                     }
                 } header: {
-                    Text("Быстрый ввод из банка")
+                    Text("Быстрый ввод и парсер СМС")
                 }
                 
                 Section {
@@ -57,7 +71,6 @@ struct AddTransactionView: View {
                     .pickerStyle(.segmented)
                     .onChange(of: transactionType) { _, newValue in
                         HapticManager.shared.selection()
-                        // Автоматическая смена выбранной категории на соответствующую новому типу
                         if let firstOfNewType = financeService.categories.first(where: { $0.type == newValue }) {
                             withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.75)) {
                                 selectedCategory = firstOfNewType
@@ -66,7 +79,7 @@ struct AddTransactionView: View {
                     }
                     
                     HStack {
-                        Text("Сумма")
+                        Text("Сумма ($)")
                             .font(.headline)
                         Spacer()
                         TextField("0", text: $amountString)
@@ -99,42 +112,44 @@ struct AddTransactionView: View {
                                     isSelected: selectedCategory.id == category.id
                                 )
                                 .onTapGesture {
-                                    HapticManager.shared.impact(.light)
-                                    withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.7)) {
+                                    HapticManager.shared.selection()
+                                    withAnimation(.interactiveSpring(response: 0.35, dampingFraction: 0.75)) {
                                         selectedCategory = category
                                     }
                                 }
                             }
                         }
-                        .padding(.vertical, 4)
+                        .padding(.vertical, 6)
                     }
                 } header: {
-                    Text("Выберите категорию")
+                    Text("Выбор категории")
                 }
                 
                 Section {
-                    TextField("Заметки", text: $notes, axis: .vertical)
-                        .lineLimit(3...5)
+                    TextField("Заметка (опционально)", text: $notes)
                 } header: {
                     Text("Дополнительно")
                 }
             }
-            .navigationTitle("Новая операция")
+            .navigationTitle("Новая транзакция")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Отмена") {
-                        HapticManager.shared.impact(.light)
                         dismiss()
                     }
                 }
+                
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Добавить") {
+                    Button("Сохранить") {
                         saveTransaction()
                     }
-                    .font(.headline)
                     .disabled(isSaveDisabled)
+                    .fontWeight(.bold)
                 }
+            }
+            .sheet(isPresented: $isShowingBatchImport) {
+                BatchSMSImportSheet(financeService: financeService)
             }
         }
     }
@@ -147,58 +162,54 @@ struct AddTransactionView: View {
     private func saveTransaction() {
         guard let amount = Double(amountString.replacingOccurrences(of: ",", with: ".")) else { return }
         
-        let transaction = Transaction(
+        let newTransaction = Transaction(
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             amount: amount,
             type: transactionType,
             category: selectedCategory,
             date: date,
-            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes,
-            brandName: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            notes: notes.isEmpty ? nil : notes,
+            brandName: title,
             brandIcon: selectedCategory.icon,
             brandColorHex: selectedCategory.colorHex
         )
         
-        financeService.addTransaction(transaction)
+        financeService.addTransaction(newTransaction)
         HapticManager.shared.trigger(.success)
         dismiss()
     }
     
     private func recognizeSMSFromClipboard() {
-        guard let clipboardString = UIPasteboard.general.string,
-              !clipboardString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            HapticManager.shared.trigger(.error)
-            recognitionMessage = "Буфер обмена пуст"
+        HapticManager.shared.impact(.light)
+        guard let clipboardText = UIPasteboard.general.string, !clipboardText.isEmpty else {
+            withAnimation {
+                recognitionMessage = "Буфер обмена пуст."
+            }
             return
         }
         
-        if let parsed = SMSParser.parse(text: clipboardString) {
-            HapticManager.shared.trigger(.success)
-            // Форматируем сумму без лишних копеек, если они равны нулю
-            if parsed.amount.truncatingRemainder(dividingBy: 1) == 0 {
-                amountString = String(format: "%.0f", parsed.amount)
-            } else {
-                amountString = String(format: "%.2f", parsed.amount)
-            }
-            transactionType = parsed.type
+        if let parsed = SMSParser.parse(text: clipboardText) {
             title = parsed.title
-            
+            amountString = String(format: "%.2f", parsed.amount)
+            transactionType = parsed.type
             if let matchedCat = financeService.categories.first(where: { $0.name == parsed.categoryName }) {
                 selectedCategory = matchedCat
             }
             
-            recognitionMessage = "Успешно распознано: \(parsed.title) (\(Int(parsed.amount)) $)"
-            
-            // Очищаем буфер для безопасности
-            UIPasteboard.general.string = ""
+            withAnimation {
+                recognitionMessage = "Успешно распознано: \(parsed.title) (\(parsed.amount) $)"
+            }
+            HapticManager.shared.trigger(.success)
         } else {
+            withAnimation {
+                recognitionMessage = "Не удалось распознать формат СМС."
+            }
             HapticManager.shared.trigger(.error)
-            recognitionMessage = "Не удалось распознать формат СМС"
         }
     }
 }
 
-/// Элемент выбора категории в виде пилюли
+/// Пузырек выбора категории
 struct CategoryBubble: View {
     let category: Category
     let isSelected: Bool
@@ -206,27 +217,144 @@ struct CategoryBubble: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: category.icon)
-                .font(.body.bold())
+                .font(.system(size: 13))
             Text(category.name)
-                .font(.subheadline)
+                .font(.system(size: 13, weight: .medium))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background {
-            if isSelected {
-                Color(hex: category.colorHex)
-            } else {
-                Color(.systemGray6)
-            }
-        }
-        .foregroundColor(isSelected ? .white : .primary)
+        .background(isSelected ? Color(hex: category.colorHex) : Color.white.opacity(0.1))
+        .foregroundColor(isSelected ? .white : .gray)
         .clipShape(Capsule())
-        .overlay {
-            if isSelected {
-                Capsule()
-                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
+        .overlay(
+            Capsule()
+                .stroke(isSelected ? Color.white.opacity(0.5) : Color.clear, lineWidth: 1.5)
+        )
+    }
+}
+
+/// Модальный экран пакетного сканирования и распознавания всей ранней истории СМС сообщений
+struct BatchSMSImportSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let financeService: FinanceService
+    
+    @State private var batchText: String = ""
+    @State private var recognizedTransactions: [ParsedSMSTransaction] = []
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                Text("Вставьте текст вашей истории СМС сообщений за прошлые периоды. Парсер распознает все операции списком.")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 16)
+                
+                TextEditor(text: $batchText)
+                    .frame(height: 140)
+                    .padding(8)
+                    .background(Color.white.opacity(0.05))
+                    .cornerRadius(12)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.gray.opacity(0.3), lineWidth: 1))
+                    .padding(.horizontal, 16)
+                
+                HStack {
+                    Button {
+                        if let clipboard = UIPasteboard.general.string {
+                            batchText = clipboard
+                            HapticManager.shared.impact(.light)
+                        }
+                    } label: {
+                        Label("Вставить из буфера", systemImage: "doc.on.clipboard")
+                            .font(.caption.bold())
+                    }
+                    
+                    Spacer()
+                    
+                    Button {
+                        HapticManager.shared.trigger(.success)
+                        withAnimation {
+                            recognizedTransactions = SMSParser.parseBatch(text: batchText)
+                        }
+                    } label: {
+                        Text("Распознать все СМС (\(recognizedTransactions.count))")
+                            .font(.caption.bold())
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .clipShape(Capsule())
+                    }
+                }
+                .padding(.horizontal, 16)
+                
+                // Список распознанных ранних СМС
+                if !recognizedTransactions.isEmpty {
+                    List {
+                        Section {
+                            ForEach(0..<recognizedTransactions.count, id: \.self) { index in
+                                let t = recognizedTransactions[index]
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(t.title)
+                                            .fontWeight(.bold)
+                                        Text(t.categoryName)
+                                            .font(.caption)
+                                            .foregroundColor(.gray)
+                                    }
+                                    Spacer()
+                                    Text("$\(Int(t.amount))")
+                                        .fontWeight(.bold)
+                                        .foregroundColor(t.type == .expense ? .red : .green)
+                                }
+                            }
+                        } header: {
+                            Text("Найдено операций: \(recognizedTransactions.count)")
+                        }
+                    }
+                } else {
+                    Spacer()
+                }
+            }
+            .padding(.top, 16)
+            .navigationTitle("Импорт ранней истории СМС")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Отмена") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Импортировать все (\(recognizedTransactions.count))") {
+                        importAllRecognized()
+                    }
+                    .disabled(recognizedTransactions.isEmpty)
+                    .fontWeight(.bold)
+                }
             }
         }
-        .scaleEffect(isSelected ? 1.05 : 1.0)
+    }
+    
+    private func importAllRecognized() {
+        for parsed in recognizedTransactions {
+            let category = financeService.categories.first(where: { $0.name == parsed.categoryName }) ?? financeService.categories[0]
+            let transaction = Transaction(
+                title: parsed.title,
+                amount: parsed.amount,
+                type: parsed.type,
+                category: category,
+                date: Date(),
+                notes: "Импортировано из ранней истории СМС",
+                brandName: parsed.brandName,
+                brandIcon: category.icon,
+                brandColorHex: category.colorHex
+            )
+            financeService.addTransaction(transaction)
+        }
+        
+        HapticManager.shared.trigger(.success)
+        dismiss()
     }
 }
