@@ -15,50 +15,43 @@ struct DashboardView: View {
     @State private var detectedSMSTransaction: ParsedSMSTransaction? = nil
     @State private var showSMSBanner = false
     @State private var lastCheckedClipboardString = ""
+    @State private var detectedBatchTransactions: [ParsedSMSTransaction] = []
     
-    /// Определение компактных экранов для динамической адаптации верстки
     private var isSmallScreen: Bool {
         UIScreen.main.bounds.height < 750
     }
     
     var body: some View {
         ZStack(alignment: .top) {
-            Color(hex: "#0E0F12") // Глубокий темный фон
+            Color(hex: "#0E0F12")
                 .ignoresSafeArea()
             
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 0) {
-                    // Шапка (Профиль и уведомления)
                     headerView
                         .padding(.horizontal, 24)
-                        .padding(.top, isSmallScreen ? 34 : 54) // Отступ сверху с учетом safe area
+                        .padding(.top, isSmallScreen ? 34 : 54)
                     
-                    // Сводка баланса и выглядывающие карты справа
                     HStack(alignment: .center, spacing: 0) {
                         balanceSection
-                        
                         Spacer()
-                        
                         miniCardsStack
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, isSmallScreen ? 12 : 20)
                     
-                    // Блок расходов Spending
                     spendingSection
                         .padding(.horizontal, 24)
                         .padding(.top, isSmallScreen ? 16 : 24)
                     
-                    // Секция аналитики и графиков трат (вместо шторки транзакций)
                     analyticsSection
                         .padding(.horizontal, 24)
                         .padding(.top, isSmallScreen ? 18 : 28)
-                        .padding(.bottom, isSmallScreen ? 110 : 140) // Отступ под таб-бар
+                        .padding(.bottom, isSmallScreen ? 110 : 140)
                 }
             }
             .ignoresSafeArea(edges: .bottom)
             
-            // Парящий СМС Баннер (Dynamic Island style)
             if showSMSBanner, let parsed = detectedSMSTransaction {
                 smsNotificationBanner(parsed: parsed)
                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -83,7 +76,6 @@ struct DashboardView: View {
     // MARK: - Шапка
     private var headerView: some View {
         HStack {
-            // Аватарка (круглая с градиентом) -> Открывает настройки
             Button {
                 HapticManager.shared.impact(.light)
                 isShowingSettingsSheet = true
@@ -109,7 +101,6 @@ struct DashboardView: View {
             Spacer()
             
             HStack(spacing: 8) {
-                // Кнопка Онлайн Конвертера
                 Button {
                     HapticManager.shared.impact(.light)
                     isShowingConverter = true
@@ -122,7 +113,6 @@ struct DashboardView: View {
                         .clipShape(Circle())
                 }
                 
-                // Колокольчик
                 Button {
                     HapticManager.shared.impact(.light)
                     checkClipboardForSMS()
@@ -145,7 +135,6 @@ struct DashboardView: View {
                 .font(.system(size: isSmallScreen ? 12 : 14))
                 .foregroundColor(.gray)
             
-            // Форматированный баланс с мелкой дробной частью
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 let formatted = balanceFormatted
                 Text(formatted.whole)
@@ -157,9 +146,7 @@ struct DashboardView: View {
                     .foregroundColor(.gray)
             }
             
-            // Кнопки Send и Request
             HStack(spacing: 8) {
-                // Кнопка Send (белая)
                 Button {
                     HapticManager.shared.trigger(.success)
                     isShowingAddSheet = true
@@ -183,7 +170,6 @@ struct DashboardView: View {
                     .clipShape(Capsule())
                 }
                 
-                // Кнопка Request (темная)
                 Button {
                     HapticManager.shared.impact(.light)
                     isShowingAddSheet = true
@@ -200,30 +186,27 @@ struct DashboardView: View {
         }
     }
     
-    // MARK: - Стопка мини-карт справа
+    // MARK: - Стопка мини-карт
     private var miniCardsStack: some View {
         Button {
             HapticManager.shared.trigger(.success)
             withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                selectedTab = 2 // Переключение на вкладку карт
+                selectedTab = 2
             }
         } label: {
             ZStack {
-                // Синяя карта (самая задняя)
                 RoundedRectangle(cornerRadius: 8)
                     .fill(LinearGradient(colors: [Color(hex: "#00C6FF"), Color(hex: "#0072FF")], startPoint: .top, endPoint: .bottom))
                     .frame(width: isSmallScreen ? 38 : 46, height: isSmallScreen ? 64 : 78)
                     .offset(x: isSmallScreen ? 16 : 20, y: isSmallScreen ? 4 : 6)
                     .rotationEffect(.degrees(4))
                 
-                // Зеленая карта (средняя)
                 RoundedRectangle(cornerRadius: 8)
                     .fill(LinearGradient(colors: [Color(hex: "#00F2FE"), Color(hex: "#4FACFE")], startPoint: .top, endPoint: .bottom))
                     .frame(width: isSmallScreen ? 38 : 46, height: isSmallScreen ? 64 : 78)
                     .offset(x: isSmallScreen ? 8 : 10, y: 0)
                     .rotationEffect(.degrees(-2))
                 
-                // Желтая карта (передняя)
                 RoundedRectangle(cornerRadius: 8)
                     .fill(LinearGradient(colors: [Color(hex: "#FFE259"), Color(hex: "#FFA751")], startPoint: .top, endPoint: .bottom))
                     .frame(width: isSmallScreen ? 38 : 46, height: isSmallScreen ? 64 : 78)
@@ -231,12 +214,12 @@ struct DashboardView: View {
                     .rotationEffect(.degrees(-6))
             }
             .frame(width: isSmallScreen ? 60 : 70, height: isSmallScreen ? 80 : 90)
-            .offset(x: isSmallScreen ? 24 : 30) // Выдвигаем за правый край экрана
+            .offset(x: isSmallScreen ? 24 : 30)
             .shadow(color: Color.black.opacity(0.35), radius: 6, x: -3, y: 3)
         }
     }
     
-    // MARK: - Блок расходов Spending
+    // MARK: - Блок расходов
     private var spendingSection: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
@@ -251,7 +234,6 @@ struct DashboardView: View {
             
             Spacer()
             
-            // Наползающие друг на друга иконки брендов (если есть расходы)
             if financeService.transactions.filter({ $0.type == .expense }).isEmpty {
                 Text("no_spending".localized)
                     .font(.system(size: 12))
@@ -282,161 +264,14 @@ struct DashboardView: View {
         }
     }
     
-    // MARK: - Графики расходов (Swift Charts)
+    // MARK: - Секция аналитики
     private var analyticsSection: some View {
-        VStack(spacing: 20) {
-            lineChartCard
-            donutChartCard
+        VStack(spacing: 16) {
+            DashboardLineChartCard(financeService: financeService)
+            DashboardDonutChartCard(financeService: financeService)
         }
     }
     
-    private var areaGradient: LinearGradient {
-        LinearGradient(
-            colors: [Color(hex: "#00F2FE").opacity(0.25), Color(hex: "#00F2FE").opacity(0.0)],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
-    
-    private var lineColor: Color {
-        Color(hex: "#00F2FE")
-    }
-
-    @ChartContentBuilder
-    private var chartContent: some ChartContent {
-        ForEach(chartData) { item in
-            // Area
-            AreaMark(
-                x: .value("Дата", item.date, unit: .day),
-                y: .value("Траты", item.amount)
-            )
-            .foregroundStyle(areaGradient)
-            .interpolationMethod(.catmullRom)
-            
-            // Line
-            LineMark(
-                x: .value("Дата", item.date, unit: .day),
-                y: .value("Траты", item.amount)
-            )
-            .foregroundStyle(lineColor)
-            .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
-            .interpolationMethod(.catmullRom)
-        }
-    }
-
-    private func makeLineChart() -> some View {
-        Chart {
-            chartContent
-        }
-        .chartXAxis {
-            AxisMarks(values: .stride(by: .day, count: 1)) { value in
-                AxisValueLabel(format: .dateTime.day().month())
-                    .foregroundStyle(Color.gray.opacity(0.8))
-            }
-        }
-        .chartYAxis {
-            AxisMarks { value in
-                AxisValueLabel()
-                    .foregroundStyle(Color.gray.opacity(0.8))
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [4, 4])).foregroundStyle(Color.white.opacity(0.06))
-            }
-        }
-        .frame(height: 160)
-    }
-
-    private var lineChartCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("weekly_spending".localized)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(.white.opacity(0.85))
-            
-            if chartData.isEmpty || financeService.totalSpending == 0 {
-                emptyChartPlaceholder
-            } else {
-                makeLineChart()
-            }
-        }
-        .padding(18)
-        .background(Color.white.opacity(0.04))
-        .cornerRadius(24)
-        .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.04), lineWidth: 1))
-    }
-    
-    @ChartContentBuilder
-    private var sectorContent: some ChartContent {
-        ForEach(categoryData) { item in
-            SectorMark(
-                angle: .value("spending".localized, item.amount),
-                innerRadius: .ratio(0.65),
-                angularInset: 2
-            )
-            .cornerRadius(4)
-            .foregroundStyle(item.color)
-        }
-    }
-
-    private func makeDonutChart() -> some View {
-        Chart {
-            sectorContent
-        }
-        .frame(width: 140, height: 140)
-    }
-
-    private var donutChartCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("category_distribution".localized)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(.white.opacity(0.85))
-            
-            if categoryData.isEmpty {
-                emptyChartPlaceholder
-            } else {
-                HStack(spacing: 20) {
-                    makeDonutChart()
-                    
-                    // Легенда
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(categoryData.prefix(4)) { item in
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(item.color)
-                                    .frame(width: 8, height: 8)
-                                Text(item.category)
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                                Spacer()
-                                Text(CurrencyManager.shared.format(item.amount))
-                                    .font(.caption.bold())
-                                    .foregroundColor(.white)
-                            }
-                        }
-                    }
-                }
-                .frame(height: 140)
-            }
-        }
-        .padding(18)
-        .background(Color.white.opacity(0.04))
-        .cornerRadius(24)
-        .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.04), lineWidth: 1))
-    }
-    
-    private var emptyChartPlaceholder: some View {
-        VStack {
-            Spacer()
-            Image(systemName: "chart.pie.fill")
-                .font(.system(size: 32))
-                .foregroundColor(.white.opacity(0.1))
-            Text("no_chart_data".localized)
-                .font(.caption)
-                .foregroundColor(.gray)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 130)
-    }
-    
-    // MARK: - СМС Распознаватель из Буфера обмена (Dynamic Island Notification)
     private func smsNotificationBanner(parsed: ParsedSMSTransaction) -> some View {
         HStack(spacing: 12) {
             Image(systemName: "banknote.fill")
@@ -458,7 +293,6 @@ struct DashboardView: View {
             
             Spacer()
             
-            // Кнопка Отклонить
             Button {
                 HapticManager.shared.impact(.light)
                 withAnimation {
@@ -475,7 +309,6 @@ struct DashboardView: View {
                     .clipShape(Circle())
             }
             
-            // Кнопка Записать
             Button {
                 addDetectedTransaction()
             } label: {
@@ -496,10 +329,6 @@ struct DashboardView: View {
         .padding(.top, isSmallScreen ? 12 : 24)
         .shadow(color: Color.black.opacity(0.5), radius: 15, x: 0, y: 10)
     }
-    
-    @State private var detectedBatchTransactions: [ParsedSMSTransaction] = []
-    
-    // MARK: - Вспомогательные методы
     
     private func checkClipboardForSMS() {
         guard let clipboardString = UIPasteboard.general.string,
@@ -575,20 +404,17 @@ struct DashboardView: View {
     private func formatSpendingAmount(_ amount: Double) -> String {
         return CurrencyManager.shared.format(amount)
     }
-    
-    // MARK: - Вычисления для графиков Swift Charts
+}
+
+/// Выделенный под-компонент линейного графика для быстрой проверки типов компилятором
+@MainActor
+struct DashboardLineChartCard: View {
+    let financeService: FinanceService
     
     struct SpendingChartData: Identifiable {
         let id = UUID()
         let date: Date
         let amount: Double
-    }
-
-    struct CategorySpendingData: Identifiable {
-        let id = UUID()
-        let category: String
-        let amount: Double
-        let color: Color
     }
     
     private var chartData: [SpendingChartData] {
@@ -614,6 +440,87 @@ struct DashboardView: View {
             .sorted(by: { $0.date < $1.date })
     }
     
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("weekly_spending".localized)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.white.opacity(0.85))
+            
+            if chartData.isEmpty || financeService.totalSpending == 0 {
+                emptyChartPlaceholder
+            } else {
+                makeLineChart()
+            }
+        }
+        .padding(18)
+        .background(Color.white.opacity(0.04))
+        .cornerRadius(24)
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.04), lineWidth: 1))
+    }
+    
+    private func makeLineChart() -> some View {
+        Chart {
+            ForEach(chartData) { item in
+                AreaMark(
+                    x: .value("Дата", item.date, unit: .day),
+                    y: .value("Траты", item.amount)
+                )
+                .foregroundStyle(LinearGradient(colors: [Color(hex: "#00F2FE").opacity(0.25), Color(hex: "#00F2FE").opacity(0.0)], startPoint: .top, endPoint: .bottom))
+                .interpolationMethod(.catmullRom)
+                
+                LineMark(
+                    x: .value("Дата", item.date, unit: .day),
+                    y: .value("Траты", item.amount)
+                )
+                .foregroundStyle(Color(hex: "#00F2FE"))
+                .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
+                .interpolationMethod(.catmullRom)
+            }
+        }
+        .chartXAxis {
+            AxisMarks(values: .stride(by: .day, count: 1)) { value in
+                AxisValueLabel(format: .dateTime.day().month())
+                    .foregroundStyle(Color.gray.opacity(0.8))
+            }
+        }
+        .chartYAxis {
+            AxisMarks { value in
+                AxisValueLabel()
+                    .foregroundStyle(Color.gray.opacity(0.8))
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [4, 4])).foregroundStyle(Color.white.opacity(0.06))
+            }
+        }
+        .frame(height: 160)
+    }
+    
+    private var emptyChartPlaceholder: some View {
+        VStack {
+            Spacer()
+            Image(systemName: "chart.pie.fill")
+                .font(.system(size: 32))
+                .foregroundColor(.white.opacity(0.1))
+            Text("no_chart_data".localized)
+                .font(.caption)
+                .foregroundColor(.gray)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 130)
+    }
+}
+
+/// Выделенный под-компонент круговой диаграммы категорий
+@MainActor
+struct DashboardDonutChartCard: View {
+    let financeService: FinanceService
+    
+    struct CategorySpendingData: Identifiable {
+        let id = UUID()
+        let category: String
+        let amount: Double
+        let color: Color
+    }
+    
     private var categoryData: [CategorySpendingData] {
         let expenses = financeService.transactions.filter { $0.type == .expense }
         var categoryMap: [String: Double] = [:]
@@ -631,5 +538,73 @@ struct DashboardView: View {
                 color: Color(hex: colorMap[key] ?? "#FFFFFF")
             )
         }
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("category_distribution".localized)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.white.opacity(0.85))
+            
+            if categoryData.isEmpty {
+                emptyChartPlaceholder
+            } else {
+                HStack(spacing: 20) {
+                    makeDonutChart()
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(categoryData.prefix(4)) { item in
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(item.color)
+                                    .frame(width: 8, height: 8)
+                                Text(item.category)
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                Spacer()
+                                Text(CurrencyManager.shared.format(item.amount))
+                                    .font(.caption.bold())
+                                    .foregroundColor(.white)
+                            }
+                        }
+                    }
+                }
+                .frame(height: 140)
+            }
+        }
+        .padding(18)
+        .background(Color.white.opacity(0.04))
+        .cornerRadius(24)
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.04), lineWidth: 1))
+    }
+    
+    private func makeDonutChart() -> some View {
+        Chart {
+            ForEach(categoryData) { item in
+                SectorMark(
+                    angle: .value("spending".localized, item.amount),
+                    innerRadius: .ratio(0.65),
+                    angularInset: 2
+                )
+                .cornerRadius(4)
+                .foregroundStyle(item.color)
+            }
+        }
+        .frame(width: 140, height: 140)
+    }
+    
+    private var emptyChartPlaceholder: some View {
+        VStack {
+            Spacer()
+            Image(systemName: "chart.pie.fill")
+                .font(.system(size: 32))
+                .foregroundColor(.white.opacity(0.1))
+            Text("no_chart_data".localized)
+                .font(.caption)
+                .foregroundColor(.gray)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 130)
     }
 }
