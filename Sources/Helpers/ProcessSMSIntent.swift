@@ -4,15 +4,15 @@ import Foundation
 /// Системное действие для автоматического парсинга СМС через Быстрые команды (Siri Shortcuts)
 @available(iOS 16.0, *)
 public struct ProcessSMSIntent: AppIntent {
-    public static var title: LocalizedStringResource = "Распознать СМС транзакцию"
-    public static var description = IntentDescription(stringLiteral: "Парсит текст банковской СМС и автоматически сохраняет транзакцию в SamFinance.")
+    public static var title: LocalizedStringResource { "Распознать СМС транзакцию" }
+    public static var description: IntentDescription? { "Парсит текст банковской СМС и автоматически сохраняет транзакцию в SamFinance." }
     
     // Входной параметр — текст СМС, передаваемый из приложения "Быстрые команды"
     @Parameter(title: "Текст СМС")
     public var smsText: String
     
     public static var parameterSummary: some ParameterSummary {
-        Summary("Распознать транзакцию из \($smsText)")
+        Summary("Распознать транзакцию из \(\.$smsText)")
     }
     
     public init() {
@@ -47,9 +47,9 @@ public struct ProcessSMSIntent: AppIntent {
             // Добавляем операцию
             financeService.addTransaction(transaction)
             
-            return .result(value: "Успешно записано: \(parsed.title) (\(Int(parsed.amount)) $)")
+            return .result()
         } else {
-            return .result(value: "Не удалось распознать формат СМС.")
+            return .result()
         }
     }
 }
