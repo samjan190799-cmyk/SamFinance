@@ -385,7 +385,7 @@ struct DashboardView: View {
                                     .font(.caption)
                                     .foregroundColor(.gray)
                                 Spacer()
-                                Text("$\(Int(item.amount))")
+                                Text(CurrencyManager.shared.format(item.amount))
                                     .font(.caption.bold())
                                     .foregroundColor(.white)
                             }
@@ -407,7 +407,7 @@ struct DashboardView: View {
             Image(systemName: "chart.pie.fill")
                 .font(.system(size: 32))
                 .foregroundColor(.white.opacity(0.1))
-            Text("Нет данных для отображения")
+            Text("no_chart_data".localized)
                 .font(.caption)
                 .foregroundColor(.gray)
             Spacer()
@@ -431,7 +431,7 @@ struct DashboardView: View {
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.gray)
                 
-                Text(detectedBatchTransactions.count > 1 ? "Всего на сумму: $\(Int(detectedBatchTransactions.reduce(0) { $0 + $1.amount }))" : "\(parsed.title) — \(parsed.type == .income ? "+" : "-")\(Int(parsed.amount)) $")
+                Text(detectedBatchTransactions.count > 1 ? "Всего на сумму: \(CurrencyManager.shared.format(detectedBatchTransactions.reduce(0) { $0 + $1.amount }))" : "\(parsed.title) — \(parsed.type == .income ? "+" : "-")\(CurrencyManager.shared.format(parsed.amount))")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white)
             }
@@ -542,27 +542,18 @@ struct DashboardView: View {
     
     private var balanceFormatted: (whole: String, fraction: String) {
         let balance = financeService.totalBalance
+        let symbol = CurrencyManager.shared.currentCurrency.symbol
         let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencySymbol = "$"
-        formatter.locale = Locale(identifier: "en_US")
-        formatter.maximumFractionDigits = 2
-        formatter.minimumFractionDigits = 2
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 0
+        formatter.groupingSeparator = " "
         
-        let components = formatter.string(from: NSNumber(value: balance))?.components(separatedBy: ".") ?? ["$0", "00"]
-        if components.count == 2 {
-            return (components[0], "." + components[1])
-        }
-        return (components[0], ".00")
+        let formattedNum = formatter.string(from: NSNumber(value: balance)) ?? "\(Int(balance))"
+        return ("\(symbol)\(formattedNum)", ".00")
     }
     
-    private func formatSpendingAmount(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencySymbol = "$"
-        formatter.locale = Locale(identifier: "en_US")
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: value)) ?? "$\(value)"
+    private func formatSpendingAmount(_ amount: Double) -> String {
+        return CurrencyManager.shared.format(amount)
     }
     
     // MARK: - Вычисления для графиков Swift Charts

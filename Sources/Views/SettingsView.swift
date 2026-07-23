@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsView: View {
     let financeService: FinanceService
     @State private var languageManager = LanguageManager.shared
+    @State private var currencyManager = CurrencyManager.shared
     @State private var isShowingDeleteAlert = false
     @State private var exportMessage: String? = nil
     
@@ -31,7 +32,7 @@ struct SettingsView: View {
                     Text("profile".localized)
                 }
                 
-                // Секция предпочтений и выбора языка
+                // Секция предпочтений и выбора языка и валюты
                 Section {
                     Picker(selection: $languageManager.currentLanguage) {
                         ForEach(AppLanguage.allCases) { lang in
@@ -45,11 +46,16 @@ struct SettingsView: View {
                         HapticManager.shared.selection()
                     }
                     
-                    HStack {
+                    Picker(selection: $currencyManager.currentCurrency) {
+                        ForEach(AppCurrency.allCases) { curr in
+                            Text("\(curr.symbol)  \(curr.displayName)")
+                                .tag(curr)
+                        }
+                    } label: {
                         Label("main_currency".localized, systemImage: "dollarsign.circle.fill")
-                        Spacer()
-                        Text("USD ($)")
-                            .foregroundColor(.secondary)
+                    }
+                    .onChange(of: currencyManager.currentCurrency) { _, _ in
+                        HapticManager.shared.selection()
                     }
                     
                     Button {

@@ -277,7 +277,7 @@ struct CardGoalRowView: View {
             }
             
             VStack(alignment: .trailing, spacing: 2) {
-                Text("$\(Int(goal.currentAmount)) / $\(Int(goal.targetAmount))")
+                Text("\(CurrencyManager.shared.format(goal.currentAmount)) / \(CurrencyManager.shared.format(goal.targetAmount))")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(.white)
                 
@@ -306,7 +306,7 @@ struct CardGoalRowView: View {
             }
         }
         .alert(goal.title, isPresented: $isShowingDepositAlert) {
-            TextField("Сумма ($)", text: $depositAmountString)
+            TextField("Сумма (\(CurrencyManager.shared.currentCurrency.symbol))", text: $depositAmountString)
                 .keyboardType(.decimalPad)
             Button("cancel".localized, role: .cancel) {
                 depositAmountString = ""
@@ -349,7 +349,7 @@ struct CardItemView: View {
                         .font(.system(size: isSmallScreen ? 15 : 17, weight: .bold))
                         .foregroundColor(.white)
                     
-                    Text("\( "total_balance".localized ): $\(Int(card.balance))")
+                    Text("\( "total_balance".localized ): \(CurrencyManager.shared.format(card.balance))")
                         .font(.system(size: 12))
                         .foregroundColor(.white.opacity(0.85))
                 }
