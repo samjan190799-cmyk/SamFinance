@@ -7,6 +7,7 @@ struct DashboardView: View {
     let financeService: FinanceService
     @Binding var selectedTab: Int
     @State private var isShowingAddSheet = false
+    @State private var isShowingSettingsSheet = false
     
     // Распознавание СМС
     @State private var detectedSMSTransaction: ParsedSMSTransaction? = nil
@@ -69,28 +70,36 @@ struct DashboardView: View {
         .sheet(isPresented: $isShowingAddSheet) {
             AddTransactionView(financeService: financeService)
         }
+        .sheet(isPresented: $isShowingSettingsSheet) {
+            SettingsView(financeService: financeService)
+        }
     }
     
     // MARK: - Шапка
     private var headerView: some View {
         HStack {
-            // Аватарка (круглая с градиентом)
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: "#FFE259"), Color(hex: "#FFA751")],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+            // Аватарка (круглая с градиентом) -> Открывает настройки
+            Button {
+                HapticManager.shared.impact(.light)
+                isShowingSettingsSheet = true
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: "#FFE259"), Color(hex: "#FFA751")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                    .frame(width: isSmallScreen ? 34 : 40, height: isSmallScreen ? 34 : 40)
-                
-                Image(systemName: "person.fill")
-                    .foregroundColor(.white)
-                    .font(.system(size: isSmallScreen ? 15 : 18))
+                        .frame(width: isSmallScreen ? 34 : 40, height: isSmallScreen ? 34 : 40)
+                    
+                    Image(systemName: "person.fill")
+                        .foregroundColor(.white)
+                        .font(.system(size: isSmallScreen ? 15 : 18))
+                }
+                .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
             }
-            .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
             
             Spacer()
             
@@ -157,6 +166,7 @@ struct DashboardView: View {
                 // Кнопка Request (темная)
                 Button {
                     HapticManager.shared.impact(.light)
+                    isShowingAddSheet = true
                 } label: {
                     Text("Request")
                         .font(.system(size: isSmallScreen ? 11 : 13, weight: .bold))
