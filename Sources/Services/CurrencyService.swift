@@ -19,9 +19,7 @@ public final class CurrencyService {
     public var lastUpdated: Date = Date()
     public var isLoading: Bool = false
     
-    private init() {
-        fetchLatestRates()
-    }
+    private init() {}
     
     /// Получение актуальных онлайн курсов валют с бекенда открытых курсов ЦБ
     public func fetchLatestRates() {
@@ -31,26 +29,35 @@ public final class CurrencyService {
             return
         }
         
-        Task { @MainActor in
+        Task {
             do {
                 let (data, _) = try await URLSession.shared.data(from: url)
                 if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let rates = json["rates"] as? [String: Double] {
-                    
-                    var newRates = self.exchangeRates
-                    if let amd = rates["AMD"] { newRates[.amd] = amd }
-                    if let rub = rates["RUB"] { newRates[.rub] = rub }
-                    if let usd = rates["USD"] { newRates[.usd] = usd }
-                    if let eur = rates["EUR"] { newRates[.eur] = eur }
-                    
-                    self.exchangeRates = newRates
-                    self.lastUpdated = Date()
+                    await updateRates(rates)
                 }
             } catch {
                 print("Failed to fetch exchange rates: \(error)")
             }
-            self.isLoading = false
+            await stopLoading()
         }
+    }
+    
+    @MainActor
+    private func updateRates(_ rates: [String: Double]) {
+        var newRates = exchangeRates
+        if let amd = rates["AMD"] { newRates[.amd] = amd }
+        if let rub = rates["RUB"] { newRates[.rub] = rub }
+        if let usd = rates["USD"] { newRates[.usd] = usd }
+        if let eur = rates["EUR"] { newRates[.eur] = eur }
+        self.exchangeRates = newRates
+        self.lastUpdated = Date()
+        self.isLoading = false
+    }
+    
+    @MainActor
+    private func stopLoading() {
+        self.isLoading = false
     }
     
     /// Конвертация любой суммы из одной валюты в другую по текущему онлайн-курсу

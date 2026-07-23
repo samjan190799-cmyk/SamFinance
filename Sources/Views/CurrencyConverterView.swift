@@ -3,8 +3,9 @@ import SwiftUI
 /// Экран Онлайн Конвертера Валют с актуальными курсами валют ЦБ
 struct CurrencyConverterView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var currencyService = CurrencyService.shared
-    @State private var currencyManager = CurrencyManager.shared
+    
+    private var currencyService: CurrencyService { CurrencyService.shared }
+    private var currencyManager: CurrencyManager { CurrencyManager.shared }
     
     @State private var amountString: String = "10000"
     @State private var sourceCurrency: AppCurrency = .amd
