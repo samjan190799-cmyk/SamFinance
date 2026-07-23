@@ -16,8 +16,6 @@ public struct SMSParser {
     /// Высокоточное сканирование ленты из 100-200+ СМС сообщений
     public static func parseBatch(text: String) -> [ParsedSMSTransaction] {
         var results: [ParsedSMSTransaction] = []
-        
-        // 1. Разбиваем ленту на отдельные сообщения по переносам строк или по именам банков/ключевым словам
         let rawLines = text.components(separatedBy: .newlines)
         var currentChunk = ""
         
@@ -25,7 +23,6 @@ public struct SMSParser {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { continue }
             
-            // Если строка содержит признаки нового сообщения банка или сумму, проверяем
             let isNewMessageHeader = isHeaderOfSMS(trimmed)
             
             if isNewMessageHeader && !currentChunk.isEmpty {
@@ -41,7 +38,6 @@ public struct SMSParser {
                 }
             }
             
-            // Если в текущей строке/чанке уже можно извлечь СМС транзакцию
             if let parsed = parse(text: currentChunk) {
                 results.append(parsed)
                 currentChunk = ""
@@ -68,7 +64,7 @@ public struct SMSParser {
     public static func parse(text: String) -> ParsedSMSTransaction? {
         let lowercased = text.lowercased()
         
-        // 1. Попытка извлечь сумму (AMD, ֏, Драм, RUB, USD, EUR или любое число транзакции)
+        // 1. Извлечение суммы
         guard let amount = extractAmount(from: text) else {
             return nil
         }
@@ -89,11 +85,10 @@ public struct SMSParser {
             type = .income
         }
         
-        // 3. Определение бренда и категории (с акцентом на армянские и международные бренды)
+        // 3. Определение бренда и категории
         var brandName: String? = nil
         var categoryName = type == .income ? "Зарплата" : "Продукты"
         
-        // Магазины и Продукты Армении и мира
         if lowercased.contains("sas") || lowercased.contains("yerevan city") || lowercased.contains("ереван сити") || lowercased.contains("nor zovq") || lowercased.contains("carrefour") || lowercased.contains("kaiser") || lowercased.contains("evrika") || lowercased.contains("магнит") || lowercased.contains("пятерочка") || lowercased.contains("перекресток") || lowercased.contains("lenta") || lowercased.contains("grocery") || lowercased.contains("supermarket") {
             if lowercased.contains("sas") { brandName = "SAS Supermarket" }
             else if lowercased.contains("yerevan city") || lowercased.contains("ереван сити") { brandName = "Yerevan City" }
@@ -101,30 +96,25 @@ public struct SMSParser {
             else { brandName = "Супермаркет" }
             categoryName = "Продукты"
         }
-        // Транспорт (Такси, Бензин, Метро)
         else if lowercased.contains("gg") || lowercased.contains("yandex.go") || lowercased.contains("yandex.taxi") || lowercased.contains("яндекс") || lowercased.contains("metro") || lowercased.contains("cps") || lowercased.contains("ran oil") || lowercased.contains("flash") || lowercased.contains("uber") || lowercased.contains("лукойл") {
             if lowercased.contains("gg") { brandName = "gg Taxi" }
             else if lowercased.contains("yandex") || lowercased.contains("яндекс") { brandName = "Yandex Go" }
             else { brandName = "Транспорт / АЗС" }
             categoryName = "Транспорт"
         }
-        // Рестораны и Кафе
         else if lowercased.contains("tavern yerevan") || lowercased.contains("lavash") || lowercased.contains("dargett") || lowercased.contains("cinnabon") || lowercased.contains("paul") || lowercased.contains("starbucks") || lowercased.contains("kfc") || lowercased.contains("mcdonalds") || lowercased.contains("burger king") || lowercased.contains("cafe") || lowercased.contains("restaurant") || lowercased.contains("кофе") {
             brandName = "Кафе / Ресторан"
             categoryName = "Рестораны"
         }
-        // Здоровье и Аптеки
         else if lowercased.contains("pharm") || lowercased.contains("аптека") || lowercased.contains("doctor") || lowercased.contains("клиника") {
             brandName = "Аптека / Медицина"
             categoryName = "Здоровье"
         }
-        // Развлечения и Подписки
         else if lowercased.contains("steam") || lowercased.contains("playstation") || lowercased.contains("netflix") || lowercased.contains("spotify") || lowercased.contains("кино") || lowercased.contains("yandex plus") {
             brandName = "Подписка / Развлечения"
             categoryName = "Развлечения"
         }
         
-        // Если бренд не определен, извлекаем его из текста
         if brandName == nil {
             brandName = extractPossibleBrand(from: text)
         }
@@ -142,13 +132,11 @@ public struct SMSParser {
         )
     }
     
-    /// Извлекает числовую сумму из текста СМС (с акцентом на AMD, ֏, Драм, RUB, USD, EUR)
+    /// Извлекает числовую сумму из текста СМС
     private static func extractAmount(from text: String) -> Double? {
         let patterns = [
-            // Сумма перед или после символов валют: AMD, ֏, dram, драм, руб, $, eur
             #"\b(\d{1,3}(?:[\s,]\d{3})*(?:[.,]\d{1,2})?)\s*(?:amd|֏|dram|драм|руб|₽|usd|\$|eur|€)\b"#,
             #"(?:amd|֏|dram|драм|руб|₽|usd|\$|eur|€)\s*(\d{1,3}(?:[\s,]\d{3})*(?:[.,]\d{1,2})?)\b"#,
-            // Сумма после ключевых слов операций (vcharum, poxancum, spissanie, покупка, оплата, payment, charge)
             #"\b(?:vcharum|poxancum|vcharvel|tranzakcia|transakcia|оплата|списание|зачисление|покупка|расход|доход|payment|charge|spent|amount)\b.*?\b(\d{1,3}(?:[\s,]\d{3})*(?:[.,]\d{1,2})?)\b"#
         ]
         
@@ -169,14 +157,13 @@ public struct SMSParser {
             }
         }
         
-        // Универсальный фолбек: ищем любые числа с возможной дробной частью
         let fallbackPattern = #"\b(\d{1,3}(?:\d{3})*(?:[.,]\d{1,2})?)\b"#
         if let regex = try? NSRegularExpression(pattern: fallbackPattern, options: []),
            let matches = try? regex.matches(in: text, options: [], range: NSRange(text.startIndex..., in: text)) {
             for match in matches {
                 if let range = Range(match.range(at: 0), in: text) {
                     let cleaned = text[range].replacingOccurrences(of: ",", with: ".")
-                    if let val = Double(cleaned), val >= 10 { // Отсекаем мелкие технические цифры вроде 4 цифр карты
+                    if let val = Double(cleaned), val >= 10 {
                         return val
                     }
                 }
@@ -189,8 +176,8 @@ public struct SMSParser {
     /// Попытка извлечь имя бренда или локации из армянской или международной СМС
     private static func extractPossibleBrand(from text: String) -> String? {
         let patterns = [
-            #"point:\s*([a-zA-Z0-9\s\.\-\"\']{3,20})\b"#, // "Point: SAS Supermarket"
-            #"at\s+([a-zA-Z0-9\s\.\-\"\']{3,20})\b"#,    // "at Yerevan City"
+            #"point:\s*([a-zA-Z0-9\s\.\-\"\']{3,20})\b"#,
+            #"at\s+([a-zA-Z0-9\s\.\-\"\']{3,20})\b"#,
             #"в\s+([а-яА-Яa-zA-Z0-9\s\.\-\"\']{3,20})\b"#,
             #"оплата\s+([а-яА-Яa-zA-Z0-9\s\.\-\"\']{3,20})\b"#
         ]
@@ -206,6 +193,7 @@ public struct SMSParser {
                     }
                 }
             }
+        }
         return nil
     }
     
@@ -247,4 +235,3 @@ public struct SMSParser {
         return nil
     }
 }
-
