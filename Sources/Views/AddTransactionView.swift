@@ -303,7 +303,7 @@ struct BatchSMSImportSheet: View {
                                             .foregroundColor(.gray)
                                     }
                                     Spacer()
-                                    Text("$\(Int(t.amount))")
+                                    Text(CurrencyManager.shared.format(t.amount))
                                         .fontWeight(.bold)
                                         .foregroundColor(t.type == .expense ? .red : .green)
                                 }
