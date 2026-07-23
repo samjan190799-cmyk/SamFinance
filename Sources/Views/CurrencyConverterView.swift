@@ -1,5 +1,22 @@
 import SwiftUI
 
+/// Вспомогательный Picker выбора валюты
+struct CurrencyPickerView: View {
+    @Binding var selection: AppCurrency
+    
+    var body: some View {
+        Picker("", selection: $selection) {
+            Text("🇦🇲 AMD").tag(AppCurrency.amd)
+            Text("🇷🇺 RUB").tag(AppCurrency.rub)
+            Text("🇺🇸 USD").tag(AppCurrency.usd)
+            Text("🇪🇺 EUR").tag(AppCurrency.eur)
+        }
+        .tint(.white)
+        .background(Color.white.opacity(0.1))
+        .clipShape(Capsule())
+    }
+}
+
 /// Экран Онлайн Конвертера Валют с актуальными курсами валют ЦБ
 @MainActor
 struct CurrencyConverterView: View {
@@ -64,14 +81,7 @@ struct CurrencyConverterView: View {
                     .foregroundColor(.gray)
                 Spacer()
                 
-                Picker("", selection: $sourceCurrency) {
-                    ForEach(AppCurrency.allCases, id: \.self) { curr in
-                        Text("\(curr.flagIcon) \(curr.rawValue)").tag(curr)
-                    }
-                }
-                .tint(.white)
-                .background(Color.white.opacity(0.1))
-                .clipShape(Capsule())
+                CurrencyPickerView(selection: $sourceCurrency)
             }
             
             TextField("0", text: $amountString)
@@ -116,14 +126,7 @@ struct CurrencyConverterView: View {
                     .foregroundColor(.gray)
                 Spacer()
                 
-                Picker("", selection: $targetCurrency) {
-                    ForEach(AppCurrency.allCases, id: \.self) { curr in
-                        Text("\(curr.flagIcon) \(curr.rawValue)").tag(curr)
-                    }
-                }
-                .tint(.white)
-                .background(Color.white.opacity(0.1))
-                .clipShape(Capsule())
+                CurrencyPickerView(selection: $targetCurrency)
             }
             
             HStack {
@@ -176,23 +179,28 @@ struct CurrencyConverterView: View {
                 .padding(.horizontal, 4)
             
             VStack(spacing: 8) {
-                ForEach(AppCurrency.allCases, id: \.self) { curr in
-                    let rateVal = currencyService.exchangeRates[curr] ?? 1.0
-                    HStack {
-                        Text("\(curr.flagIcon) \(curr.displayName)")
-                            .font(.subheadline.bold())
-                            .foregroundColor(.white)
-                        Spacer()
-                        Text("\(formatRateNumber(rateVal)) \(curr.symbol)")
-                            .font(.subheadline.bold())
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                    .padding(12)
-                    .background(Color.white.opacity(0.04))
-                    .cornerRadius(12)
-                }
+                rateRow(currency: .amd)
+                rateRow(currency: .rub)
+                rateRow(currency: .usd)
+                rateRow(currency: .eur)
             }
         }
+    }
+    
+    private func rateRow(currency: AppCurrency) -> some View {
+        let rateVal = currencyService.exchangeRates[currency] ?? 1.0
+        return HStack {
+            Text("\(currency.flagIcon) \(currency.displayName)")
+                .font(.subheadline.bold())
+                .foregroundColor(.white)
+            Spacer()
+            Text("\(formatRateNumber(rateVal)) \(currency.symbol)")
+                .font(.subheadline.bold())
+                .foregroundColor(.white.opacity(0.8))
+        }
+        .padding(12)
+        .background(Color.white.opacity(0.04))
+        .cornerRadius(12)
     }
     
     private func formatNumber(_ val: Double) -> String {
