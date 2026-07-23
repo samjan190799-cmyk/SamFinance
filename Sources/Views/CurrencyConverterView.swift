@@ -12,19 +12,17 @@ struct CurrencyConverterView: View {
     @State private var sourceCurrency: AppCurrency = .amd
     @State private var targetCurrency: AppCurrency = .rub
     
-    private var isSmallScreen: Bool {
-        UIScreen.main.bounds.height < 750
-    }
-    
     /// Результат конвертации
-    private var convertedResult: Double {
+    private var convertedResultText: String {
         let amount = Double(amountString.replacingOccurrences(of: ",", with: ".")) ?? 0
-        return currencyService.convert(amount: amount, from: sourceCurrency, to: targetCurrency)
+        let val = currencyService.convert(amount: amount, from: sourceCurrency, to: targetCurrency)
+        return formatNumber(val)
     }
     
     /// Прямой курс 1 единицы
-    private var unitRate: Double {
-        return currencyService.getDirectRate(from: sourceCurrency, to: targetCurrency)
+    private var unitRateText: String {
+        let val = currencyService.getDirectRate(from: sourceCurrency, to: targetCurrency)
+        return formatRateNumber(val)
     }
     
     var body: some View {
@@ -67,7 +65,7 @@ struct CurrencyConverterView: View {
                 Spacer()
                 
                 Picker("", selection: $sourceCurrency) {
-                    ForEach(AppCurrency.allCases) { curr in
+                    ForEach(AppCurrency.allCases, id: \.self) { curr in
                         Text("\(curr.flagIcon) \(curr.rawValue)").tag(curr)
                     }
                 }
@@ -119,7 +117,7 @@ struct CurrencyConverterView: View {
                 Spacer()
                 
                 Picker("", selection: $targetCurrency) {
-                    ForEach(AppCurrency.allCases) { curr in
+                    ForEach(AppCurrency.allCases, id: \.self) { curr in
                         Text("\(curr.flagIcon) \(curr.rawValue)").tag(curr)
                     }
                 }
@@ -129,7 +127,7 @@ struct CurrencyConverterView: View {
             }
             
             HStack {
-                Text(formatResult(convertedResult))
+                Text(convertedResultText)
                     .font(.system(size: 32, weight: .bold, design: .rounded))
                     .foregroundColor(.green)
                 Spacer()
@@ -141,7 +139,7 @@ struct CurrencyConverterView: View {
             Divider().background(Color.white.opacity(0.1))
             
             HStack {
-                Text("1 \(sourceCurrency.rawValue) = \(formatRate(unitRate)) \(targetCurrency.symbol)")
+                Text("1 \(sourceCurrency.rawValue) = \(unitRateText) \(targetCurrency.symbol)")
                     .font(.caption)
                     .foregroundColor(.gray)
                 Spacer()
@@ -178,13 +176,14 @@ struct CurrencyConverterView: View {
                 .padding(.horizontal, 4)
             
             VStack(spacing: 8) {
-                ForEach(AppCurrency.allCases) { curr in
+                ForEach(AppCurrency.allCases, id: \.self) { curr in
+                    let rateVal = currencyService.exchangeRates[curr] ?? 1.0
                     HStack {
                         Text("\(curr.flagIcon) \(curr.displayName)")
                             .font(.subheadline.bold())
                             .foregroundColor(.white)
                         Spacer()
-                        Text("\(formatRate(currencyService.exchangeRates[curr] ?? 1.0)) \(curr.symbol)")
+                        Text("\(formatRateNumber(rateVal)) \(curr.symbol)")
                             .font(.subheadline.bold())
                             .foregroundColor(.white.opacity(0.8))
                     }
@@ -196,7 +195,7 @@ struct CurrencyConverterView: View {
         }
     }
     
-    private func formatResult(_ val: Double) -> String {
+    private func formatNumber(_ val: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = 2
@@ -204,7 +203,7 @@ struct CurrencyConverterView: View {
         return formatter.string(from: NSNumber(value: val)) ?? "\(val)"
     }
     
-    private func formatRate(_ val: Double) -> String {
+    private func formatRateNumber(_ val: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = 4
