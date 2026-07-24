@@ -31,18 +31,18 @@ public extension Color {
 
 /// Обертка для UIKit Blur в SwiftUI в концепции Glassmorphism 2026
 public struct VisualEffectBlur: UIViewRepresentable {
-    public var material: UIBlurEffect.Material
-    public var blendingMode: UIVisualEffectView.BlendingMode
+    public var style: UIBlurEffect.Style
     
-    public init(material: UIBlurEffect.Material = .systemUltraThinMaterial, blendingMode: UIVisualEffectView.BlendingMode = .withinWindow) {
-        self.material = material
-        self.blendingMode = blendingMode
+    public init(style: UIBlurEffect.Style = .systemUltraThinMaterial) {
+        self.style = style
     }
     
     public func makeUIView(context: Context) -> UIVisualEffectView {
-        let view = UIVisualEffectView(effect: UIBlurEffect(style: material))
+        let view = UIVisualEffectView(effect: UIBlurEffect(style: style))
         return view
     }
     
-    public func updateUIView(_ uiView: UIVisualEffectView, context: Context) {}
+    public func updateUIView(_ uiView: UIVisualEffectView, context: Context) {
+        uiView.effect = UIBlurEffect(style: style)
+    }
 }
