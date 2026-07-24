@@ -13,8 +13,22 @@ struct DebtsView: View {
     
     var body: some View {
         ZStack(alignment: .top) {
-            Color(hex: "#0E0F12") // Глубокий темный фон
-                .ignoresSafeArea()
+            ZStack {
+                Color(hex: "#090A0E")
+                    .ignoresSafeArea()
+                
+                Circle()
+                    .fill(Color(hex: "#00E676").opacity(0.10))
+                    .frame(width: 260, height: 260)
+                    .blur(radius: 85)
+                    .offset(x: -100, y: -120)
+                
+                Circle()
+                    .fill(Color(hex: "#7C4DFF").opacity(0.12))
+                    .frame(width: 260, height: 260)
+                    .blur(radius: 85)
+                    .offset(x: 120, y: 100)
+            }
             
             VStack(spacing: 0) {
                 // Шапка

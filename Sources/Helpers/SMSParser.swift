@@ -17,35 +17,28 @@ public struct SMSParser {
     public static func parseBatch(text: String) -> [ParsedSMSTransaction] {
         var results: [ParsedSMSTransaction] = []
         let rawLines = text.components(separatedBy: .newlines)
-        var currentChunk = ""
+        var currentChunkLines: [String] = []
         
         for line in rawLines {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { continue }
             
-            let isNewMessageHeader = isHeaderOfSMS(trimmed)
-            
-            if isNewMessageHeader && !currentChunk.isEmpty {
-                if let parsed = parse(text: currentChunk) {
+            if isHeaderOfSMS(trimmed) && !currentChunkLines.isEmpty {
+                let fullChunk = currentChunkLines.joined(separator: " ")
+                if let parsed = parse(text: fullChunk) {
                     results.append(parsed)
                 }
-                currentChunk = trimmed
+                currentChunkLines = [trimmed]
             } else {
-                if currentChunk.isEmpty {
-                    currentChunk = trimmed
-                } else {
-                    currentChunk += " " + trimmed
-                }
-            }
-            
-            if let parsed = parse(text: currentChunk) {
-                results.append(parsed)
-                currentChunk = ""
+                currentChunkLines.append(trimmed)
             }
         }
         
-        if !currentChunk.isEmpty, let parsed = parse(text: currentChunk) {
-            results.append(parsed)
+        if !currentChunkLines.isEmpty {
+            let fullChunk = currentChunkLines.joined(separator: " ")
+            if let parsed = parse(text: fullChunk) {
+                results.append(parsed)
+            }
         }
         
         return results
@@ -55,7 +48,8 @@ public struct SMSParser {
     private static func isHeaderOfSMS(_ text: String) -> Bool {
         let lower = text.lowercased()
         let bankKeywords = [
-            "inecobank", "ameriabank", "acba", "ardshinbank", "evocabank", "idbank", "converse", "arca", "amio", "amio bank", "elq hashvic", "mutq hashvin", "vcharum", "poxancum", "vcharvel", "сбербанк", "т-банк", "тинькофф", "втб", "альфа", "списание", "зачисление", "покупка", "оплата", "card", "kart"
+            "inecobank", "ameriabank", "acba", "ardshinbank", "evocabank", "idbank", "converse", "arca", "amio", "amio bank",
+            "сбербанк", "т-банк", "тинькофф", "втб", "альфа", "списание", "зачисление", "покупка", "оплата", "card", "kart"
         ]
         return bankKeywords.contains { lower.contains($0) }
     }
@@ -64,12 +58,24 @@ public struct SMSParser {
     public static func parse(text: String) -> ParsedSMSTransaction? {
         let lowercased = text.lowercased()
         
-        // 1. Извлечение суммы
-        guard let amount = extractAmount(from: text) else {
+        // 0. Игнорируем отклоненные операции и сообщения о нехватке средств
+        let declineKeywords = [
+            "not enough funds", "insufficient funds", "недостаточно средств",
+            "отказ", "declined", "failed", "chhajoghvec", "anharajogh", "vcharumy chstacvec"
+        ]
+        if declineKeywords.contains(where: { lowercased.contains($0) }) {
             return nil
         }
         
-        // 2. Определение типа операции (доход или расход)
+        // 1. Очистка текста от номеров карт, телефонов, остатков и служебных кодов
+        let sanitizedText = sanitizeTextForAmountExtraction(text)
+        
+        // 2. Извлечение суммы
+        guard let amount = extractAmount(from: sanitizedText), amount > 0, amount < 100_000_000 else {
+            return nil
+        }
+        
+        // 3. Определение типа операции (доход или расход)
         var type: TransactionType = .expense
         if lowercased.contains("зачисление") || 
            lowercased.contains("пополнение") || 
@@ -85,7 +91,11 @@ public struct SMSParser {
             type = .income
         }
         
-        // 3. Определение бренда и категории
+        if lowercased.contains("elq hashvic") || lowercased.contains("списание") || lowercased.contains("оплата") || lowercased.contains("покупка") || lowercased.contains("vcharum") {
+            type = .expense
+        }
+        
+        // 4. Определение бренда и категории
         var brandName: String? = nil
         var categoryName = type == .income ? "Зарплата" : "Продукты"
         
@@ -94,11 +104,11 @@ public struct SMSParser {
             brandName = "IDBank"
             if lowercased.contains("elq hashvic") { type = .expense }
             if lowercased.contains("mutq hashvin") { type = .income }
-        } else if lowercased.contains("arca") || lowercased.contains("not enough funds") {
+        } else if lowercased.contains("arca") {
             brandName = "ARCA System"
             categoryName = "Продукты"
         } else if lowercased.contains("amio") || lowercased.contains("varky") || lowercased.contains("vark") {
-            brandName = "AMIO Bank (Кредит)"
+            brandName = "AMIO Bank"
             categoryName = "Долги"
         }
         
@@ -145,12 +155,55 @@ public struct SMSParser {
         )
     }
     
-    /// Извлекает числовую сумму из текста СМС
+    /// Очищает текст от 16-значных номеров карт, скрытых номеров карт, телефонов, остатка счета и служебных кодов
+    private static func sanitizeTextForAmountExtraction(_ text: String) -> String {
+        var result = text
+        
+        // 1. Скрываем остаток на счете (Balans: 45000 AMD / Остаток: 12000 RUB / Dostupno: 5000)
+        let balancePatterns = [
+            #"\b(?:balans|balance|ostatok|остаток|hashvum|hashvin|dostupno|доступно|dostupny)\b[:\s]*[A-Za-z֏₽\$€]*\s*(\d{1,3}(?:[\s,]\d{3})*(?:[.,]\d{1,2})?)"#,
+            #"\b(?:остаток|баланс)\b[:\s]*(\d{1,3}(?:[\s,]\d{3})*(?:[.,]\d{1,2})?)\s*(?:руб|₽|amd|֏|dram|драм|usd|\$)?"#
+        ]
+        for pattern in balancePatterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) {
+                result = regex.stringByReplacingMatches(in: result, options: [], range: NSRange(result.startIndex..., in: result), withTemplate: "[BALANS_MASKED]")
+            }
+        }
+        
+        // 2. Скрываем 16-значные номера карт (например, 4318 2900 1046 4994 или 4318-2900-1046-4994 или 4318290010464994)
+        let cardNumberPatterns = [
+            #"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b"#,
+            #"\b\d{4,6}[\*xX]+\d{4}\b"#,
+            #"\b(?:\*|x|X){4,12}\d{4}\b"#,
+            #"(?:card|kart|карта|карт|счет|hashiv)\s*[:#]?\s*\*?\d{4,16}\b"#
+        ]
+        for pattern in cardNumberPatterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) {
+                result = regex.stringByReplacingMatches(in: result, options: [], range: NSRange(result.startIndex..., in: result), withTemplate: "[CARD_MASKED]")
+            }
+        }
+        
+        // 3. Скрываем номера телефонов (например, +37498123456 или 89991234567)
+        let phonePattern = #"\b(?:\+?374|\+?7|8)[\s-]?\(?\d{2,3}\)?[\s-]?\d{3}[\s-]?\d{2,4}\b"#
+        if let regex = try? NSRegularExpression(pattern: phonePattern, options: []) {
+            result = regex.stringByReplacingMatches(in: result, options: [], range: NSRange(result.startIndex..., in: result), withTemplate: "[PHONE_MASKED]")
+        }
+        
+        // 4. Скрываем коды авторизации / транзакций (Auth: 89123, ID: 12345678)
+        let codePattern = #"\b(?:auth|code|id|ref|kod|kod:|spravka|справка|код|авторизация)\s*[:#]?\s*\d{4,12}\b"#
+        if let regex = try? NSRegularExpression(pattern: codePattern, options: [.caseInsensitive]) {
+            result = regex.stringByReplacingMatches(in: result, options: [], range: NSRange(result.startIndex..., in: result), withTemplate: "[CODE_MASKED]")
+        }
+        
+        return result
+    }
+    
+    /// Извлекает числовую сумму из очищенного текста СМС
     private static func extractAmount(from text: String) -> Double? {
         let patterns = [
-            #"\b(\d{1,3}(?:[\s,]\d{3})*(?:[.,]\d{1,2})?)\s*(?:amd|֏|dram|драм|руб|₽|usd|\$|eur|€)\b"#,
-            #"(?:amd|֏|dram|драм|руб|₽|usd|\$|eur|€)\s*(\d{1,3}(?:[\s,]\d{3})*(?:[.,]\d{1,2})?)\b"#,
-            #"\b(?:vcharum|poxancum|vcharvel|tranzakcia|transakcia|оплата|списание|зачисление|покупка|расход|доход|payment|charge|spent|amount)\b.*?\b(\d{1,3}(?:[\s,]\d{3})*(?:[.,]\d{1,2})?)\b"#
+            #"\b(\d{1,3}(?:[\s\u{00A0},]\d{3})*(?:[.,]\d{1,2})?)\s*(?:amd|֏|dram|драм|руб|руб.|рублей|₽|usd|\$|eur|€)\b"#,
+            #"(?:amd|֏|dram|драм|руб|руб.|рублей|₽|usd|\$|eur|€)\s*(\d{1,3}(?:[\s\u{00A0},]\d{3})*(?:[.,]\d{1,2})?)\b"#,
+            #"\b(?:vcharum|poxancum|vcharvel|tranzakcia|transakcia|оплата|списание|зачисление|покупка|расход|доход|payment|charge|spent|amount)\b[^\d]*?(\d{1,3}(?:[\s\u{00A0},]\d{3})*(?:[.,]\d{1,2})?)\b"#
         ]
         
         for pattern in patterns {
@@ -159,24 +212,28 @@ public struct SMSParser {
                 
                 if match.numberOfRanges > 1,
                    let range = Range(match.range(at: 1), in: text) {
-                    let cleaned = text[range]
+                    let rawStr = String(text[range])
+                    let cleaned = rawStr
                         .replacingOccurrences(of: " ", with: "")
+                        .replacingOccurrences(of: "\u{00A0}", with: "")
                         .replacingOccurrences(of: ",", with: ".")
                     
-                    if let val = Double(cleaned), val > 0 {
+                    if let val = Double(cleaned), val > 0, val < 100_000_000 {
                         return val
                     }
                 }
             }
         }
         
-        let fallbackPattern = #"\b(\d{1,3}(?:\d{3})*(?:[.,]\d{1,2})?)\b"#
+        // Безопасный фолбэк: ищем числа от 10 до 1,000,000 без суффиксов карт
+        let fallbackPattern = #"\b(\d{1,6}(?:[.,]\d{1,2})?)\b"#
         if let regex = try? NSRegularExpression(pattern: fallbackPattern, options: []),
            let matches = try? regex.matches(in: text, options: [], range: NSRange(text.startIndex..., in: text)) {
             for match in matches {
-                if let range = Range(match.range(at: 0), in: text) {
-                    let cleaned = text[range].replacingOccurrences(of: ",", with: ".")
-                    if let val = Double(cleaned), val >= 10 {
+                if let range = Range(match.range(at: 1), in: text) {
+                    let rawStr = String(text[range])
+                    let cleaned = rawStr.replacingOccurrences(of: ",", with: ".")
+                    if let val = Double(cleaned), val >= 10, val <= 1_000_000 {
                         return val
                     }
                 }

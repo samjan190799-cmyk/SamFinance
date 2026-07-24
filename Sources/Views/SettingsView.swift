@@ -158,18 +158,7 @@ struct SettingsView: View {
     }
     
     private func resetAllData() {
-        for t in financeService.transactions {
-            financeService.deleteTransaction(t)
-        }
-        for c in financeService.cards {
-            financeService.deleteCard(id: c.id)
-        }
-        for d in financeService.debts {
-            financeService.deleteDebt(id: d.id)
-        }
-        for g in financeService.goals {
-            financeService.deleteGoal(id: g.id)
-        }
+        financeService.resetAllData()
         HapticManager.shared.trigger(.success)
     }
 }

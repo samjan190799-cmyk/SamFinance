@@ -60,6 +60,18 @@ public final class FinanceService {
         saveData()
     }
     
+    /// Сбросить абсолютно все данные приложения (транзакции, карты, долги, цели)
+    public func resetAllData() {
+        transactions.removeAll()
+        cards.removeAll()
+        debts.removeAll()
+        goals.removeAll()
+        saveData()
+        saveCards()
+        saveDebts()
+        saveGoals()
+    }
+    
     // MARK: - API для карт
     
     public func toggleFreezeCard(id: UUID) {

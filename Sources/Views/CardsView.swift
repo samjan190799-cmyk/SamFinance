@@ -16,8 +16,22 @@ struct CardsView: View {
     
     var body: some View {
         ZStack(alignment: .top) {
-            Color(hex: "#0E0F12") // Темный глубокий фон
-                .ignoresSafeArea()
+            ZStack {
+                Color(hex: "#090A0E")
+                    .ignoresSafeArea()
+                
+                Circle()
+                    .fill(Color(hex: "#7C4DFF").opacity(0.12))
+                    .frame(width: 280, height: 280)
+                    .blur(radius: 90)
+                    .offset(x: 120, y: -100)
+                
+                Circle()
+                    .fill(Color(hex: "#00F2FE").opacity(0.10))
+                    .frame(width: 240, height: 240)
+                    .blur(radius: 80)
+                    .offset(x: -120, y: 150)
+            }
             
             VStack(spacing: 0) {
                 // Кастомная шапка

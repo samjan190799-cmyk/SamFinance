@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 public extension Color {
     /// Инициализатор цвета из HEX-строки (например, "#0E0F12" или "FFE259")
@@ -26,4 +27,22 @@ public extension Color {
             opacity: Double(a) / 255
         )
     }
+}
+
+/// Обертка для UIKit Blur в SwiftUI в концепции Glassmorphism 2026
+public struct VisualEffectBlur: UIViewRepresentable {
+    public var material: UIBlurEffect.Material
+    public var blendingMode: UIVisualEffectView.BlendingMode
+    
+    public init(material: UIBlurEffect.Material = .systemUltraThinMaterial, blendingMode: UIVisualEffectView.BlendingMode = .withinWindow) {
+        self.material = material
+        self.blendingMode = blendingMode
+    }
+    
+    public func makeUIView(context: Context) -> UIVisualEffectView {
+        let view = UIVisualEffectView(effect: UIBlurEffect(style: material))
+        return view
+    }
+    
+    public func updateUIView(_ uiView: UIVisualEffectView, context: Context) {}
 }
