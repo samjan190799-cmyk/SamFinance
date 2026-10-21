@@ -60,8 +60,10 @@ public final class PurchasePromptService {
     /// Сколько категорий расходов показать на первом шаге, остальные открываются кнопкой «Ещё…»
     private static let firstPageSize = 3
 
+    /// Категории расходов для покупок: переводы и долги к оплате картой не относятся
     private var expenseCategories: [Category] {
-        Category.defaultCategories.filter { $0.type == .expense }
+        let excluded = ["Переводы", "Долги"]
+        return Category.defaultCategories.filter { $0.type == .expense && !excluded.contains($0.name) }
     }
 
     private var incomeCategories: [Category] {
@@ -138,6 +140,18 @@ public final class PurchasePromptService {
 
     /// Первый шаг: «Расход или доход?». Возвращает false, если уведомления запрещены и подсказку показать нельзя.
     func postKindPrompt(merchant: String, amount: Double, date: Date) async -> Bool {
+        // Магазин уже знаком: записываем расход сразу, без вопросов
+        if let learned = AutomationService.shared.learnedCategory(forMerchant: merchant, type: .expense) {
+            let known = PurchaseContext(
+                merchant: merchant,
+                amount: amount,
+                date: date.timeIntervalSince1970,
+                kind: TransactionType.expense.rawValue
+            )
+            record(categoryID: learned.id, context: known)
+            return true
+        }
+
         var status = await Self.currentAuthorizationStatus()
         if status == .notDetermined {
             _ = await requestAuthorization()
@@ -212,6 +226,8 @@ public final class PurchasePromptService {
         let sign = kind == .expense ? "−" : "+"
         let amountText = "\(sign)\(CurrencyManager.shared.format(context.amount))"
         if financeService.addTransaction(transaction) {
+            // Выбор запоминается: следующая покупка в этом магазине запишется без вопросов
+            AutomationService.shared.learnCategory(merchant: context.merchant, category: category)
             post(
                 category: "",
                 title: "Записано",

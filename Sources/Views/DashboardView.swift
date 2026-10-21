@@ -39,6 +39,7 @@ struct DashboardView: View {
     @State private var isShowingSettingsSheet = false
     @State private var isShowingAIAdvisorSheet = false
     @State private var isShowingFullChartSheet = false
+    @State private var isShowingAllTransactions = false
     @State private var selectedPeriod: TimePeriodFilter = .month
 
     // Распознавание СМС из буфера обмена
@@ -79,6 +80,9 @@ struct DashboardView: View {
         }
         .sheet(isPresented: $isShowingFullChartSheet) {
             FullExpenseChartView(financeService: financeService)
+        }
+        .sheet(isPresented: $isShowingAllTransactions) {
+            TransactionsView(financeService: financeService)
         }
     }
 
@@ -320,7 +324,23 @@ struct DashboardView: View {
     // MARK: - Последние операции
     private var recentTransactionsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            MonoSectionHeader(title: "Последние операции")
+            MonoSectionHeader(
+                title: "Последние операции",
+                trailing: "Все",
+                onTrailingTap: { isShowingAllTransactions = true }
+            )
+
+            if financeService.reviewCount > 0 {
+                Button {
+                    HapticManager.shared.impact(.light)
+                    isShowingAllTransactions = true
+                } label: {
+                    Text("Проверить категории: \(financeService.reviewCount)")
+                        .font(.system(size: 14))
+                        .foregroundColor(Theme.accent)
+                        .frame(minHeight: 44, alignment: .leading)
+                }
+            }
 
             if financeService.transactions.isEmpty {
                 Text("Операций пока нет. Добавьте первую кнопкой «+» или из СМС.")
@@ -398,29 +418,20 @@ struct DashboardView: View {
     }
 
     private func addDetectedTransaction() {
-        for parsed in detectedBatchTransactions {
-            let category = financeService.category(named: parsed.categoryName, type: parsed.type)
-
-            let transaction = Transaction(
-                title: parsed.title,
-                amount: parsed.amount,
-                type: parsed.type,
-                category: category,
-                date: parsed.date ?? Date(),
-                notes: "Автоматически распознано из СМС",
-                brandName: parsed.brandName,
-                brandIcon: category.icon,
-                brandColorHex: category.colorHex
-            )
-
-            financeService.addTransaction(transaction)
-        }
+        // Карта, баланс, дубли и категория обрабатываются автоматически
+        let summary = AutomationService.shared.ingestAll(detectedBatchTransactions)
 
         HapticManager.shared.trigger(.success)
         UIPasteboard.general.string = ""
 
         withAnimation {
             detectedBatchTransactions = []
+        }
+
+        clipboardMessage = String(summary.text.prefix(1)).uppercased() + String(summary.text.dropFirst())
+        Task {
+            try? await Task.sleep(for: .seconds(4))
+            clipboardMessage = nil
         }
     }
 }

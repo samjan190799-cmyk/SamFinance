@@ -9,6 +9,9 @@ struct SettingsView: View {
     @State private var isShowingDeleteAlert = false
     @State private var exportMessage: String? = nil
     @State private var purchasePromptStatus: String? = nil
+    @AppStorage(AutomationKeys.autoCreateCards) private var autoCreateCards = true
+    @AppStorage(AutomationKeys.skipOwnTransfers) private var skipOwnTransfers = true
+    @AppStorage(AutomationKeys.ownSurnames) private var ownSurnames = ""
 
     var body: some View {
         NavigationStack {
@@ -107,6 +110,24 @@ struct SettingsView: View {
                     Text("В Быстрых командах iOS добавьте правило: При получении СМС -> вызывать ProcessSMSIntent для автозаписи в фоне.")
                 }
                 
+                // Автоматизация учёта
+                Section {
+                    Toggle("Создавать карты автоматически", isOn: $autoCreateCards)
+                    Toggle("Не считать переводы между своими картами", isOn: $skipOwnTransfers)
+                    HStack {
+                        Text("Моя фамилия в СМС")
+                        Spacer()
+                        TextField("SURNAME", text: $ownSurnames)
+                            .multilineTextAlignment(.trailing)
+                            .textInputAutocapitalization(.characters)
+                            .autocorrectionDisabled()
+                    }
+                } header: {
+                    Text("Автоматизация")
+                } footer: {
+                    Text("В Быстрых командах: Автоматизация → Сообщение → отправитель (IDBank, ARCA…) → «Выполнять сразу» → действие «Распознать СМС транзакцию», в поле «Текст СМС» подставьте «Содержимое сообщения». Операция, карта и её баланс обновятся сами. Фамилию укажите латиницей, как в СМС: переводы себе не считаются доходом и расходом.")
+                }
+
                 // Подсказки покупок Apple Pay
                 Section {
                     Button {
