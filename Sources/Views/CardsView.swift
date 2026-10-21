@@ -346,16 +346,7 @@ struct CardItemView: View {
     private var isSmallScreen: Bool {
         UIScreen.main.bounds.height < 750
     }
-    
-    /// Отображает последние 4 цифры карты
-    private var lastFourDigits: String {
-        let clean = card.number.replacingOccurrences(of: " ", with: "")
-        if clean.count >= 4 {
-            return String(clean.suffix(4))
-        }
-        return card.number
-    }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
@@ -371,7 +362,7 @@ struct CardItemView: View {
                 
                 Spacer()
                 
-                Text("•••• \(lastFourDigits)")
+                Text("•••• \(card.last4)")
                     .font(.system(size: isSmallScreen ? 14 : 16, weight: .semibold, design: .monospaced))
                     .foregroundColor(.white)
             }
@@ -458,7 +449,6 @@ struct AddCardView: View {
     @State private var balanceString: String = "1000"
     @State private var cardNumberRaw: String = "5244872190127642"
     @State private var expiryDate: String = "08/29"
-    @State private var cvv: String = "123"
     @State private var selectedThemeIndex = 0
     
     var defaultPurposes: [String] {
@@ -543,14 +533,6 @@ struct AddCardView: View {
                             .keyboardType(.numbersAndPunctuation)
                             .multilineTextAlignment(.trailing)
                     }
-                    
-                    HStack {
-                        Text("cvv_code".localized)
-                        Spacer()
-                        TextField("123", text: $cvv)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                    }
                 } header: {
                     Text("card_requisites".localized)
                 }
@@ -609,18 +591,18 @@ struct AddCardView: View {
     private func saveCard() {
         guard let balance = Double(balanceString.replacingOccurrences(of: ",", with: ".")) else { return }
         let theme = themes[selectedThemeIndex]
+        let number = formattedCardNumber.isEmpty ? "5244 8721 9012 7642" : formattedCardNumber
         let card = Card(
-            number: formattedCardNumber.isEmpty ? "5244 8721 9012 7642" : formattedCardNumber,
+            last4: Card.lastFourDigits(of: number),
             holderName: holderName.isEmpty ? "SAMVEL USER" : holderName,
             balance: balance,
             type: cardPurpose,
             colorHex: theme.colorHex,
             gradientColors: theme.gradient,
             isFrozen: false,
-            expiryDate: expiryDate.isEmpty ? "08/29" : expiryDate,
-            cvv: cvv.isEmpty ? "123" : cvv
+            expiryDate: expiryDate.isEmpty ? "08/29" : expiryDate
         )
-        financeService.addCard(card)
+        financeService.addCard(card, number: number)
         HapticManager.shared.trigger(.success)
         dismiss()
     }
@@ -647,7 +629,7 @@ struct AddGoalForCardView: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("\(card.type) (•••• \(String(card.number.suffix(4))))")
+                    Text("\(card.type) (•••• \(card.last4))")
                         .font(.subheadline.bold())
                         .foregroundColor(.gray)
                 } header: {
@@ -741,7 +723,16 @@ struct CardDetailsSheet: View {
     @Environment(\.dismiss) private var dismiss
     let card: Card
     @State private var isCopied = false
-    
+    @State private var fullNumber: String?
+
+    /// Номер из Keychain в виде групп по 4 цифры. Если его нет (например, карта перенесена с другого устройства), показывает прочерк.
+    private var displayedNumber: String {
+        guard let fullNumber, !fullNumber.isEmpty else { return "—" }
+        return stride(from: 0, to: fullNumber.count, by: 4)
+            .map { String(fullNumber.dropFirst($0).prefix(4)) }
+            .joined(separator: " ")
+    }
+
     var body: some View {
         VStack(spacing: 24) {
             Capsule()
@@ -755,9 +746,8 @@ struct CardDetailsSheet: View {
             VStack(alignment: .leading, spacing: 16) {
                 detailRow(title: "card_purpose".localized, value: card.type)
                 detailRow(title: "card_holder".localized, value: card.holderName)
-                detailRow(title: "full_card_number".localized, value: card.number)
+                detailRow(title: "full_card_number".localized, value: displayedNumber)
                 detailRow(title: "expiry_date".localized, value: card.expiryDate)
-                detailRow(title: "cvv_code".localized, value: card.cvv)
                 detailRow(title: "Статус", value: card.isFrozen ? "freeze".localized : "Активна")
             }
             .padding()
@@ -765,7 +755,16 @@ struct CardDetailsSheet: View {
             .cornerRadius(16)
             
             Button {
-                UIPasteboard.general.string = card.number.replacingOccurrences(of: " ", with: "")
+                if let fullNumber {
+                    // Номер остаётся только на этом устройстве (без Universal Clipboard) и стирается из буфера через минуту
+                    UIPasteboard.general.setItems(
+                        [[UIPasteboard.typeAutomatic: fullNumber]],
+                        options: [
+                            .localOnly: true,
+                            .expirationDate: Date().addingTimeInterval(60)
+                        ]
+                    )
+                }
                 HapticManager.shared.trigger(.success)
                 withAnimation {
                     isCopied = true
@@ -785,14 +784,18 @@ struct CardDetailsSheet: View {
                 .background(isCopied ? Color.green : Color.white)
                 .cornerRadius(12)
             }
+            .disabled(fullNumber == nil)
             
             Spacer()
         }
         .padding(.horizontal, 24)
         .presentationDetents([.medium])
         .preferredColorScheme(.dark)
+        .onAppear {
+            fullNumber = CardSecretsStore.number(for: card.id)
+        }
     }
-    
+
     private func detailRow(title: String, value: String) -> some View {
         HStack {
             Text(title)

@@ -8,7 +8,8 @@ struct SettingsView: View {
     @State private var isShowingConverter = false
     @State private var isShowingDeleteAlert = false
     @State private var exportMessage: String? = nil
-    
+    @State private var purchasePromptStatus: String? = nil
+
     var body: some View {
         NavigationStack {
             List {
@@ -106,6 +107,31 @@ struct SettingsView: View {
                     Text("В Быстрых командах iOS добавьте правило: При получении СМС -> вызывать ProcessSMSIntent для автозаписи в фоне.")
                 }
                 
+                // Подсказки покупок Apple Pay
+                Section {
+                    Button {
+                        Task {
+                            let granted = await PurchasePromptService.shared.requestAuthorization()
+                            HapticManager.shared.trigger(granted ? .success : .warning)
+                            purchasePromptStatus = granted ? "Уведомления включены" : "Выключены в настройках iOS"
+                        }
+                    } label: {
+                        HStack {
+                            Label("Включить подсказки покупок", systemImage: "applelogo")
+                            Spacer()
+                            if let status = purchasePromptStatus {
+                                Text(status)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Apple Pay")
+                } footer: {
+                    Text("В Быстрых командах: Автоматизация → Транзакция → выберите карты → «Выполнять сразу» → действие «Записать покупку Apple Pay», подставьте Магазин и Сумму из транзакции. После оплаты придёт уведомление: расход или доход, затем категория.")
+                }
+
                 // Опасная зона
                 Section {
                     Button(role: .destructive) {
