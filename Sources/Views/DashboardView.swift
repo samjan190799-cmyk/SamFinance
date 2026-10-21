@@ -568,8 +568,8 @@ struct DashboardView: View {
         guard !itemsToAdd.isEmpty else { return }
         
         for parsed in itemsToAdd {
-            let category = financeService.categories.first(where: { $0.name == parsed.categoryName }) ?? financeService.categories[0]
-            
+            let category = financeService.category(named: parsed.categoryName, type: parsed.type)
+
             let transaction = Transaction(
                 title: parsed.title,
                 amount: parsed.amount,

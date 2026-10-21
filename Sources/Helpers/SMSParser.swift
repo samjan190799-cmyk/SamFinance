@@ -277,7 +277,9 @@ public struct SMSParser {
         let formatters: [DateFormatter] = {
             let formats = [
                 "dd.MM.yyyy HH:mm", "dd.MM.yyyy HH:mm:ss", "dd.MM.yyyy",
-                "dd/MM/yyyy HH:mm", "dd/MM/yy HH:mm", "dd.MM.yy HH:mm",
+                "dd/MM/yyyy HH:mm", "dd/MM/yyyy HH:mm:ss", "dd/MM/yyyy",
+                "dd/MM/yy HH:mm", "dd/MM/yy HH:mm:ss", "dd/MM/yy",
+                "dd.MM.yy HH:mm", "dd.MM.yy HH:mm:ss", "dd.MM.yy",
                 "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd"
             ]
             return formats.map { format in
@@ -294,14 +296,22 @@ public struct SMSParser {
                 if let range = Range(match.range(at: 1), in: text) {
                     let dateStr = String(text[range])
                     for df in formatters {
-                        if let date = df.date(from: dateStr) {
+                        if let date = df.date(from: dateStr), isPlausibleSMSDate(date) {
                             return date
                         }
                     }
                 }
             }
         }
-        
+
         return nil
+    }
+
+    /// Отсекает заведомо неверные даты. Формат «yyyy» принимает двузначный год «26» как 26 год н. э.,
+    /// и без этой проверки импорт записывал бы операции на две тысячи лет назад; дата из будущего в СМС тоже невозможна.
+    private static func isPlausibleSMSDate(_ date: Date) -> Bool {
+        let earliest = DateComponents(calendar: Calendar(identifier: .gregorian), year: 2000, month: 1, day: 1).date ?? .distantPast
+        let latest = Date().addingTimeInterval(24 * 60 * 60)
+        return date >= earliest && date <= latest
     }
 }

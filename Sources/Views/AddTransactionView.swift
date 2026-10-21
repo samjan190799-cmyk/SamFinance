@@ -192,9 +192,7 @@ struct AddTransactionView: View {
             title = parsed.title
             amountString = String(format: "%.2f", parsed.amount)
             transactionType = parsed.type
-            if let matchedCat = financeService.categories.first(where: { $0.name == parsed.categoryName }) {
-                selectedCategory = matchedCat
-            }
+            selectedCategory = financeService.category(named: parsed.categoryName, type: parsed.type)
             
             withAnimation {
                 recognitionMessage = "Успешно распознано: \(parsed.title) (\(parsed.amount) $)"
@@ -339,13 +337,13 @@ struct BatchSMSImportSheet: View {
     
     private func importAllRecognized() {
         for parsed in recognizedTransactions {
-            let category = financeService.categories.first(where: { $0.name == parsed.categoryName }) ?? financeService.categories[0]
+            let category = financeService.category(named: parsed.categoryName, type: parsed.type)
             let transaction = Transaction(
                 title: parsed.title,
                 amount: parsed.amount,
                 type: parsed.type,
                 category: category,
-                date: Date(),
+                date: parsed.date ?? Date(),
                 notes: "Импортировано из ранней истории СМС",
                 brandName: parsed.brandName,
                 brandIcon: category.icon,

@@ -35,33 +35,64 @@ public final class FinanceService {
         return paths[0].appendingPathComponent("goals.json")
     }()
     
+    /// Хранилища данных на диске
+    private enum Store: String {
+        case transactions
+        case cards
+        case debts
+        case goals
+    }
+
+    /// Хранилища, файл которых существует, но не удалось прочитать или сохранить рядом резервную копию
+    /// (например, телефон заблокирован, а файлы защищены `completeFileProtection`).
+    /// Пока хранилище в этом списке, запись в него запрещена, чтобы пустой массив не затёр непрочитанные данные.
+    @ObservationIgnored private var unreadableStores: Set<Store> = []
+
     public init() {
         loadData()
         // Демо-информация полностью удалена при инициализации.
         // Приложение запускается полностью чистым.
     }
-    
+
+    // MARK: - Категории
+
+    /// Подбирает категорию по названию и типу операции. Если такой нет, берёт первую категорию нужного типа,
+    /// чтобы расход никогда не получил доходную категорию (и наоборот).
+    public func category(named name: String, type: TransactionType) -> Category {
+        categories.first { $0.name == name && $0.type == type }
+            ?? categories.first { $0.type == type }
+            ?? categories[0]
+    }
+
     // MARK: - API для транзакций
-    
-    public func addTransaction(_ transaction: Transaction) {
+
+    /// Возвращает `false`, если файл транзакций сейчас нельзя безопасно перезаписать — тогда операция не добавлена.
+    @discardableResult
+    public func addTransaction(_ transaction: Transaction) -> Bool {
+        guard prepareForWrite(.transactions) else { return false }
         transactions.insert(transaction, at: 0)
-        
+
         // Автоматически корректируем баланс карт, если транзакция привязана к счету (дополнительная логика)
         saveData()
+        return true
     }
-    
+
     public func deleteTransaction(_ transaction: Transaction) {
+        guard prepareForWrite(.transactions) else { return }
         transactions.removeAll { $0.id == transaction.id }
         saveData()
     }
-    
+
     public func deleteTransactions(at offsets: IndexSet) {
+        guard prepareForWrite(.transactions) else { return }
         transactions.remove(atOffsets: offsets)
         saveData()
     }
-    
+
     /// Сбросить абсолютно все данные приложения (транзакции, карты, долги, цели)
     public func resetAllData() {
+        // Пользователь явно просит стереть всё — защита от перезаписи больше не нужна
+        unreadableStores.removeAll()
         transactions.removeAll()
         cards.removeAll()
         debts.removeAll()
@@ -75,60 +106,69 @@ public final class FinanceService {
     // MARK: - API для карт
     
     public func toggleFreezeCard(id: UUID) {
+        guard prepareForWrite(.cards) else { return }
         if let index = cards.firstIndex(where: { $0.id == id }) {
             cards[index].isFrozen.toggle()
             saveCards()
         }
     }
-    
+
     public func addCard(_ card: Card) {
+        guard prepareForWrite(.cards) else { return }
         cards.append(card)
         saveCards()
     }
-    
+
     public func deleteCard(id: UUID) {
+        guard prepareForWrite(.cards) else { return }
         cards.removeAll { $0.id == id }
         saveCards()
     }
-    
+
     // MARK: - API для долгов (Debts)
-    
+
     public func addDebt(_ debt: Debt) {
+        guard prepareForWrite(.debts) else { return }
         debts.insert(debt, at: 0)
         saveDebts()
     }
-    
+
     public func togglePayDebt(id: UUID) {
+        guard prepareForWrite(.debts) else { return }
         if let index = debts.firstIndex(where: { $0.id == id }) {
             debts[index].isPaid.toggle()
             saveDebts()
         }
     }
-    
+
     public func deleteDebt(id: UUID) {
+        guard prepareForWrite(.debts) else { return }
         debts.removeAll { $0.id == id }
         saveDebts()
     }
-    
+
     // MARK: - API для копилок (Goals)
-    
+
     public func addGoal(_ goal: Goal) {
+        guard prepareForWrite(.goals) else { return }
         goals.append(goal)
         saveGoals()
     }
-    
+
     public func goalsForCard(cardId: UUID) -> [Goal] {
         goals.filter { $0.cardId == cardId }
     }
-    
+
     public func addFundsToGoal(id: UUID, amount: Double) {
+        guard prepareForWrite(.goals) else { return }
         if let index = goals.firstIndex(where: { $0.id == id }) {
             goals[index].currentAmount += amount
             saveGoals()
         }
     }
-    
+
     public func deleteGoal(id: UUID) {
+        guard prepareForWrite(.goals) else { return }
         goals.removeAll { $0.id == id }
         saveGoals()
     }
@@ -174,54 +214,121 @@ public final class FinanceService {
     // MARK: - Сохранение и загрузка
     
     private func loadData() {
-        // Загрузка транзакций
-        if FileManager.default.fileExists(atPath: fileURL.path) {
-            do {
-                let data = try Data(contentsOf: fileURL)
-                let decoder = JSONDecoder()
-                decoder.dateDecodingStrategy = .iso8601
-                self.transactions = try decoder.decode([Transaction].self, from: data)
-            } catch {
-                print("⚠️ Не удалось загрузить транзакции: \(error.localizedDescription)")
-            }
-        }
-        
-        // Загрузка карт
-        if FileManager.default.fileExists(atPath: cardsURL.path) {
-            do {
-                let data = try Data(contentsOf: cardsURL)
-                let decoder = JSONDecoder()
-                self.cards = try decoder.decode([Card].self, from: data)
-            } catch {
-                print("⚠️ Не удалось загрузить карты: \(error.localizedDescription)")
-            }
-        }
-        
-        // Загрузка долгов
-        if FileManager.default.fileExists(atPath: debtsURL.path) {
-            do {
-                let data = try Data(contentsOf: debtsURL)
-                let decoder = JSONDecoder()
-                decoder.dateDecodingStrategy = .iso8601
-                self.debts = try decoder.decode([Debt].self, from: data)
-            } catch {
-                print("⚠️ Не удалось загрузить долги: \(error.localizedDescription)")
-            }
-        }
-        
-        // Загрузка копилок
-        if FileManager.default.fileExists(atPath: goalsURL.path) {
-            do {
-                let data = try Data(contentsOf: goalsURL)
-                let decoder = JSONDecoder()
-                self.goals = try decoder.decode([Goal].self, from: data)
-            } catch {
-                print("⚠️ Не удалось загрузить цели: \(error.localizedDescription)")
-            }
+        loadTransactions()
+        loadCards()
+        loadDebts()
+        loadGoals()
+    }
+
+    private func loadTransactions() {
+        guard let loaded = readStore([Transaction].self, store: .transactions, url: fileURL, dateStrategy: .iso8601) else { return }
+
+        // Старые транзакции хранят категории со случайными id — приводим их к постоянным
+        let migrated = loaded.map { Self.withCanonicalCategory($0) }
+        transactions = migrated
+        if migrated != loaded {
+            saveData()
         }
     }
-    
+
+    private func loadCards() {
+        if let loaded = readStore([Card].self, store: .cards, url: cardsURL) {
+            cards = loaded
+        }
+    }
+
+    private func loadDebts() {
+        if let loaded = readStore([Debt].self, store: .debts, url: debtsURL, dateStrategy: .iso8601) {
+            debts = loaded
+        }
+    }
+
+    private func loadGoals() {
+        if let loaded = readStore([Goal].self, store: .goals, url: goalsURL) {
+            goals = loaded
+        }
+    }
+
+    /// Заменяет категорию транзакции на встроенную с тем же названием и типом (с постоянным id)
+    private static func withCanonicalCategory(_ transaction: Transaction) -> Transaction {
+        guard let canonical = Category.defaultCategories.first(where: {
+                  $0.name == transaction.category.name && $0.type == transaction.category.type
+              }),
+              canonical != transaction.category else {
+            return transaction
+        }
+        var fixed = transaction
+        fixed.category = canonical
+        return fixed
+    }
+
+    /// Читает массив из файла хранилища. Данные при этом никогда не теряются:
+    /// - файла нет — возвращает nil, это чистый старт;
+    /// - файл есть, но не читается (например, телефон заблокирован) — хранилище закрывается для записи,
+    ///   пока файл не удастся прочитать;
+    /// - файл прочитан, но не декодируется (повреждён или изменилась схема) — он переносится
+    ///   в резервную копию, чтобы следующее сохранение его не затёрло.
+    private func readStore<T: Decodable>(
+        _ type: [T].Type,
+        store: Store,
+        url: URL,
+        dateStrategy: JSONDecoder.DateDecodingStrategy = .deferredToDate
+    ) -> [T]? {
+        unreadableStores.remove(store)
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            print("⚠️ Не удалось прочитать \(url.lastPathComponent), запись заблокирована: \(error.localizedDescription)")
+            unreadableStores.insert(store)
+            return nil
+        }
+
+        do {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = dateStrategy
+            return try decoder.decode(type, from: data)
+        } catch {
+            print("⚠️ Не удалось декодировать \(url.lastPathComponent): \(error)")
+            if !moveToBackup(url) {
+                unreadableStores.insert(store)
+            }
+            return nil
+        }
+    }
+
+    /// Переносит нечитаемый файл в `<имя>.corrupt-<время>.json` рядом с оригиналом
+    private func moveToBackup(_ url: URL) -> Bool {
+        let stamp = Int(Date().timeIntervalSince1970)
+        let name = url.deletingPathExtension().lastPathComponent
+        let backupURL = url.deletingLastPathComponent().appendingPathComponent("\(name).corrupt-\(stamp).json")
+        do {
+            try FileManager.default.moveItem(at: url, to: backupURL)
+            print("⚠️ Файл сохранён как \(backupURL.lastPathComponent)")
+            return true
+        } catch {
+            print("⚠️ Не удалось сохранить резервную копию \(url.lastPathComponent): \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    /// Проверяет, что файл хранилища можно безопасно перезаписывать. Если раньше он не читался, пробует загрузить его снова.
+    private func prepareForWrite(_ store: Store) -> Bool {
+        if unreadableStores.contains(store) {
+            switch store {
+            case .transactions: loadTransactions()
+            case .cards: loadCards()
+            case .debts: loadDebts()
+            case .goals: loadGoals()
+            }
+        }
+        return !unreadableStores.contains(store)
+    }
+
     private func saveData() {
+        guard !unreadableStores.contains(.transactions) else { return }
         do {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
@@ -234,6 +341,7 @@ public final class FinanceService {
     }
     
     private func saveCards() {
+        guard !unreadableStores.contains(.cards) else { return }
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
@@ -245,6 +353,7 @@ public final class FinanceService {
     }
     
     private func saveDebts() {
+        guard !unreadableStores.contains(.debts) else { return }
         do {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
@@ -257,6 +366,7 @@ public final class FinanceService {
     }
     
     private func saveGoals() {
+        guard !unreadableStores.contains(.goals) else { return }
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
