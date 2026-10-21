@@ -12,6 +12,9 @@ struct SettingsView: View {
     @AppStorage(AutomationKeys.autoCreateCards) private var autoCreateCards = true
     @AppStorage(AutomationKeys.skipOwnTransfers) private var skipOwnTransfers = true
     @AppStorage(AutomationKeys.ownSurnames) private var ownSurnames = ""
+    @State private var hasAPIKey = AIKeyStore.key() != nil
+    @State private var apiKeyInput = ""
+    @State private var apiKeyError: String? = nil
 
     var body: some View {
         NavigationStack {
@@ -90,6 +93,9 @@ struct SettingsView: View {
                     Text("preferences".localized)
                 }
                 
+                // Облачный ИИ: собственный ключ Claude API
+                aiKeySection
+
                 // Авто-импорт СМС в фоне
                 Section {
                     Button {
@@ -187,6 +193,71 @@ struct SettingsView: View {
         }
     }
     
+    // MARK: - Ключ Claude API
+    private var aiKeySection: some View {
+        Section {
+            if hasAPIKey {
+                Label("Ключ Claude сохранён", systemImage: "checkmark.seal.fill")
+                    .foregroundColor(Theme.accent)
+                Button(role: .destructive) {
+                    HapticManager.shared.trigger(.warning)
+                    AIKeyStore.deleteKey()
+                    hasAPIKey = false
+                } label: {
+                    Label("Удалить ключ", systemImage: "trash")
+                }
+            } else {
+                SecureField("sk-ant-…", text: $apiKeyInput)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button {
+                    saveAPIKey()
+                } label: {
+                    Label("Сохранить ключ", systemImage: "key.fill")
+                }
+                .disabled(apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                if let apiKeyError {
+                    Text(apiKeyError)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                if let url = URL(string: "https://console.anthropic.com/settings/keys") {
+                    Link(destination: url) {
+                        HStack {
+                            Label("Создать ключ в консоли Anthropic", systemImage: "safari")
+                            Spacer()
+                            Image(systemName: "arrow.up.forward.app")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+        } header: {
+            Text("ИИ-помощник")
+        } footer: {
+            Text("Ключ хранится в Keychain только на этом телефоне. С ключом ИИ-чат отвечает на любые вопросы, разбирает чеки, выписки и скриншоты моделью Claude Opus 5.5: вопрос, скриншоты и сводка ваших операций, карт (последние 4 цифры) и долгов отправляются в Anthropic, оплата по тарифу ключа. Банковские СМС по-прежнему распознаются на телефоне и в облако не уходят. Без ключа всё считается только на телефоне.")
+        }
+    }
+
+    private func saveAPIKey() {
+        let key = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        guard key.hasPrefix("sk-ant-") else {
+            apiKeyError = "Ключ Claude начинается с «sk-ant-». Скопируйте его из консоли Anthropic целиком."
+            HapticManager.shared.trigger(.error)
+            return
+        }
+        if AIKeyStore.setKey(key) {
+            HapticManager.shared.trigger(.success)
+            apiKeyInput = ""
+            apiKeyError = nil
+            hasAPIKey = true
+        } else {
+            apiKeyError = "Не получилось сохранить ключ в Keychain. Разблокируйте телефон и попробуйте ещё раз."
+            HapticManager.shared.trigger(.error)
+        }
+    }
+
     private func exportDataToClipboard() {
         var csvText = "Date,Type,Category,Title,Amount\n"
         let formatter = DateFormatter()

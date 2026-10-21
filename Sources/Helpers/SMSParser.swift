@@ -85,10 +85,10 @@ public struct SMSParser {
         return headers.contains { upper.hasPrefix($0) }
     }
 
-    /// СМС закончена, когда последняя строка — дата или остаток
+    /// СМС закончена, когда в ней уже есть дата или остаток. Смотрим все строки, а не только последнюю:
+    /// на скриншотах после СМС бывают посторонние строки вроде «Вчера 14:32».
     private static func isComplete(_ lines: [String]) -> Bool {
-        guard let last = lines.last else { return false }
-        return firstMatch(balancePattern, in: last) != nil || firstMatch(datePattern, in: last) != nil
+        lines.contains { firstMatch(balancePattern, in: $0) != nil || firstMatch(datePattern, in: $0) != nil }
     }
 
     /// Проверка, является ли строка началом банковской СМС в свободном формате
@@ -125,7 +125,8 @@ public struct SMSParser {
 
     // MARK: - Структурный формат банков
 
-    private static let cardMaskPattern = #"\b\d{4}\*{2,}(\d{4})\b"#
+    /// Маска карты «4318***0640». Распознанный со скриншота текст бывает с пробелами и другими звёздочками: «4318 •••0640»
+    private static let cardMaskPattern = #"\b\d{4}\s?[\*•×xX]{2,}\s?(\d{4})\b"#
     private static let amountPairPattern = #"(\d[\d\s,.]*\d|\d)\s*(AMD|USD|EUR|RUB|֏|₽|€|\$)"#
     private static let balancePattern = #"(?:mnacord|balance|balans|остаток|баланс|մնացորդ)\s*:?\s*(\d[\d\s,.]*)"#
     private static let datePattern = #"\b(\d{2}[./-]\d{2}[./-]\d{2,4}(?:\s+\d{2}:\d{2}(?::\d{2})?)?)\b"#
@@ -151,7 +152,9 @@ public struct SMSParser {
             return nil
         }
 
-        let operation = lines[0].uppercased()
+        // Код операции ищем до строки с маской: на скриншоте перед СМС может стоять имя отправителя или время
+        let maskIndex = lines.firstIndex { firstMatch(cardMaskPattern, in: $0) != nil } ?? 0
+        let operation = (lines[...maskIndex].first(where: isOperationHeader) ?? lines[0]).uppercased()
         let details = detailLines(in: lines)
         let firstDetail = details.first ?? ""
         let date = extractDate(from: flat)
@@ -286,7 +289,8 @@ public struct SMSParser {
         return trimmed == trimmed.uppercased() ? trimmed.capitalized : trimmed
     }
 
-    private static func dedupKey(last4: String?, amount: Double, date: Date?, merchant: String) -> String {
+    /// Общий ключ дублей: по нему же сверяются операции, которые нашёл облачный ИИ
+    static func dedupKey(last4: String?, amount: Double, date: Date?, merchant: String) -> String {
         let stamp = Int(date?.timeIntervalSince1970 ?? 0)
         let normalized = merchant.lowercased().filter { $0.isLetter || $0.isNumber }
         return "\(last4 ?? "-")|\(amount)|\(stamp)|\(normalized)"

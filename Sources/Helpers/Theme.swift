@@ -1,24 +1,33 @@
 import SwiftUI
 
-/// Токены дизайна SamFinance Mono: чёрный фон, белый текст, тонкие линии и один акцент для роста и прогресса.
+/// Токены дизайна SamFinance «Пульс»: графитовый фон, лаймовый акцент, крупные скруглённые цифры.
 enum Theme {
-    static let background = Color(hex: "#000000")
-    static let surface = Color(hex: "#0E0E10")
-    static let surfaceRaised = Color(hex: "#161618")
-    static let line = Color(hex: "#26262A")
-    static let hairline = Color(hex: "#1C1C1F")
-    static let textSecondary = Color(hex: "#A1A1A6")
-    static let textTertiary = Color(hex: "#8E8E93")
-    static let accent = Color(hex: "#8CF0C0")
+    static let background = Color(hex: "#111214")
+    static let surface = Color(hex: "#1C1D21")
+    static let surfaceRaised = Color(hex: "#2A2B30")
+    static let line = Color(hex: "#34353B")
+    static let hairline = Color(hex: "#26272C")
+    static let tabBar = Color(hex: "#16171A")
+    static let textSecondary = Color(hex: "#9B9DA4")
+    static let textTertiary = Color(hex: "#8B8D94")
+    /// Лаймовый акцент: главные кнопки, активные вкладки, рост
+    static let accent = Color(hex: "#C6F432")
+    /// Текст поверх лайма
+    static let onAccent = Color(hex: "#111214")
 
-    /// Оттенки серого для долей категорий: от самой крупной к самой мелкой
+    /// Цвета долей категорий: от самой крупной к самой мелкой
     static let shades: [Color] = [
-        Color(hex: "#FFFFFF"),
-        Color(hex: "#C7C7CC"),
-        Color(hex: "#8E8E93"),
-        Color(hex: "#5A5A5E"),
-        Color(hex: "#3A3A3C")
+        Color(hex: "#C6F432"),
+        Color(hex: "#F4F4F5"),
+        Color(hex: "#9B9DA4"),
+        Color(hex: "#5E6068"),
+        Color(hex: "#3A3B41")
     ]
+
+    /// Шрифт для сумм и крупных цифр
+    static func number(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
+        .system(size: size, weight: weight, design: .rounded)
+    }
 
     /// Светлая ли заливка: поверх светлой нужен тёмный текст
     static func isLight(hex: String) -> Bool {
@@ -32,37 +41,38 @@ enum Theme {
     }
 }
 
-/// Мелкая подпись заглавными буквами над значением
+/// Мелкая подпись над значением
 struct MonoLabel: View {
     let text: String
 
     var body: some View {
-        Text(text.uppercased())
-            .font(.system(size: 12, weight: .medium))
-            .tracking(1)
-            .foregroundColor(Theme.textTertiary)
+        Text(text)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundColor(Theme.textSecondary)
     }
 }
 
-/// Круглая кнопка-контур с иконкой
+/// Круглая кнопка с иконкой на графитовой подложке
 struct MonoCircleButton: View {
     let systemName: String
     let label: String
+    var filled: Bool = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 17, weight: .medium))
-                .foregroundColor(.white)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(filled ? Theme.onAccent : .white)
                 .frame(width: 44, height: 44)
-                .overlay(Circle().stroke(Theme.line, lineWidth: 1))
+                .background(filled ? Theme.accent : Theme.surfaceRaised)
+                .clipShape(Circle())
         }
         .accessibilityLabel(label)
     }
 }
 
-/// Переключатель в виде капсулы: активный вариант белый, остальные приглушены
+/// Переключатель в виде капсулы: активный вариант лаймовый, остальные приглушены
 struct MonoSegmentedControl<Option: Hashable>: View {
     let options: [Option]
     let title: (Option) -> String
@@ -77,7 +87,6 @@ struct MonoSegmentedControl<Option: Hashable>: View {
         .padding(4)
         .background(Theme.surface)
         .clipShape(Capsule())
-        .overlay(Capsule().stroke(Theme.hairline, lineWidth: 1))
     }
 
     private func segment(for option: Option) -> some View {
@@ -90,27 +99,28 @@ struct MonoSegmentedControl<Option: Hashable>: View {
         } label: {
             Text(title(option))
                 .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
-                .foregroundColor(isSelected ? .black : Theme.textSecondary)
+                .foregroundColor(isSelected ? Theme.onAccent : Theme.textSecondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity, minHeight: 40)
-                .background(isSelected ? Color.white : Color.clear)
+                .background(isSelected ? Theme.accent : Color.clear)
                 .clipShape(Capsule())
         }
     }
 }
 
-/// Кружок с первой буквой названия вместо логотипа бренда
+/// Скруглённый квадрат с первой буквой названия вместо логотипа бренда
 struct MonoInitialBadge: View {
     let title: String
     var size: CGFloat = 44
 
     var body: some View {
         Text(String(title.trimmingCharacters(in: .whitespaces).prefix(1)).uppercased())
-            .font(.system(size: 15, weight: .medium))
+            .font(Theme.number(16, weight: .bold))
             .foregroundColor(.white)
             .frame(width: size, height: size)
-            .overlay(Circle().stroke(Theme.line, lineWidth: 1))
+            .background(Theme.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 }
 
@@ -133,7 +143,7 @@ struct MonoSectionHeader: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
                 .foregroundColor(.white)
             Spacer()
             if let trailing {
@@ -141,7 +151,7 @@ struct MonoSectionHeader: View {
                     onTrailingTap?()
                 } label: {
                     Text(trailing)
-                        .font(.system(size: 14))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(trailingColor)
                 }
             }
@@ -149,16 +159,35 @@ struct MonoSectionHeader: View {
     }
 }
 
+/// Главная кнопка: лаймовая капсула с тёмным текстом
+struct PrimaryButton: View {
+    let title: String
+    var isEnabled: Bool = true
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(Theme.onAccent)
+                .frame(maxWidth: .infinity, minHeight: 54)
+                .background(Theme.accent)
+                .clipShape(Capsule())
+        }
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1.0 : 0.4)
+    }
+}
+
 extension View {
-    /// Плоская поверхность с тонкой рамкой
-    func monoSurface(cornerRadius: CGFloat = 20) -> some View {
+    /// Графитовая плитка со скруглёнными углами
+    func monoSurface(cornerRadius: CGFloat = 24) -> some View {
         self
             .background(Theme.surface)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .overlay(RoundedRectangle(cornerRadius: cornerRadius).stroke(Theme.hairline, lineWidth: 1))
     }
 
-    /// Чёрный фон экрана и тёмная схема
+    /// Фон экрана и тёмная схема
     func monoScreen() -> some View {
         self
             .background(Theme.background.ignoresSafeArea())
@@ -171,5 +200,6 @@ extension View {
             .scrollContentBackground(.hidden)
             .background(Theme.background.ignoresSafeArea())
             .preferredColorScheme(.dark)
+            .tint(Theme.accent)
     }
 }

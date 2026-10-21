@@ -1,26 +1,22 @@
 import SwiftUI
 import Charts
 
-/// Тонкий линейный график трат за период. По нажатию открывает подробный график.
+/// Сумма трат за один день
+struct DailyAmount: Identifiable {
+    let date: Date
+    let amount: Double
+
+    var id: Date { date }
+}
+
+/// Траты по дням за последние N дней, включая сегодня
 @MainActor
-struct DashboardSpendingChart: View {
-    let financeService: FinanceService
-    let selectedPeriod: TimePeriodFilter
-    let onTap: () -> Void
-
-    struct Point: Identifiable {
-        let date: Date
-        let amount: Double
-
-        var id: Date { date }
-    }
-
-    private var points: [Point] {
+enum DailySpending {
+    static func points(financeService: FinanceService, days: Int) -> [DailyAmount] {
         let calendar = Calendar.current
-        let daysCount = selectedPeriod == .today ? 1 : (selectedPeriod == .week ? 7 : 30)
         var amounts: [Date: Double] = [:]
 
-        for offset in 0..<daysCount {
+        for offset in 0..<max(days, 1) {
             if let day = calendar.date(byAdding: .day, value: -offset, to: Date()) {
                 amounts[calendar.startOfDay(for: day)] = 0.0
             }
@@ -34,66 +30,161 @@ struct DashboardSpendingChart: View {
         }
 
         return amounts
-            .map { Point(date: $0.key, amount: $0.value) }
+            .map { DailyAmount(date: $0.key, amount: $0.value) }
             .sorted { $0.date < $1.date }
-    }
-
-    private var hasData: Bool {
-        points.contains { $0.amount > 0 }
-    }
-
-    var body: some View {
-        Button(action: onTap) {
-            if hasData {
-                chart
-            } else {
-                emptyPlaceholder
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var chart: some View {
-        let data = points
-        return Chart {
-            ForEach(data) { point in
-                LineMark(
-                    x: .value("Дата", point.date, unit: .day),
-                    y: .value("Траты", point.amount)
-                )
-                .foregroundStyle(Color.white)
-                .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round))
-                .interpolationMethod(.catmullRom)
-            }
-
-            if let last = data.last {
-                PointMark(
-                    x: .value("Дата", last.date, unit: .day),
-                    y: .value("Траты", last.amount)
-                )
-                .foregroundStyle(Color.white)
-                .symbolSize(48)
-            }
-        }
-        .chartYAxis(.hidden)
-        .chartXAxis {
-            AxisMarks(values: .automatic(desiredCount: 3)) { _ in
-                AxisValueLabel(format: .dateTime.day().month(.abbreviated))
-                    .foregroundStyle(Theme.textTertiary)
-            }
-        }
-        .frame(height: 110)
-    }
-
-    private var emptyPlaceholder: some View {
-        Text("no_chart_data".localized)
-            .font(.system(size: 14))
-            .foregroundColor(Theme.textTertiary)
-            .frame(maxWidth: .infinity, minHeight: 80, alignment: .leading)
     }
 }
 
-/// Доли категорий в тратах за период: тонкое кольцо в оттенках серого и список под ним.
+/// Короткая запись суммы: «148к ֏», «1,2 млн ֏»
+@MainActor
+func compactAmount(_ amountInBase: Double) -> String {
+    let value = CurrencyManager.shared.convertFromBase(amountInBase)
+    let symbol = CurrencyManager.shared.currentCurrency.symbol
+    if value >= 1_000_000 {
+        return String(format: "%.1f млн %@", value / 1_000_000, symbol)
+    }
+    if value >= 1_000 {
+        return "\(Int((value / 1_000).rounded()))к \(symbol)"
+    }
+    return "\(Int(value.rounded())) \(symbol)"
+}
+
+/// Тонкая линия трат по дням на лаймовой карточке баланса
+@MainActor
+struct BalanceSparkline: View {
+    let financeService: FinanceService
+
+    var body: some View {
+        let points = DailySpending.points(financeService: financeService, days: 30)
+        Chart(points) { point in
+            LineMark(
+                x: .value("Дата", point.date, unit: .day),
+                y: .value("Траты", point.amount)
+            )
+            .foregroundStyle(Theme.onAccent)
+            .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+            .interpolationMethod(.monotone)
+        }
+        .chartXAxis(.hidden)
+        .chartYAxis(.hidden)
+        .accessibilityLabel("Траты по дням за 30 дней")
+    }
+}
+
+/// Столбики трат за последние 7 дней; сегодняшний день лаймовый
+@MainActor
+struct WeekSpendingCard: View {
+    let financeService: FinanceService
+    let onTap: () -> Void
+
+    var body: some View {
+        let days = DailySpending.points(financeService: financeService, days: 7)
+        let total = days.reduce(0.0) { $0 + $1.amount }
+        let maxAmount = max(days.map(\.amount).max() ?? 0, 1)
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Траты за неделю")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                    Spacer()
+                    Text(CurrencyManager.shared.format(total))
+                        .font(Theme.number(15))
+                        .foregroundColor(.white)
+                }
+
+                HStack(alignment: .bottom, spacing: 0) {
+                    ForEach(days) { day in
+                        bar(for: day, maxAmount: maxAmount)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .frame(height: 96)
+            }
+            .padding(18)
+            .monoSurface(cornerRadius: 28)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Траты за неделю: \(CurrencyManager.shared.format(total))")
+    }
+
+    private func bar(for day: DailyAmount, maxAmount: Double) -> some View {
+        let isToday = Calendar.current.isDateInToday(day.date)
+        let height = max(8, CGFloat(day.amount / maxAmount) * 70)
+        let weekday = day.date.formatted(.dateTime.weekday(.abbreviated))
+        let label = String(weekday.prefix(1)).uppercased() + String(weekday.dropFirst())
+        return VStack(spacing: 6) {
+            Spacer(minLength: 0)
+            RoundedRectangle(cornerRadius: 10)
+                .fill(isToday ? Theme.accent : Theme.line)
+                .frame(width: 30, height: height)
+            Text(label)
+                .font(.system(size: 11, weight: isToday ? .semibold : .regular))
+                .foregroundColor(isToday ? .white : Theme.textSecondary)
+        }
+    }
+}
+
+/// Сумма по категории за период
+struct CategoryTotal: Identifiable {
+    let category: Category
+    let amount: Double
+
+    var id: UUID { category.id }
+}
+
+/// Три главные категории трат за 30 дней плитками
+@MainActor
+struct TopCategoriesRow: View {
+    let financeService: FinanceService
+    let onTap: () -> Void
+
+    private var topCategories: [CategoryTotal] {
+        var totals: [UUID: CategoryTotal] = [:]
+        for transaction in financeService.transactions where transaction.type == .expense && TimePeriodFilter.month.contains(transaction.date) {
+            let current = totals[transaction.category.id]?.amount ?? 0
+            totals[transaction.category.id] = CategoryTotal(category: transaction.category, amount: current + transaction.amount)
+        }
+        return Array(totals.values.sorted { $0.amount > $1.amount }.prefix(3))
+    }
+
+    var body: some View {
+        let items = topCategories
+        if !items.isEmpty {
+            HStack(spacing: 10) {
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    Button(action: onTap) {
+                        tile(item, highlighted: index == 0)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func tile(_ item: CategoryTotal, highlighted: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Image(systemName: item.category.icon)
+                .font(.system(size: 20))
+                .foregroundColor(highlighted ? Theme.accent : .white)
+            Spacer(minLength: 12)
+            Text(item.category.name)
+                .font(.system(size: 12))
+                .foregroundColor(Theme.textSecondary)
+                .lineLimit(1)
+            Text(compactAmount(item.amount))
+                .font(Theme.number(17))
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
+        .monoSurface(cornerRadius: 24)
+    }
+}
+
+/// Доли категорий в тратах за период: кольцо и список под ним
 @MainActor
 struct DashboardCategoriesSection: View {
     let financeService: FinanceService
@@ -125,7 +216,7 @@ struct DashboardCategoriesSection: View {
 
         let rest = sorted.dropFirst(4).reduce(0.0) { $0 + $1.value }
         if rest > 0 {
-            result.append(CategorySlice(id: "other", name: "Прочее", amount: rest, share: rest / total, color: Theme.shades[4]))
+            result.append(CategorySlice(id: "other", name: "Остальное", amount: rest, share: rest / total, color: Theme.shades[4]))
         }
         return result
     }
@@ -138,7 +229,7 @@ struct DashboardCategoriesSection: View {
             if items.isEmpty {
                 Text("no_chart_data".localized)
                     .font(.system(size: 14))
-                    .foregroundColor(Theme.textTertiary)
+                    .foregroundColor(Theme.textSecondary)
                     .padding(.vertical, 16)
             } else {
                 ring(items)
@@ -151,19 +242,19 @@ struct DashboardCategoriesSection: View {
         Chart(items) { slice in
             SectorMark(
                 angle: .value("Сумма", slice.amount),
-                innerRadius: .ratio(0.82),
+                innerRadius: .ratio(0.78),
                 angularInset: 2
             )
-            .cornerRadius(3)
+            .cornerRadius(4)
             .foregroundStyle(slice.color)
         }
         .chartLegend(.hidden)
-        .frame(width: 140, height: 140)
+        .frame(width: 150, height: 150)
         .overlay {
             centerLabel(for: items.first)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 24)
+        .padding(.top, 20)
         .padding(.bottom, 12)
     }
 
@@ -172,14 +263,14 @@ struct DashboardCategoriesSection: View {
         if let slice {
             VStack(spacing: 2) {
                 Text("\(Int((slice.share * 100).rounded()))%")
-                    .font(.system(size: 26, weight: .light))
+                    .font(Theme.number(26, weight: .bold))
                     .foregroundColor(.white)
                 Text(slice.name)
                     .font(.system(size: 12))
-                    .foregroundColor(Theme.textTertiary)
+                    .foregroundColor(Theme.textSecondary)
                     .lineLimit(1)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 22)
         }
     }
 
@@ -194,9 +285,9 @@ struct DashboardCategoriesSection: View {
     private func row(_ slice: CategorySlice) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                RoundedRectangle(cornerRadius: 2)
+                Circle()
                     .fill(slice.color)
-                    .frame(width: 8, height: 8)
+                    .frame(width: 10, height: 10)
 
                 Text(slice.name)
                     .font(.system(size: 15))
@@ -207,11 +298,10 @@ struct DashboardCategoriesSection: View {
 
                 Text("\(Int((slice.share * 100).rounded()))%")
                     .font(.system(size: 13))
-                    .foregroundColor(Theme.textTertiary)
+                    .foregroundColor(Theme.textSecondary)
 
                 Text(CurrencyManager.shared.format(slice.amount))
-                    .font(.system(size: 15))
-                    .monospacedDigit()
+                    .font(Theme.number(15))
                     .foregroundColor(.white)
                     .frame(minWidth: 96, alignment: .trailing)
             }
