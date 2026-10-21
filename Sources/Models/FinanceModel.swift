@@ -48,7 +48,7 @@ public struct Category: Codable, Identifiable, Hashable, Sendable {
 /// Банковская карта пользователя
 public struct Card: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
-    public var number: String // Полный 16-значный номер карты или 4 цифры
+    public var last4: String // Последние 4 цифры номера. Полный номер лежит в Keychain (CardSecretsStore), CVV не хранится
     public var holderName: String
     public var balance: Double
     public var type: String // Назначение карты ("Карта для покупок")
@@ -56,11 +56,10 @@ public struct Card: Codable, Identifiable, Hashable, Sendable {
     public var gradientColors: [String] // Цвета для градиентного фона
     public var isFrozen: Bool
     public var expiryDate: String // Срок действия (MM/YY)
-    public var cvv: String // CVV код (3 цифры)
-    
-    public init(id: UUID = UUID(), number: String, holderName: String, balance: Double, type: String = "Digital card", colorHex: String, gradientColors: [String], isFrozen: Bool = false, expiryDate: String = "08/29", cvv: String = "123") {
+
+    public init(id: UUID = UUID(), last4: String, holderName: String, balance: Double, type: String = "Digital card", colorHex: String, gradientColors: [String], isFrozen: Bool = false, expiryDate: String = "08/29") {
         self.id = id
-        self.number = number
+        self.last4 = last4
         self.holderName = holderName
         self.balance = balance
         self.type = type
@@ -68,7 +67,47 @@ public struct Card: Codable, Identifiable, Hashable, Sendable {
         self.gradientColors = gradientColors
         self.isFrozen = isFrozen
         self.expiryDate = expiryDate
-        self.cvv = cvv
+    }
+
+    /// Последние 4 цифры из номера в любом виде (с пробелами или без)
+    public static func lastFourDigits(of number: String) -> String {
+        String(number.filter { $0.isNumber }.suffix(4))
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, last4, holderName, balance, type, colorHex, gradientColors, isFrozen, expiryDate
+        case number // Только чтение: старые файлы хранили полный номер прямо в cards.json
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        if let stored = try container.decodeIfPresent(String.self, forKey: .last4) {
+            last4 = stored
+        } else {
+            // Старый формат: полный номер уходит в Keychain при загрузке (FinanceService), здесь берём только конец
+            last4 = Card.lastFourDigits(of: try container.decodeIfPresent(String.self, forKey: .number) ?? "")
+        }
+        holderName = try container.decode(String.self, forKey: .holderName)
+        balance = try container.decode(Double.self, forKey: .balance)
+        type = try container.decode(String.self, forKey: .type)
+        colorHex = try container.decode(String.self, forKey: .colorHex)
+        gradientColors = try container.decode([String].self, forKey: .gradientColors)
+        isFrozen = try container.decode(Bool.self, forKey: .isFrozen)
+        expiryDate = try container.decode(String.self, forKey: .expiryDate)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(last4, forKey: .last4)
+        try container.encode(holderName, forKey: .holderName)
+        try container.encode(balance, forKey: .balance)
+        try container.encode(type, forKey: .type)
+        try container.encode(colorHex, forKey: .colorHex)
+        try container.encode(gradientColors, forKey: .gradientColors)
+        try container.encode(isFrozen, forKey: .isFrozen)
+        try container.encode(expiryDate, forKey: .expiryDate)
     }
 }
 
