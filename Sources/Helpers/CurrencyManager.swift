@@ -65,15 +65,24 @@ public final class CurrencyManager {
         return CurrencyService.shared.convert(amount: amountInBase, from: baseCurrency, to: currentCurrency)
     }
     
-    /// Форматирование суммы с символом выбранной валюты и автопересчетом по курсу
-    public func format(_ amountInBase: Double) -> String {
+    /// Число в выбранной валюте с пробелами между разрядами, без символа валюты
+    public func formatNumber(_ amountInBase: Double) -> String {
         let converted = convertFromBase(amountInBase)
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = (currentCurrency == .usd || currentCurrency == .eur) ? 2 : 0
         formatter.groupingSeparator = " "
-        
-        let formattedNum = formatter.string(from: NSNumber(value: converted)) ?? "\(Int(converted))"
-        return "\(currentCurrency.symbol)\(formattedNum)"
+
+        return formatter.string(from: NSNumber(value: converted)) ?? "\(Int(converted))"
+    }
+
+    /// Форматирование суммы с символом выбранной валюты и автопересчетом по курсу:
+    /// «412 300 ֏», для доллара символ спереди — «$412.30»
+    public func format(_ amountInBase: Double) -> String {
+        let formattedNum = formatNumber(amountInBase)
+        if currentCurrency == .usd {
+            return "\(currentCurrency.symbol)\(formattedNum)"
+        }
+        return "\(formattedNum) \(currentCurrency.symbol)"
     }
 }
