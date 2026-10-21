@@ -22,18 +22,27 @@ public struct Category: Codable, Identifiable, Hashable, Sendable {
         self.type = type
     }
     
-    /// Предопределенный список категорий по умолчанию
+    /// Предопределенный список категорий по умолчанию.
+    /// Идентификаторы фиксированы: категория сохраняется целиком внутри каждой транзакции,
+    /// и случайные UUID при каждом запуске превращали одну и ту же категорию в разные.
+    /// Менять существующие номера нельзя, новые категории добавляются в конец с новым номером.
     public static let defaultCategories: [Category] = [
-        Category(name: "Зарплата", icon: "briefcase.fill", colorHex: "#34C759", type: .income),
-        Category(name: "Фриланс", icon: "laptopcomputer", colorHex: "#007AFF", type: .income),
-        Category(name: "Инвестиции", icon: "chart.line.uptrend.xyaxis", colorHex: "#AF52DE", type: .income),
-        Category(name: "Продукты", icon: "cart.fill", colorHex: "#FF9500", type: .expense),
-        Category(name: "Транспорт", icon: "car.fill", colorHex: "#5AC8FA", type: .expense),
-        Category(name: "Рестораны", icon: "fork.knife", colorHex: "#FF2D55", type: .expense),
-        Category(name: "Жилье", icon: "house.fill", colorHex: "#5E5CE6", type: .expense),
-        Category(name: "Развлечения", icon: "gamecontroller.fill", colorHex: "#FFCC00", type: .expense),
-        Category(name: "Здоровье", icon: "heart.text.square.fill", colorHex: "#FF3B30", type: .expense)
+        Category(id: stableID(1), name: "Зарплата", icon: "briefcase.fill", colorHex: "#34C759", type: .income),
+        Category(id: stableID(2), name: "Фриланс", icon: "laptopcomputer", colorHex: "#007AFF", type: .income),
+        Category(id: stableID(3), name: "Инвестиции", icon: "chart.line.uptrend.xyaxis", colorHex: "#AF52DE", type: .income),
+        Category(id: stableID(4), name: "Продукты", icon: "cart.fill", colorHex: "#FF9500", type: .expense),
+        Category(id: stableID(5), name: "Транспорт", icon: "car.fill", colorHex: "#5AC8FA", type: .expense),
+        Category(id: stableID(6), name: "Рестораны", icon: "fork.knife", colorHex: "#FF2D55", type: .expense),
+        Category(id: stableID(7), name: "Жилье", icon: "house.fill", colorHex: "#5E5CE6", type: .expense),
+        Category(id: stableID(8), name: "Развлечения", icon: "gamecontroller.fill", colorHex: "#FFCC00", type: .expense),
+        Category(id: stableID(9), name: "Здоровье", icon: "heart.text.square.fill", colorHex: "#FF3B30", type: .expense),
+        Category(id: stableID(10), name: "Долги", icon: "banknote.fill", colorHex: "#A2845E", type: .expense)
     ]
+
+    /// Постоянный идентификатор встроенной категории по её номеру
+    private static func stableID(_ number: Int) -> UUID {
+        UUID(uuidString: String(format: "5A3F1C00-0000-4000-8000-%012ld", number))!
+    }
 }
 
 /// Банковская карта пользователя

@@ -78,7 +78,9 @@ public final class AIService {
         
         // 3. Анализ средней дневной нормы трат
         if !recentExpenses.isEmpty {
-            let avgDaily = totalExpenseVal / 30.0
+            // Только траты за последние 30 дней: раньше делилась сумма за всё время, и среднее завышалось
+            let recentExpenseVal = recentExpenses.reduce(0) { $0 + $1.amount }
+            let avgDaily = recentExpenseVal / 30.0
             let avgDailyFormatted = CurrencyManager.shared.format(avgDaily)
             insights.append(AIFinancialInsight(
                 title: "Средний дневной расход",

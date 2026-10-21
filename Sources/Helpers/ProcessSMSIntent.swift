@@ -1,6 +1,18 @@
 import AppIntents
 import Foundation
 
+/// Ошибки действия распознавания СМС
+enum ProcessSMSError: Error, CustomLocalizedStringResourceConvertible {
+    case storageUnavailable
+
+    var localizedStringResource: LocalizedStringResource {
+        switch self {
+        case .storageUnavailable:
+            return "Данные SamFinance сейчас недоступны (возможно, телефон заблокирован). Операция не сохранена."
+        }
+    }
+}
+
 /// Системное действие для автоматического парсинга СМС через Быстрые команды (Siri Shortcuts)
 @available(iOS 16.0, *)
 public struct ProcessSMSIntent: AppIntent {
@@ -30,23 +42,26 @@ public struct ProcessSMSIntent: AppIntent {
             let financeService = FinanceService.shared
             
             // Находим подходящую категорию
-            let category = financeService.categories.first(where: { $0.name == parsed.categoryName }) ?? financeService.categories[0]
-            
+            let category = financeService.category(named: parsed.categoryName, type: parsed.type)
+
             let transaction = Transaction(
                 title: parsed.title,
                 amount: parsed.amount,
                 type: parsed.type,
                 category: category,
-                date: Date(),
+                date: parsed.date ?? Date(),
                 notes: "Автоматически импортировано через Быстрые команды",
                 brandName: parsed.brandName,
                 brandIcon: category.icon,
                 brandColorHex: category.colorHex
             )
-            
-            // Добавляем операцию
-            financeService.addTransaction(transaction)
-            
+
+            // Добавляем операцию. Если файл данных сейчас недоступен (например, телефон заблокирован),
+            // сообщаем об ошибке в Быстрых командах, а не теряем СМС молча.
+            guard financeService.addTransaction(transaction) else {
+                throw ProcessSMSError.storageUnavailable
+            }
+
             return .result()
         } else {
             return .result()
