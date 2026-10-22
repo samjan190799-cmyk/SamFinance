@@ -1,8 +1,9 @@
 name: App Store Screenshots
 
-# Снимает настоящие скриншоты для App Store: собирает отладочную сборку, запускает её на симуляторе iPhone Pro Max (1320x2868)
+# Снимает настоящие скриншоты для App Store: собирает отладочную сборку и запускает её на двух симуляторах:
+# large — iPhone Pro Max (1320x2868, экран 6,9"), medium — iPhone Pro (1206x2622, экран 6,3"; в App Store Connect это обязательный размер)
 # с демонстрационными данными (Sources/Helpers/DemoData.swift) и делает снимок каждого экрана на русском, английском и армянском.
-# Результат лежит в артефакте screenshots. Запуск: вручную или правкой файлов, перечисленных в paths.
+# Результат лежит в артефактах screenshots-large и screenshots-medium. Запуск: вручную или правкой файлов, перечисленных в paths.
 on:
   workflow_dispatch:
   pull_request:
@@ -16,9 +17,13 @@ permissions:
 
 jobs:
   screenshots:
-    name: Capture Screenshots
+    name: Capture Screenshots (${{ matrix.device }})
     runs-on: macos-14
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [large, medium]
 
     steps:
       - name: Checkout Repository
@@ -37,13 +42,12 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate
 
-      - name: Pick a Pro Max Simulator
+      - name: Pick a Simulator
         run: |
-          # iPhone Pro Max с iOS 17 или новее: экран 6,9" (1320x2868), для него Apple принимает скриншоты без пересчёта
           UDID=$(xcrun simctl list devices available -j | python3 -c "
-          import json, sys
+          import json, re, sys
+          want = '${{ matrix.device }}'
           data = json.load(sys.stdin)['devices']
-          best = None
           for runtime in sorted(data, reverse=True):
               if 'iOS' not in runtime:
                   continue
@@ -51,10 +55,15 @@ jobs:
               if int(version[0]) < 17:
                   continue
               for device in sorted(data[runtime], key=lambda d: d['name'], reverse=True):
-                  if 'Pro Max' in device['name'] and device['isAvailable']:
+                  name = device['name']
+                  if not device['isAvailable']:
+                      continue
+                  # large: iPhone Pro Max (6,9\"); medium: iPhone Pro или обычный iPhone (6,3\" и 6,1\")
+                  matches = ('Pro Max' in name) if want == 'large' else bool(re.fullmatch(r'iPhone \d+( Pro)?', name))
+                  if matches:
                       print(device['udid'])
                       sys.exit(0)
-          sys.exit('Нет симулятора iPhone Pro Max')
+          sys.exit('Нет подходящего симулятора для ' + want)
           ")
           echo "Simulator: $UDID"
           echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
@@ -125,7 +134,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots
+          name: screenshots-${{ matrix.device }}
           path: screenshots
           if-no-files-found: ignore
           retention-days: 14
@@ -134,7 +143,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log
+          name: build-log-${{ matrix.device }}
           path: build.log
           if-no-files-found: ignore
           retention-days: 7
