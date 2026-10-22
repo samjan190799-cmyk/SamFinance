@@ -4,8 +4,8 @@ import XCTest
 @MainActor
 final class AutomationServiceTests: XCTestCase {
 
+    // Вызов super.setUp() здесь не нужен (он пустой) и не компилируется в Swift 6 для MainActor-классов
     override func setUp() async throws {
-        try await super.setUp()
         FinanceService.shared.resetAllData()
         let defaults = UserDefaults.standard
         for key in [AutomationKeys.autoCreateCards, AutomationKeys.skipOwnTransfers, AutomationKeys.ownSurnames, AutomationKeys.merchantRules] {
@@ -15,7 +15,6 @@ final class AutomationServiceTests: XCTestCase {
 
     override func tearDown() async throws {
         FinanceService.shared.resetAllData()
-        try await super.tearDown()
     }
 
     private func parsed(_ text: String) throws -> ParsedSMSTransaction {

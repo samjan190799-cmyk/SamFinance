@@ -7,8 +7,8 @@ import XCTest
 final class LocalFinanceAssistantTests: XCTestCase {
     private var service: FinanceService { FinanceService.shared }
 
+    // Вызов super.setUp() здесь не нужен (он пустой) и не компилируется в Swift 6 для MainActor-классов
     override func setUp() async throws {
-        try await super.setUp()
         service.resetAllData()
         let groceries = try XCTUnwrap(service.categories.first { $0.name == "Продукты" })
         service.addTransaction(Transaction(title: "SAS", amount: 5_000, type: .expense, category: groceries, brandName: "SAS"))
@@ -24,7 +24,6 @@ final class LocalFinanceAssistantTests: XCTestCase {
 
     override func tearDown() async throws {
         service.resetAllData()
-        try await super.tearDown()
     }
 
     private func answer(_ question: String) -> String {

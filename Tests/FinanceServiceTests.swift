@@ -5,14 +5,13 @@ import XCTest
 final class FinanceServiceTests: XCTestCase {
     private var service: FinanceService { FinanceService.shared }
 
+    // Вызов super.setUp() здесь не нужен (он пустой) и не компилируется в Swift 6 для MainActor-классов
     override func setUp() async throws {
-        try await super.setUp()
         service.resetAllData()
     }
 
     override func tearDown() async throws {
         service.resetAllData()
-        try await super.tearDown()
     }
 
     private func category(_ name: String, type: TransactionType = .expense) throws -> AppCategory {
