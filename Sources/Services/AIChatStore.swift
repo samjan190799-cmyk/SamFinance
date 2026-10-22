@@ -63,18 +63,21 @@ struct ChatMessage: Identifiable {
 }
 
 /// ИИ-чат: принимает скриншоты и тексты СМС, раскладывает операции по картам и категориям,
-/// отвечает на вопросы о деньгах. Банковские СМС распознаются на телефоне; если пользователь сохранил ключ Claude,
-/// остальное (вопросы, чеки, выписки, фразы о тратах) разбирает облачный ИИ. Переписка живёт до закрытия приложения.
+/// отвечает на вопросы о деньгах. Банковские СМС распознаются на телефоне; если пользователь сохранил ключ выбранного
+/// облачного ИИ (Claude, ChatGPT или Gemini), остальное (вопросы, чеки, выписки, фразы о тратах) разбирает он.
+/// Переписка живёт до закрытия приложения.
 @Observable
 @MainActor
 final class AIChatStore {
     static let shared = AIChatStore()
 
     private(set) var messages: [ChatMessage] = []
-    /// Чем сейчас занят помощник: распознаёт скриншоты или ждёт ответа Claude
+    /// Чем сейчас занят помощник: распознаёт скриншоты или ждёт ответа облачного ИИ
     private(set) var workingText: String? = nil
-    /// Сохранён ли ключ Claude в настройках
-    private(set) var isCloudEnabled = AIKeyStore.key() != nil
+    /// Облачный ИИ, выбранный в настройках
+    private(set) var provider = AIProvider.selected
+    /// Сохранён ли в настройках ключ выбранного облачного ИИ
+    private(set) var isCloudEnabled = AIKeyStore.key(for: AIProvider.selected) != nil
 
     var isWorking: Bool { workingText != nil }
 
@@ -97,9 +100,10 @@ final class AIChatStore {
         workingText = nil
     }
 
-    /// Перечитывает ключ после возврата из настроек
+    /// Перечитывает выбранный сервис и его ключ после возврата из настроек
     func refreshCloudState() {
-        isCloudEnabled = AIKeyStore.key() != nil
+        provider = AIProvider.selected
+        isCloudEnabled = AIKeyStore.key(for: provider) != nil
     }
 
     // MARK: - Текст
@@ -118,13 +122,14 @@ final class AIChatStore {
         }
 
         refreshCloudState()
-        guard let apiKey = AIKeyStore.key() else {
+        let activeProvider = provider
+        guard let apiKey = AIKeyStore.key(for: activeProvider) else {
             reply(LocalFinanceAssistant.answer(trimmed, financeService: FinanceService.shared))
             return
         }
         workingText = "Думаю…"
         Task {
-            await askCloud(trimmed, images: [], recognizedText: nil, history: history, apiKey: apiKey)
+            await askCloud(trimmed, images: [], recognizedText: nil, history: history, provider: activeProvider, apiKey: apiKey)
         }
     }
 
@@ -165,15 +170,17 @@ final class AIChatStore {
             return
         }
 
-        // Чеки, выписки и приложения банков разбирает Claude, если есть ключ
+        // Чеки, выписки и приложения банков разбирает облачный ИИ, если есть ключ
         refreshCloudState()
-        if let apiKey = AIKeyStore.key() {
+        let activeProvider = provider
+        if let apiKey = AIKeyStore.key(for: activeProvider) {
             workingText = "Разбираю скриншоты…"
             await askCloud(
                 "Разбери скриншоты: найди операции, которые нужно записать в учёт. Если операций нет, коротко скажи, что на скриншотах.",
                 images: images,
                 recognizedText: recognized,
                 history: history,
+                provider: activeProvider,
                 apiKey: apiKey
             )
             return
@@ -182,7 +189,7 @@ final class AIChatStore {
         if texts.isEmpty {
             reply("Не нашёл текста на изображении. Нужен скриншот, где СМС банка видна целиком.")
         } else {
-            reply("Текст распознал, но банковских СМС в нём нет. Подойдут СМС с суммой и маской карты, например «GNUM 3,500.00 AMD 4318***0640». Чтобы разбирать чеки и выписки, добавьте ключ Claude: Настройки → ИИ-помощник.")
+            reply("Текст распознал, но банковских СМС в нём нет. Подойдут СМС с суммой и маской карты, например «GNUM 3,500.00 AMD 4318***0640». Чтобы разбирать чеки и выписки, добавьте ключ Claude, ChatGPT или Gemini: Настройки → ИИ-помощник.")
         }
     }
 
@@ -196,7 +203,7 @@ final class AIChatStore {
 
     // MARK: - Облачный ИИ
 
-    private func askCloud(_ question: String, images: [Data], recognizedText: String?, history: [CloudTurn], apiKey: String) async {
+    private func askCloud(_ question: String, images: [Data], recognizedText: String?, history: [CloudTurn], provider: AIProvider, apiKey: String) async {
         defer { workingText = nil }
         do {
             let answer = try await CloudFinanceAssistant.ask(
@@ -204,6 +211,7 @@ final class AIChatStore {
                 images: images,
                 recognizedText: recognizedText,
                 history: history,
+                provider: provider,
                 apiKey: apiKey
             )
             if answer.operations.isEmpty {
@@ -215,7 +223,7 @@ final class AIChatStore {
             return
         } catch {
             HapticManager.shared.trigger(.error)
-            reply((error as? LocalizedError)?.errorDescription ?? "Не получилось получить ответ Claude. Повторите запрос.")
+            reply((error as? LocalizedError)?.errorDescription ?? "Не получилось получить ответ \(provider.displayName). Повторите запрос.")
         }
     }
 

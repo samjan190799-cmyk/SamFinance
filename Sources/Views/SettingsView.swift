@@ -12,9 +12,14 @@ struct SettingsView: View {
     @AppStorage(AutomationKeys.autoCreateCards) private var autoCreateCards = true
     @AppStorage(AutomationKeys.skipOwnTransfers) private var skipOwnTransfers = true
     @AppStorage(AutomationKeys.ownSurnames) private var ownSurnames = ""
-    @State private var hasAPIKey = AIKeyStore.key() != nil
+    @AppStorage(AIProvider.storageKey) private var providerRaw = AIProvider.claude.rawValue
+    @State private var hasAPIKey = AIKeyStore.key(for: AIProvider.selected) != nil
     @State private var apiKeyInput = ""
     @State private var apiKeyError: String? = nil
+    @State private var modelInput = AIProvider.selected.customModel ?? ""
+
+    /// Выбранный облачный ИИ
+    private var provider: AIProvider { AIProvider(rawValue: providerRaw) ?? .claude }
 
     var body: some View {
         NavigationStack {
@@ -93,7 +98,7 @@ struct SettingsView: View {
                     Text("preferences".localized)
                 }
                 
-                // Облачный ИИ: собственный ключ Claude API
+                // Облачный ИИ: Claude, ChatGPT или Gemini с собственным ключом
                 aiKeySection
 
                 // Авто-импорт СМС в фоне
@@ -193,21 +198,36 @@ struct SettingsView: View {
         }
     }
     
-    // MARK: - Ключ Claude API
+    // MARK: - Облачный ИИ
     private var aiKeySection: some View {
         Section {
+            Picker(selection: $providerRaw) {
+                ForEach(AIProvider.allCases) { item in
+                    Text(item.displayName).tag(item.rawValue)
+                }
+            } label: {
+                Label("Какой ИИ", systemImage: "sparkles")
+            }
+            .onChange(of: providerRaw) { _, _ in
+                HapticManager.shared.selection()
+                hasAPIKey = AIKeyStore.key(for: provider) != nil
+                apiKeyInput = ""
+                apiKeyError = nil
+                modelInput = provider.customModel ?? ""
+            }
+
             if hasAPIKey {
-                Label("Ключ Claude сохранён", systemImage: "checkmark.seal.fill")
+                Label("Ключ \(provider.displayName) сохранён", systemImage: "checkmark.seal.fill")
                     .foregroundColor(Theme.accent)
                 Button(role: .destructive) {
                     HapticManager.shared.trigger(.warning)
-                    AIKeyStore.deleteKey()
+                    AIKeyStore.deleteKey(for: provider)
                     hasAPIKey = false
                 } label: {
                     Label("Удалить ключ", systemImage: "trash")
                 }
             } else {
-                SecureField("sk-ant-…", text: $apiKeyInput)
+                SecureField(provider.keyPlaceholder, text: $apiKeyInput)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 Button {
@@ -221,33 +241,54 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                if let url = URL(string: "https://console.anthropic.com/settings/keys") {
-                    Link(destination: url) {
-                        HStack {
-                            Label("Создать ключ в консоли Anthropic", systemImage: "safari")
-                            Spacer()
-                            Image(systemName: "arrow.up.forward.app")
-                                .foregroundColor(.secondary)
-                        }
+                Link(destination: provider.consoleURL) {
+                    HStack {
+                        Label(provider.consoleLinkTitle, systemImage: "safari")
+                        Spacer()
+                        Image(systemName: "arrow.up.forward.app")
+                            .foregroundColor(.secondary)
                     }
                 }
+            }
+
+            HStack {
+                Text("Модель")
+                Spacer()
+                TextField(provider.defaultModel, text: $modelInput)
+                    .multilineTextAlignment(.trailing)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .foregroundColor(.secondary)
+                    .onChange(of: modelInput) { _, value in
+                        provider.setCustomModel(value)
+                    }
             }
         } header: {
             Text("ИИ-помощник")
         } footer: {
-            Text("Ключ хранится в Keychain только на этом телефоне. С ключом ИИ-чат отвечает на любые вопросы, разбирает чеки, выписки и скриншоты моделью Claude Opus 5.5: вопрос, скриншоты и сводка ваших операций, карт (последние 4 цифры) и долгов отправляются в Anthropic, оплата по тарифу ключа. Банковские СМС по-прежнему распознаются на телефоне и в облако не уходят. Без ключа всё считается только на телефоне.")
+            Text(aiFooter)
         }
+    }
+
+    private var aiFooter: String {
+        var text = "Ключ каждого сервиса хранится в Keychain только на этом телефоне. С ключом ИИ-чат отвечает на любые вопросы, разбирает чеки, выписки и скриншоты моделью \(provider.model): вопрос, скриншоты и сводка ваших операций, карт (последние 4 цифры) и долгов отправляются в \(provider.company), оплата по тарифу ключа."
+        if provider == .openAI {
+            text += " Нужен ключ API с platform.openai.com: подписка ChatGPT для него не подходит."
+        }
+        text += " Банковские СМС по-прежнему распознаются на телефоне и в облако не уходят. Без ключа всё считается только на телефоне."
+        text += " Поле «Модель» можно оставить пустым: тогда используется \(provider.defaultModel)."
+        return text
     }
 
     private func saveAPIKey() {
         let key = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { return }
-        guard key.hasPrefix("sk-ant-") else {
-            apiKeyError = "Ключ Claude начинается с «sk-ant-». Скопируйте его из консоли Anthropic целиком."
+        guard provider.isPlausibleKey(key) else {
+            apiKeyError = provider.keyFormatHint
             HapticManager.shared.trigger(.error)
             return
         }
-        if AIKeyStore.setKey(key) {
+        if AIKeyStore.setKey(key, for: provider) {
             HapticManager.shared.trigger(.success)
             apiKeyInput = ""
             apiKeyError = nil

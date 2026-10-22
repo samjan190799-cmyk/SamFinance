@@ -32,7 +32,7 @@ private struct CloudOperation: Decodable {
     let counterparty: String?
 }
 
-/// Облачный ИИ-помощник на Claude: отвечает на любые вопросы по данным пользователя
+/// Облачный ИИ-помощник на Claude, ChatGPT или Gemini (на выбор пользователя): отвечает на любые вопросы по данным пользователя
 /// и находит операции в чеках, выписках, скриншотах и обычных фразах («купил кофе за 1500»).
 /// Найденные операции не записываются сами: они приходят черновиком, который пользователь подтверждает.
 @MainActor
@@ -47,62 +47,47 @@ enum CloudFinanceAssistant {
         images: [Data],
         recognizedText: String?,
         history: [CloudTurn],
+        provider: AIProvider,
         apiKey: String
     ) async throws -> CloudReply {
         var prepared: [Data] = []
         for image in images {
-            if let jpeg = await ClaudeAPI.preparedImage(image) {
+            if let jpeg = await AIImages.prepared(image) {
                 prepared.append(jpeg)
             }
         }
 
-        let body = try requestBody(question: question, images: prepared, recognizedText: recognizedText, history: history)
-        let text = try await ClaudeAPI.send(body: body, apiKey: apiKey)
-        return try parse(text)
+        let prompt = makePrompt(question: question, images: prepared, recognizedText: recognizedText, history: history)
+        let schema = responseSchema()
+        let text: String
+        switch provider {
+        case .claude:
+            text = try await ClaudeAPI.send(body: ClaudeAPI.requestBody(prompt, schema: schema), apiKey: apiKey)
+        case .openAI:
+            text = try await OpenAIAPI.send(body: OpenAIAPI.requestBody(prompt, schema: schema), apiKey: apiKey)
+        case .gemini:
+            text = try await GeminiAPI.send(body: GeminiAPI.requestBody(prompt, schema: schema), apiKey: apiKey)
+        }
+        return try parse(text, provider: provider)
     }
 
     // MARK: - Запрос
 
-    private static func requestBody(question: String, images: [Data], recognizedText: String?, history: [CloudTurn]) throws -> Data {
+    /// Запрос в общем виде: из него каждый сервис собирает своё тело запроса
+    private static func makePrompt(question: String, images: [Data], recognizedText: String?, history: [CloudTurn]) -> AIPrompt {
         var turns = mergedHistory(history)
 
-        // Текущая реплика: картинки, затем текст. Если история кончается репликой пользователя, она идёт в ту же реплику
-        var content: [JSON] = []
+        // Если история кончается репликой пользователя, она идёт в ту же реплику, что и вопрос
+        var leadingText: String? = nil
         if let last = turns.last, last.isUser {
             turns.removeLast()
-            content.append(["type": "text", "text": last.text])
-        }
-        for image in images {
-            content.append([
-                "type": "image",
-                "source": ["type": "base64", "media_type": "image/jpeg", "data": image.base64EncodedString()]
-            ] as JSON)
+            leadingText = last.text
         }
         var text = question
         if let recognizedText, !recognizedText.isEmpty {
             text += "\n\nТекст со скриншотов, распознанный на телефоне (может содержать ошибки):\n" + recognizedText
         }
-        content.append(["type": "text", "text": text])
-
-        var messages: [JSON] = turns.map { turn -> JSON in
-            ["role": turn.isUser ? "user" : "assistant", "content": turn.text]
-        }
-        messages.append(["role": "user", "content": content] as JSON)
-
-        let outputConfig: JSON = [
-            // Скриншоты разбираем внимательнее, вопросы — быстрее
-            "effort": images.isEmpty ? "low" : "medium",
-            "format": ["type": "json_schema", "schema": responseSchema()] as JSON
-        ]
-        let body: JSON = [
-            "model": ClaudeAPI.model,
-            "max_tokens": 16000,
-            "system": systemPrompt(),
-            "messages": messages,
-            "output_config": outputConfig,
-            "fallbacks": "default"
-        ]
-        return try JSONSerialization.data(withJSONObject: body)
+        return AIPrompt(system: systemPrompt(), turns: turns, leadingText: leadingText, images: images, text: text)
     }
 
     /// Переписка должна начинаться с пользователя, а реплики одной стороны подряд склеиваются
@@ -264,12 +249,12 @@ enum CloudFinanceAssistant {
 
     // MARK: - Разбор ответа
 
-    private static func parse(_ text: String) throws -> CloudReply {
+    private static func parse(_ text: String, provider: AIProvider) throws -> CloudReply {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        guard let data = text.data(using: .utf8),
+        guard let data = withoutCodeFence(text).data(using: .utf8),
               let envelope = try? decoder.decode(CloudEnvelope.self, from: data) else {
-            throw ClaudeAPIError.badResponse
+            throw AIAPIError.badResponse(provider)
         }
 
         var seen = Set<String>()
@@ -277,6 +262,19 @@ enum CloudFinanceAssistant {
             .compactMap { transaction(from: $0) }
             .filter { seen.insert($0.dedupKey).inserted }
         return CloudReply(text: envelope.reply, operations: operations)
+    }
+
+    /// Некоторые модели оборачивают JSON в блок кода ```json … ``` даже при заданной схеме
+    private static func withoutCodeFence(_ text: String) -> String {
+        var result = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard result.hasPrefix("```") else { return result }
+        if let newline = result.firstIndex(of: "\n") {
+            result = String(result[result.index(after: newline)...])
+        }
+        if result.hasSuffix("```") {
+            result = String(result.dropLast(3))
+        }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func transaction(from operation: CloudOperation) -> ParsedSMSTransaction? {
