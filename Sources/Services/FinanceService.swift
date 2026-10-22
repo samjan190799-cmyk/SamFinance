@@ -166,6 +166,26 @@ public final class FinanceService {
         saveCards()
     }
 
+    /// Сохраняет изменённую карту (реквизиты и оформление). Номер меняется, только если он передан.
+    /// Если пользователь поправил баланс вручную, это новая точка отсчёта: операции старше этого момента баланс не изменят.
+    public func updateCard(_ card: Card, number: String? = nil) {
+        guard prepareForWrite(.cards), let index = cards.firstIndex(where: { $0.id == card.id }) else { return }
+        var updated = card
+        let previous = cards[index]
+        updated.balanceUpdatedAt = abs(card.balance - previous.balance) > 0.0001 ? Date() : previous.balanceUpdatedAt
+        if let number {
+            let digits = number.filter { $0.isNumber }
+            if !digits.isEmpty {
+                if !CardSecretsStore.setNumber(digits, for: card.id) {
+                    print("⚠️ Не удалось сохранить номер карты в Keychain")
+                }
+                updated.last4 = Card.lastFourDigits(of: digits)
+            }
+        }
+        cards[index] = updated
+        saveCards()
+    }
+
     /// Полный номер карты из Keychain (nil, если его нет или устройство заблокировано)
     public func cardNumber(for id: UUID) -> String? {
         CardSecretsStore.number(for: id)

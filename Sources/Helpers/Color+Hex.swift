@@ -29,6 +29,22 @@ public extension Color {
     }
 }
 
+public extension Color {
+    /// Цвет в виде «#RRGGBB» (прозрачность отбрасывается); нужен, чтобы сохранить выбранный в палитре цвет
+    var hexString: String {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        UIColor(self).getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        // Палитра может отдать цвет шире sRGB: значения за пределами 0…1 обрезаются
+        func byte(_ value: CGFloat) -> Int {
+            Int((min(max(value, 0), 1) * 255).rounded())
+        }
+        return String(format: "#%02X%02X%02X", byte(red), byte(green), byte(blue))
+    }
+}
+
 /// Обертка для UIKit Blur в SwiftUI в концепции Glassmorphism 2026
 public struct VisualEffectBlur: UIViewRepresentable {
     public var style: UIBlurEffect.Style

@@ -61,7 +61,13 @@ public struct Card: Codable, Identifiable, Hashable, Sendable {
     public var expiryDate: String // Срок действия (MM/YY)
     public var balanceUpdatedAt: Date? // На какой момент верен баланс: операции старше него баланс не меняют
 
-    public init(id: UUID = UUID(), last4: String, holderName: String, balance: Double, type: String = "Digital card", colorHex: String, gradientColors: [String], isFrozen: Bool = false, expiryDate: String = "08/29", balanceUpdatedAt: Date? = nil) {
+    // Оформление и подробности карты; у старых карт их нет
+    public var bankName: String? // Банк: подпись на карте
+    public var network: CardNetwork? // Платёжная система
+    public var pattern: CardPattern? // Узор на лицевой стороне
+    public var symbol: String? // Значок рядом с назначением (SF Symbol)
+
+    public init(id: UUID = UUID(), last4: String, holderName: String, balance: Double, type: String = "Digital card", colorHex: String, gradientColors: [String], isFrozen: Bool = false, expiryDate: String = "08/29", balanceUpdatedAt: Date? = nil, bankName: String? = nil, network: CardNetwork? = nil, pattern: CardPattern? = nil, symbol: String? = nil) {
         self.id = id
         self.last4 = last4
         self.holderName = holderName
@@ -72,6 +78,10 @@ public struct Card: Codable, Identifiable, Hashable, Sendable {
         self.isFrozen = isFrozen
         self.expiryDate = expiryDate
         self.balanceUpdatedAt = balanceUpdatedAt
+        self.bankName = bankName
+        self.network = network
+        self.pattern = pattern
+        self.symbol = symbol
     }
 
     /// Последние 4 цифры из номера в любом виде (с пробелами или без)
@@ -81,6 +91,7 @@ public struct Card: Codable, Identifiable, Hashable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, last4, holderName, balance, type, colorHex, gradientColors, isFrozen, expiryDate, balanceUpdatedAt
+        case bankName, network, pattern, symbol
         case number // Только чтение: старые файлы хранили полный номер прямо в cards.json
     }
 
@@ -101,6 +112,11 @@ public struct Card: Codable, Identifiable, Hashable, Sendable {
         isFrozen = try container.decode(Bool.self, forKey: .isFrozen)
         expiryDate = try container.decode(String.self, forKey: .expiryDate)
         balanceUpdatedAt = try container.decodeIfPresent(Date.self, forKey: .balanceUpdatedAt)
+        bankName = try container.decodeIfPresent(String.self, forKey: .bankName)
+        // Неизвестное значение (например, из более новой версии) не должно ломать чтение всех карт
+        network = (try? container.decodeIfPresent(CardNetwork.self, forKey: .network)) ?? nil
+        pattern = (try? container.decodeIfPresent(CardPattern.self, forKey: .pattern)) ?? nil
+        symbol = try container.decodeIfPresent(String.self, forKey: .symbol)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -115,6 +131,10 @@ public struct Card: Codable, Identifiable, Hashable, Sendable {
         try container.encode(isFrozen, forKey: .isFrozen)
         try container.encode(expiryDate, forKey: .expiryDate)
         try container.encodeIfPresent(balanceUpdatedAt, forKey: .balanceUpdatedAt)
+        try container.encodeIfPresent(bankName, forKey: .bankName)
+        try container.encodeIfPresent(network, forKey: .network)
+        try container.encodeIfPresent(pattern, forKey: .pattern)
+        try container.encodeIfPresent(symbol, forKey: .symbol)
     }
 }
 
