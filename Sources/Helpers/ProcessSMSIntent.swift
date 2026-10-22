@@ -8,7 +8,7 @@ enum ProcessSMSError: Error, CustomLocalizedStringResourceConvertible {
     var localizedStringResource: LocalizedStringResource {
         switch self {
         case .storageUnavailable:
-            return "Данные SamFinance сейчас недоступны (возможно, телефон заблокирован). Операция не сохранена."
+            return "Данные Hashiv сейчас недоступны (возможно, телефон заблокирован). Операция не сохранена."
         }
     }
 }
@@ -18,7 +18,7 @@ enum ProcessSMSError: Error, CustomLocalizedStringResourceConvertible {
 @available(iOS 16.0, *)
 public struct ProcessSMSIntent: AppIntent {
     public static var title: LocalizedStringResource { "Распознать СМС транзакцию" }
-    public static var description: IntentDescription? { "Парсит текст банковской СМС, записывает операцию в SamFinance и обновляет баланс карты." }
+    public static var description: IntentDescription? { "Парсит текст банковской СМС, записывает операцию в Hashiv и обновляет баланс карты." }
 
     // Входной параметр — текст СМС, передаваемый из приложения "Быстрые команды"
     @Parameter(title: "Текст СМС")
