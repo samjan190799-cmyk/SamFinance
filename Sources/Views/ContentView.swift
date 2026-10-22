@@ -1,119 +1,115 @@
 import SwiftUI
 
-/// Главный контейнер приложения. Управляет плавающим стеклянным таб-баром 2026 (Долги, Главная, Карты).
-/// Растянут на весь физический экран (ignoresSafeArea) для премиального визуального отображения.
+/// Вкладка нижней панели
+private struct MonoTab: Identifiable {
+    let index: Int
+    let title: String
+    let icon: String
+
+    var id: Int { index }
+}
+
+/// Главный контейнер приложения. Три вкладки (Долги, Обзор, Карты) в плавающей панели
+/// и отдельная кнопка «+» для новой операции.
 struct ContentView: View {
     @State private var financeService = FinanceService.shared
     @State private var languageManager = LanguageManager.shared
     @State private var selectedTab = 1 // По умолчанию открыт главный экран (индекс 1)
-    
-    private var isSmallScreen: Bool {
-        UIScreen.main.bounds.height < 750
-    }
-    
+    @State private var isShowingAddSheet = false
+
+    private let tabs: [MonoTab] = [
+        MonoTab(index: 0, title: "Долги", icon: "person.2"),
+        MonoTab(index: 1, title: "Обзор", icon: "house"),
+        MonoTab(index: 2, title: "Карты", icon: "creditcard")
+    ]
+
     var body: some View {
-        ZStack(alignment: .bottom) {
-            // Контент выбранной вкладки
-            ZStack {
-                switch selectedTab {
-                case 0:
-                    DebtsView(financeService: financeService)
-                        .transition(.opacity)
-                case 1:
-                    DashboardView(financeService: financeService, selectedTab: $selectedTab)
-                        .transition(.opacity)
-                case 2:
-                    CardsView(financeService: financeService)
-                        .transition(.opacity)
-                default:
-                    DashboardView(financeService: financeService, selectedTab: $selectedTab)
-                }
-            }
+        tabContent
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .ignoresSafeArea()
-            
-            // Кастомный плавающий стеклянный таб-бар Aether Glass 2026
-            customFloatingTabBar
-                .padding(.bottom, isSmallScreen ? 14 : 32)
-        }
-        .background(Color(hex: "#090A0E"))
-        .ignoresSafeArea()
-    }
-    
-    // MARK: - Панель таб-бара (Floating Glass Tab Bar)
-    private var customFloatingTabBar: some View {
-        HStack(spacing: 6) {
-            tabButton(index: 0, title: "Долги", activeIcon: "person.2.fill", inactiveIcon: "person.2")
-            tabButton(index: 1, title: "Обзор", activeIcon: "house.fill", inactiveIcon: "house")
-            tabButton(index: 2, title: "Карты", activeIcon: "creditcard.fill", inactiveIcon: "creditcard")
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(
-            ZStack {
-                Capsule()
-                    .fill(Color(hex: "#12141C").opacity(0.85))
-                Capsule()
-                    .fill(Color.white.opacity(0.04))
+            .monoScreen()
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                bottomBar
             }
-        )
-        .clipShape(Capsule())
-        .overlay(
-            Capsule()
-                .stroke(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.22), Color.white.opacity(0.04)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: Color.black.opacity(0.55), radius: 20, x: 0, y: 12)
-        .shadow(color: Color(hex: "#00F2FE").opacity(0.12), radius: 15, x: 0, y: 4)
+            .sheet(isPresented: $isShowingAddSheet) {
+                AddTransactionView(financeService: financeService)
+            }
     }
-    
-    // MARK: - Кнопка вкладки
-    private func tabButton(index: Int, title: String, activeIcon: String, inactiveIcon: String) -> some View {
-        let isSelected = selectedTab == index
+
+    // MARK: - Содержимое выбранной вкладки
+    @ViewBuilder
+    private var tabContent: some View {
+        switch selectedTab {
+        case 0:
+            DebtsView(financeService: financeService)
+        case 2:
+            CardsView(financeService: financeService)
+        default:
+            DashboardView(financeService: financeService)
+        }
+    }
+
+    // MARK: - Нижняя панель
+    private var bottomBar: some View {
+        HStack(spacing: 12) {
+            tabPill
+            addButton
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+    }
+
+    private var tabPill: some View {
+        HStack(spacing: 4) {
+            ForEach(tabs) { tab in
+                tabButton(tab)
+            }
+        }
+        .padding(6)
+        .frame(height: 64)
+        .background(Theme.surface)
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Theme.line, lineWidth: 1))
+    }
+
+    private func tabButton(_ tab: MonoTab) -> some View {
+        let isSelected = selectedTab == tab.index
         return Button {
-            if selectedTab != index {
+            if selectedTab != tab.index {
                 HapticManager.shared.selection()
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.72)) {
-                    selectedTab = index
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedTab = tab.index
                 }
             }
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: isSelected ? activeIcon : inactiveIcon)
-                    .font(.system(size: isSmallScreen ? 15 : 17, weight: .bold))
-                    .foregroundColor(isSelected ? .black : .white.opacity(0.5))
-                
+            HStack(spacing: 8) {
+                Image(systemName: isSelected ? "\(tab.icon).fill" : tab.icon)
+                    .font(.system(size: 20, weight: .regular))
                 if isSelected {
-                    Text(title)
-                        .font(.system(size: isSmallScreen ? 12 : 13, weight: .bold))
-                        .foregroundColor(.black)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
+                    Text(tab.title)
+                        .font(.system(size: 14, weight: .semibold))
                 }
             }
-            .padding(.horizontal, isSelected ? (isSmallScreen ? 14 : 18) : (isSmallScreen ? 12 : 14))
-            .padding(.vertical, isSmallScreen ? 8 : 10)
-            .background(
-                ZStack {
-                    if isSelected {
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color.white, Color(hex: "#E2E8F0")],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .shadow(color: Color.white.opacity(0.4), radius: 8, x: 0, y: 2)
-                    }
-                }
-            )
+            .foregroundColor(isSelected ? .white : Theme.textTertiary)
+            .frame(maxWidth: isSelected ? .infinity : 64, maxHeight: .infinity)
+            .background(isSelected ? Theme.line : Color.clear)
+            .clipShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .accessibilityLabel(tab.title)
+    }
+
+    private var addButton: some View {
+        Button {
+            HapticManager.shared.impact(.light)
+            isShowingAddSheet = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 24, weight: .medium))
+                .foregroundColor(.black)
+                .frame(width: 64, height: 64)
+                .background(Color.white)
+                .clipShape(Circle())
+        }
+        .accessibilityLabel("Новая операция")
     }
 }

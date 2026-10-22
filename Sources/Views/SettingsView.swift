@@ -18,7 +18,7 @@ struct SettingsView: View {
                     HStack(spacing: 16) {
                         Image(systemName: "person.crop.circle.fill")
                             .font(.system(size: 56))
-                            .foregroundColor(.accentColor)
+                            .foregroundColor(.white)
                             .symbolRenderingMode(.hierarchical)
                         
                         VStack(alignment: .leading, spacing: 4) {
@@ -146,6 +146,8 @@ struct SettingsView: View {
                     Text("reset_footer".localized)
                 }
             }
+            .monoForm()
+            .tint(Theme.accent)
             .sheet(isPresented: $isShowingConverter) {
                 CurrencyConverterView()
             }
