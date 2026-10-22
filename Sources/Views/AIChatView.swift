@@ -9,6 +9,8 @@ struct AIChatView: View {
     @State private var inputText = ""
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var isShowingSettings = false
+    /// Счётчик отправок: по нему подпрыгивает стрелка
+    @State private var sendCount = 0
     @FocusState private var isInputFocused: Bool
 
     private static let bottomID = "chat-bottom"
@@ -74,12 +76,15 @@ struct AIChatView: View {
                 LazyVStack(spacing: 12) {
                     ForEach(store.messages) { message in
                         messageView(message)
+                            .transition(messageTransition(for: message))
                     }
                     if store.isWorking {
                         workingIndicator
+                            .transition(.scale(scale: 0.85, anchor: .leading).combined(with: .opacity))
                     }
                     if store.isFresh {
                         suggestions
+                            .transition(.opacity)
                     }
                     Color.clear
                         .frame(height: 1)
@@ -87,6 +92,8 @@ struct AIChatView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
+                .animation(Motion.spring, value: store.messages.count)
+                .animation(Motion.spring, value: store.isWorking)
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
@@ -102,6 +109,17 @@ struct AIChatView: View {
                 }
             }
         }
+    }
+
+    /// Сообщение выплывает снизу из своего угла: пользователя — справа, помощника — слева
+    private func messageTransition(for message: ChatMessage) -> AnyTransition {
+        let anchor: UnitPoint = message.role == .user ? .bottomTrailing : .bottomLeading
+        return .asymmetric(
+            insertion: .scale(scale: 0.85, anchor: anchor)
+                .combined(with: .opacity)
+                .combined(with: .offset(y: 12)),
+            removal: .opacity
+        )
     }
 
     @ViewBuilder
@@ -165,8 +183,10 @@ struct AIChatView: View {
 
     private var workingIndicator: some View {
         HStack(spacing: 10) {
-            ProgressView()
-                .tint(Theme.accent)
+            Image(systemName: "sparkles")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(Theme.accent)
+                .symbolEffect(.pulse)
             Text(store.workingText ?? "")
                 .font(.system(size: 15))
                 .foregroundColor(Theme.textSecondary)
@@ -201,7 +221,9 @@ struct AIChatView: View {
                     .background(Theme.accent)
                     .clipShape(Capsule())
             }
-            ForEach(questions, id: \.self) { question in
+            .buttonStyle(.pressable)
+            .appearAnimation(order: 1)
+            ForEach(Array(questions.enumerated()), id: \.element) { index, question in
                 Button {
                     HapticManager.shared.impact(.light)
                     store.send(text: question)
@@ -214,6 +236,8 @@ struct AIChatView: View {
                         .background(Theme.surfaceRaised)
                         .clipShape(Capsule())
                 }
+                .buttonStyle(.pressable)
+                .appearAnimation(order: index + 2)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -255,12 +279,16 @@ struct AIChatView: View {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 17, weight: .bold))
                     .foregroundColor(Theme.onAccent)
+                    .symbolEffect(.bounce.up, value: sendCount)
                     .frame(width: 44, height: 44)
                     .background(Theme.accent)
                     .clipShape(Circle())
             }
+            .buttonStyle(PressableButtonStyle(scale: 0.88))
             .disabled(!canSend)
             .opacity(canSend ? 1 : 0.4)
+            .scaleEffect(canSend ? 1 : 0.9)
+            .animation(Motion.bouncy, value: canSend)
             .accessibilityLabel("Отправить")
         }
         .padding(.horizontal, 16)
@@ -271,6 +299,7 @@ struct AIChatView: View {
     private func send() {
         guard canSend else { return }
         HapticManager.shared.impact(.light)
+        sendCount += 1
         store.send(text: inputText)
         inputText = ""
     }
@@ -297,7 +326,9 @@ private struct DraftCard: View {
                 Label("Записано", systemImage: "checkmark")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(Theme.accent)
+                    .symbolEffect(.bounce, value: draft.isSaved)
                     .frame(maxWidth: .infinity, minHeight: 54)
+                    .transition(.scale(scale: 0.8).combined(with: .opacity))
             } else {
                 let count = draft.includedCount
                 PrimaryButton(title: count > 0 ? "Записать (\(count))" : "Ничего не отмечено", isEnabled: count > 0) {
@@ -308,6 +339,7 @@ private struct DraftCard: View {
         }
         .padding(14)
         .monoSurface(cornerRadius: 24)
+        .animation(Motion.spring, value: draft.isSaved)
     }
 
     private func row(_ item: DraftItem) -> some View {
@@ -321,6 +353,7 @@ private struct DraftCard: View {
                 Image(systemName: item.isIncluded ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 22))
                     .foregroundColor(item.isIncluded ? Theme.accent : Theme.textSecondary)
+                    .contentTransition(.symbolEffect(.replace))
                     .frame(width: 44, height: 44)
             }
             .disabled(draft.isSaved)
@@ -346,6 +379,7 @@ private struct DraftCard: View {
                 .lineLimit(1)
         }
         .opacity(item.isIncluded || draft.isSaved ? 1 : 0.5)
+        .animation(Motion.spring, value: item.isIncluded)
         .padding(.vertical, 4)
     }
 

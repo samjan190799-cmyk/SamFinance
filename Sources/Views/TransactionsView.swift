@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Все операции по дням. Фильтр «Проверить» показывает операции, категорию которых приложение подобрало наугад:
 /// выбранная категория запоминается для магазина и в следующий раз подставляется сама.
+/// Строку можно смахнуть влево, чтобы удалить, и вправо, чтобы сменить категорию.
 struct TransactionsView: View {
     @Environment(\.dismiss) private var dismiss
     let financeService: FinanceService
@@ -35,21 +36,23 @@ struct TransactionsView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    MonoSegmentedControl(
-                        options: [Filter.all, Filter.review],
-                        title: { $0 == .all ? "Все" : "Проверить (\(financeService.reviewCount))" },
-                        selection: $filter
-                    )
-                    .padding(.top, 8)
+            // List, а не ScrollView: строкам нужны системные жесты смахивания
+            List {
+                MonoSegmentedControl(
+                    options: [Filter.all, Filter.review],
+                    title: { $0 == .all ? "Все" : "Проверить (\(financeService.reviewCount))" },
+                    selection: $filter
+                )
+                .padding(.top, 8)
+                .monoListRow()
 
-                    content
-                }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 24)
+                content
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
             .scrollIndicators(.hidden)
+            .environment(\.defaultMinListRowHeight, 0)
+            .animation(Motion.spring, value: filter)
             .monoScreen()
             .navigationTitle("Все операции")
             .navigationBarTitleDisplayMode(.inline)
@@ -75,16 +78,35 @@ struct TransactionsView: View {
                 .foregroundColor(Theme.textTertiary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 56)
+                .transition(.opacity)
+                .monoListRow()
         } else {
             ForEach(dayGroups) { group in
-                VStack(alignment: .leading, spacing: 0) {
-                    MonoLabel(text: dayTitle(group.day))
-                        .padding(.top, 28)
-                        .padding(.bottom, 4)
+                MonoLabel(text: dayTitle(group.day))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 28)
+                    .padding(.bottom, 4)
+                    .monoListRow()
 
-                    ForEach(group.items) { transaction in
-                        row(transaction)
-                    }
+                ForEach(group.items) { transaction in
+                    row(transaction)
+                        .monoListRow()
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                delete(transaction)
+                            } label: {
+                                Label("Удалить", systemImage: "trash")
+                            }
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                            Button {
+                                HapticManager.shared.impact(.light)
+                                editing = transaction
+                            } label: {
+                                Label("Категория", systemImage: "tag")
+                            }
+                            .tint(Theme.accentStrong)
+                        }
                 }
             }
         }
@@ -134,18 +156,23 @@ struct TransactionsView: View {
                 .frame(minHeight: 64)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableButtonStyle(scale: 0.98))
             .contextMenu {
                 Button(role: .destructive) {
-                    HapticManager.shared.trigger(.warning)
-                    withAnimation {
-                        financeService.deleteTransaction(transaction)
-                    }
+                    delete(transaction)
                 } label: {
                     Label("Удалить", systemImage: "trash")
                 }
             }
             MonoDivider()
+        }
+        .background(Theme.background)
+    }
+
+    private func delete(_ transaction: Transaction) {
+        HapticManager.shared.trigger(.warning)
+        withAnimation(Motion.spring) {
+            financeService.deleteTransaction(transaction)
         }
     }
 }

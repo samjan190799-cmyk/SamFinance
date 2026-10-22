@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Экран банковских карт пользователя с привязанными накопительными целями (копилками)
-/// и локализацией (Русский, English, Հայերեն).
+/// и локализацией (Русский, English, Հայերեն). Карты листаются каруселью, под ней — действия и копилки текущей карты.
 @MainActor
 struct CardsView: View {
     let financeService: FinanceService
@@ -9,34 +9,56 @@ struct CardsView: View {
     @State private var selectedCardForDetails: Card? = nil
     @State private var selectedCardForNewGoal: Card? = nil
     @State private var languageManager = LanguageManager.shared
+    /// Карта в центре карусели; nil, пока пользователь не листал (тогда текущая — первая)
+    @State private var centeredCardID: UUID? = nil
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var currentCard: Card? {
+        financeService.cards.first { $0.id == centeredCardID } ?? financeService.cards.first
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 headerView
+                    .padding(.horizontal, 20)
+                    .appearAnimation(order: 0)
 
                 if financeService.cards.isEmpty {
                     emptyCardsPlaceholder
+                        .padding(.horizontal, 20)
                 } else {
-                    VStack(spacing: 36) {
-                        ForEach(financeService.cards) { card in
-                            CardWithGoalsSection(
-                                card: card,
-                                financeService: financeService,
-                                onShowDetails: {
-                                    selectedCardForDetails = card
-                                },
-                                onAddGoal: {
-                                    selectedCardForNewGoal = card
-                                }
-                            )
-                        }
+                    carousel
+                        .padding(.top, 20)
+                        .appearAnimation(order: 1)
+
+                    if financeService.cards.count > 1 {
+                        pageIndicator
+                            .padding(.top, 16)
                     }
-                    .padding(.top, 20)
+
+                    if let card = currentCard {
+                        CardWithGoalsSection(
+                            card: card,
+                            financeService: financeService,
+                            onShowDetails: {
+                                selectedCardForDetails = card
+                            },
+                            onAddGoal: {
+                                selectedCardForNewGoal = card
+                            }
+                        )
+                        // Новая карта — новый блок: прежний исчезает сразу, новый выплывает снизу
+                        .id(card.id)
+                        .transition(.identity)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 18)
+                        .appearAnimation(order: 2)
+                    }
                 }
             }
-            .padding(.horizontal, 20)
             .padding(.bottom, 24)
+            .animation(Motion.spring, value: currentCard?.id)
         }
         .scrollIndicators(.hidden)
         .monoScreen()
@@ -49,6 +71,67 @@ struct CardsView: View {
         .sheet(item: $selectedCardForNewGoal) { card in
             AddGoalForCardView(card: card, financeService: financeService)
         }
+    }
+
+    // MARK: - Карусель
+    /// Соседние карты выглядывают по краям, уменьшены и повёрнуты к центру; листание с доводкой до карты
+    private var carousel: some View {
+        let tilt = reduceMotion ? 0.0 : 16.0
+        return ScrollView(.horizontal) {
+            LazyHStack(spacing: 12) {
+                ForEach(financeService.cards) { card in
+                    FlippableCardView(card: card)
+                        .containerRelativeFrame(.horizontal)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                HapticManager.shared.trigger(.warning)
+                                withAnimation(Motion.spring) {
+                                    financeService.deleteCard(id: card.id)
+                                }
+                            } label: {
+                                Label("delete_card".localized, systemImage: "trash")
+                            }
+                        }
+                        .scrollTransition(axis: .horizontal) { content, phase in
+                            content
+                                .scaleEffect(phase.isIdentity ? 1 : 0.88)
+                                .rotation3DEffect(.degrees(phase.value * -tilt), axis: (x: 0, y: 1, z: 0))
+                                .opacity(phase.isIdentity ? 1 : 0.5)
+                        }
+                }
+            }
+            .scrollTargetLayout()
+        }
+        .contentMargins(.horizontal, 28, for: .scrollContent)
+        .scrollTargetBehavior(.viewAligned)
+        .scrollPosition(id: $centeredCardID)
+        .scrollIndicators(.hidden)
+        .scrollClipDisabled()
+        .sensoryFeedback(.selection, trigger: centeredCardID)
+    }
+
+    /// Точки под каруселью: текущая карта вытягивается в лаймовую капсулу, по нажатию карусель листает к карте
+    private var pageIndicator: some View {
+        HStack(spacing: 2) {
+            ForEach(financeService.cards) { card in
+                let isCurrent = card.id == currentCard?.id
+                Button {
+                    withAnimation(Motion.spring) {
+                        centeredCardID = card.id
+                    }
+                } label: {
+                    Capsule()
+                        .fill(isCurrent ? Theme.accent : Theme.line)
+                        .frame(width: isCurrent ? 22 : 7, height: 7)
+                        .frame(minWidth: 20, minHeight: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(card.type), •••• \(card.last4)")
+                .accessibilityAddTraits(isCurrent ? .isSelected : [])
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Шапка
@@ -69,6 +152,9 @@ struct CardsView: View {
     // MARK: - Заглушка, если карт пока нет
     private var emptyCardsPlaceholder: some View {
         VStack(spacing: 12) {
+            FloatingCardIcon()
+                .padding(.bottom, 12)
+
             Text("no_cards".localized)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundColor(.white)
@@ -90,14 +176,43 @@ struct CardsView: View {
                     .background(Theme.accent)
                     .clipShape(Capsule())
             }
+            .buttonStyle(.pressable)
             .padding(.top, 8)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 80)
+        .padding(.vertical, 64)
+        .appearAnimation(order: 1)
     }
 }
 
-/// Блок карты с кнопками действий и привязанными к ней накопительными целями
+/// Иконка карты для пустого экрана: плавно покачивается вверх-вниз
+private struct FloatingCardIcon: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isUp = false
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 14)
+            .fill(Theme.accent)
+            .frame(width: 84, height: 54)
+            .overlay(alignment: .bottomLeading) {
+                Capsule()
+                    .fill(Theme.onAccent.opacity(0.3))
+                    .frame(width: 30, height: 5)
+                    .padding(12)
+            }
+            .rotationEffect(.degrees(isUp ? -6 : 4))
+            .offset(y: isUp ? -6 : 4)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+                    isUp = true
+                }
+            }
+            .accessibilityHidden(true)
+    }
+}
+
+/// Действия и накопительные цели карты, которая сейчас в центре карусели
 struct CardWithGoalsSection: View {
     let card: Card
     let financeService: FinanceService
@@ -110,20 +225,7 @@ struct CardWithGoalsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            CardItemView(card: card)
-                .contextMenu {
-                    Button(role: .destructive) {
-                        HapticManager.shared.trigger(.warning)
-                        withAnimation {
-                            financeService.deleteCard(id: card.id)
-                        }
-                    } label: {
-                        Label("delete_card".localized, systemImage: "trash")
-                    }
-                }
-
             actionButtons
-                .padding(.top, 12)
 
             goalsSection
                 .padding(.top, 24)
@@ -138,7 +240,7 @@ struct CardWithGoalsSection: View {
             }
             outlineButton(title: card.isFrozen ? "unfreeze".localized : "freeze".localized) {
                 HapticManager.shared.trigger(.success)
-                withAnimation {
+                withAnimation(Motion.spring) {
                     financeService.toggleFreezeCard(id: card.id)
                 }
             }
@@ -153,7 +255,9 @@ struct CardWithGoalsSection: View {
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .background(Theme.surfaceRaised)
                 .clipShape(Capsule())
+                .contentTransition(.opacity)
         }
+        .buttonStyle(.pressable)
     }
 
     // MARK: - Копилки
@@ -173,8 +277,9 @@ struct CardWithGoalsSection: View {
                     .padding(.vertical, 16)
             } else {
                 VStack(spacing: 0) {
-                    ForEach(goals) { goal in
+                    ForEach(Array(goals.enumerated()), id: \.element.id) { index, goal in
                         CardGoalRowView(goal: goal, financeService: financeService)
+                            .appearAnimation(delay: 0.1 + Double(index) * Motion.stagger)
                     }
                 }
                 .padding(.top, 4)
@@ -189,6 +294,8 @@ struct CardGoalRowView: View {
     let financeService: FinanceService
     @State private var isShowingDepositAlert = false
     @State private var depositAmountString = ""
+    /// Полоска прогресса наполняется при показе и после пополнения
+    @State private var isFilled = false
 
     private var progressPercent: Double {
         guard goal.targetAmount > 0 else { return 0.0 }
@@ -209,6 +316,7 @@ struct CardGoalRowView: View {
                     Text("\(CurrencyManager.shared.format(goal.currentAmount)) / \(CurrencyManager.shared.format(goal.targetAmount))")
                         .font(.system(size: 14))
                         .monospacedDigit()
+                        .contentTransition(.numericText(value: goal.currentAmount))
                         .foregroundColor(Theme.textSecondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -249,7 +357,9 @@ struct CardGoalRowView: View {
             Button("deposit".localized) {
                 if let amount = Double(depositAmountString.replacingOccurrences(of: ",", with: ".")) {
                     HapticManager.shared.trigger(.success)
-                    financeService.addFundsToGoal(id: goal.id, amount: amount)
+                    withAnimation(Motion.spring) {
+                        financeService.addFundsToGoal(id: goal.id, amount: amount)
+                    }
                 }
                 depositAmountString = ""
             }
@@ -263,10 +373,47 @@ struct CardGoalRowView: View {
                     .fill(Theme.hairline)
                 Capsule()
                     .fill(Theme.accent)
-                    .frame(width: geo.size.width * CGFloat(progressPercent))
+                    .frame(width: geo.size.width * CGFloat(isFilled ? progressPercent : 0))
             }
         }
         .frame(height: 4)
+        .onAppear {
+            withAnimation(Motion.spring.delay(0.25)) {
+                isFilled = true
+            }
+        }
+    }
+}
+
+/// Цвета карты: заливка по теме, тёмный текст на светлой карте и белый на тёмной
+struct CardPalette {
+    let fillColors: [Color]
+    let isLight: Bool
+
+    init(card: Card) {
+        let colors = card.gradientColors.map { Color(hex: $0) }
+        fillColors = colors.isEmpty ? [Theme.surface] : colors
+        isLight = Theme.isLight(hex: card.gradientColors.first ?? card.colorHex)
+    }
+
+    var primary: Color { isLight ? .black : .white }
+    var secondary: Color { isLight ? Color(hex: "#5A5A5E") : Theme.textSecondary }
+}
+
+extension View {
+    /// Форма и заливка карты: общая для лицевой и оборотной стороны
+    func cardFace(_ palette: CardPalette) -> some View {
+        self
+            .padding(.horizontal, 22)
+            .padding(.vertical, 22)
+            .frame(maxWidth: .infinity)
+            .frame(height: 196)
+            .foregroundColor(palette.primary)
+            .background(
+                LinearGradient(colors: palette.fillColors, startPoint: .topLeading, endPoint: .bottomTrailing)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 28))
+            .overlay(RoundedRectangle(cornerRadius: 28).stroke(Theme.line, lineWidth: palette.isLight ? 0 : 1))
     }
 }
 
@@ -274,23 +421,9 @@ struct CardGoalRowView: View {
 struct CardItemView: View {
     let card: Card
 
-    private var fillColors: [Color] {
-        let colors = card.gradientColors.map { Color(hex: $0) }
-        return colors.isEmpty ? [Theme.surface] : colors
-    }
+    private var palette: CardPalette { CardPalette(card: card) }
 
-    /// Тёмный текст на светлой карте и белый на тёмной
-    private var isLightCard: Bool {
-        Theme.isLight(hex: card.gradientColors.first ?? card.colorHex)
-    }
-
-    private var primaryColor: Color {
-        isLightCard ? .black : .white
-    }
-
-    private var secondaryColor: Color {
-        isLightCard ? Color(hex: "#5A5A5E") : Theme.textSecondary
-    }
+    private var secondaryColor: Color { palette.secondary }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -300,16 +433,7 @@ struct CardItemView: View {
             Spacer(minLength: 12)
             bottomRow
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 22)
-        .frame(maxWidth: .infinity)
-        .frame(height: 196)
-        .foregroundColor(primaryColor)
-        .background(
-            LinearGradient(colors: fillColors, startPoint: .topLeading, endPoint: .bottomTrailing)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 28))
-        .overlay(RoundedRectangle(cornerRadius: 28).stroke(Theme.line, lineWidth: isLightCard ? 0 : 1))
+        .cardFace(palette)
         .opacity(card.isFrozen ? 0.5 : 1.0)
     }
 
@@ -322,6 +446,7 @@ struct CardItemView: View {
             if card.isFrozen {
                 Image(systemName: "snowflake")
                     .font(.system(size: 14))
+                    .transition(.scale(scale: 0.2).combined(with: .opacity))
             }
             Text("•••• \(card.last4)")
                 .font(.system(size: 15))
@@ -340,6 +465,8 @@ struct CardItemView: View {
                 .tracking(-1)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
+                .contentTransition(.numericText(value: card.balance))
+                .animation(Motion.digits, value: card.balance)
         }
     }
 
@@ -353,6 +480,102 @@ struct CardItemView: View {
         .font(.system(size: 12, weight: .medium))
         .tracking(0.8)
         .foregroundColor(secondaryColor)
+    }
+}
+
+/// Карта в карусели: по нажатию переворачивается на оборот и обратно.
+/// Сначала лицевая сторона доворачивается до ребра, затем из-за ребра выходит оборот, поэтому зеркального текста не видно.
+struct FlippableCardView: View {
+    let card: Card
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isFlipped = false
+    @State private var frontAngle = 0.0
+    @State private var backAngle = -90.0
+
+    var body: some View {
+        ZStack {
+            CardItemView(card: card)
+                .rotation3DEffect(.degrees(frontAngle), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
+                .opacity(reduceMotion && isFlipped ? 0 : 1)
+            CardBackView(card: card)
+                .rotation3DEffect(.degrees(backAngle), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
+                .opacity(reduceMotion && !isFlipped ? 0 : 1)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 28))
+        .onTapGesture {
+            flip()
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(isFlipped ? "Показать лицевую сторону" : "Показать оборот карты")
+    }
+
+    private func flip() {
+        HapticManager.shared.impact(.light)
+        isFlipped.toggle()
+        if reduceMotion {
+            // Без поворота: стороны просто сменяют друг друга
+            frontAngle = isFlipped ? 90 : 0
+            backAngle = isFlipped ? 0 : -90
+            return
+        }
+        let half = 0.18
+        if isFlipped {
+            withAnimation(.easeIn(duration: half)) { frontAngle = 90 }
+            withAnimation(.easeOut(duration: half).delay(half)) { backAngle = 0 }
+        } else {
+            withAnimation(.easeIn(duration: half)) { backAngle = -90 }
+            withAnimation(.easeOut(duration: half).delay(half)) { frontAngle = 0 }
+        }
+    }
+}
+
+/// Оборот карты: магнитная полоса, маска номера, держатель и срок
+struct CardBackView: View {
+    let card: Card
+
+    var body: some View {
+        let palette = CardPalette(card: card)
+        VStack(alignment: .leading, spacing: 0) {
+            Rectangle()
+                .fill(palette.primary.opacity(0.85))
+                .frame(height: 34)
+                .padding(.horizontal, -22)
+                .padding(.top, 4)
+
+            Spacer(minLength: 12)
+
+            Text("•••• •••• •••• \(card.last4)")
+                .font(Theme.number(20, weight: .semibold))
+                .tracking(2)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            Spacer(minLength: 12)
+
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("card_holder".localized)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(palette.secondary)
+                    Text(card.holderName.uppercased())
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("expiry_date".localized)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(palette.secondary)
+                    Text(card.expiryDate)
+                        .font(.system(size: 13, weight: .semibold))
+                        .monospacedDigit()
+                }
+            }
+        }
+        .cardFace(palette)
+        .opacity(card.isFrozen ? 0.5 : 1.0)
     }
 }
 
@@ -398,9 +621,32 @@ struct AddCardView: View {
         return result
     }
 
+    /// Как будет выглядеть карта: обновляется на лету при вводе и смене темы
+    private var previewCard: Card {
+        let theme = themes[selectedThemeIndex]
+        let number = formattedCardNumber.isEmpty ? "5244 8721 9012 7642" : formattedCardNumber
+        return Card(
+            last4: Card.lastFourDigits(of: number),
+            holderName: holderName.isEmpty ? "SAMVEL USER" : holderName,
+            balance: Double(balanceString.replacingOccurrences(of: ",", with: ".")) ?? 0,
+            type: cardPurpose,
+            colorHex: theme.colorHex,
+            gradientColors: theme.gradient,
+            isFrozen: false,
+            expiryDate: expiryDate.isEmpty ? "08/29" : expiryDate
+        )
+    }
+
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    CardItemView(card: previewCard)
+                        .animation(Motion.spring, value: selectedThemeIndex)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                }
+
                 Section {
                     TextField("card_purpose".localized, text: $cardPurpose)
 
@@ -487,7 +733,10 @@ struct AddCardView: View {
             .clipShape(Capsule())
             .overlay(Capsule().stroke(Theme.line, lineWidth: isSelected ? 0 : 1))
             .onTapGesture {
-                cardPurpose = purpose
+                HapticManager.shared.selection()
+                withAnimation(Motion.spring) {
+                    cardPurpose = purpose
+                }
             }
     }
 
@@ -498,10 +747,13 @@ struct AddCardView: View {
             .fill(LinearGradient(colors: theme.gradient.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing))
             .frame(width: 44, height: 44)
             .overlay(Circle().stroke(isSelected ? Theme.accent : Theme.line, lineWidth: isSelected ? 2 : 1))
+            .scaleEffect(isSelected ? 1.12 : 1)
             .padding(3)
             .onTapGesture {
                 HapticManager.shared.impact(.light)
-                selectedThemeIndex = index
+                withAnimation(Motion.bouncy) {
+                    selectedThemeIndex = index
+                }
             }
             .accessibilityLabel("card_color_theme".localized)
     }
@@ -662,12 +914,16 @@ struct CardDetailsSheet: View {
             }
             Task {
                 try? await Task.sleep(for: .seconds(2))
-                isCopied = false
+                withAnimation {
+                    isCopied = false
+                }
             }
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
+                    .contentTransition(.symbolEffect(.replace))
                 Text(isCopied ? "copied".localized : "copy_number".localized)
+                    .contentTransition(.opacity)
             }
             .font(.system(size: 16, weight: .semibold))
             .foregroundColor(Theme.onAccent)
@@ -675,6 +931,7 @@ struct CardDetailsSheet: View {
             .background(Theme.accent)
             .clipShape(Capsule())
         }
+        .buttonStyle(.pressable)
         .disabled(fullNumber == nil)
     }
 

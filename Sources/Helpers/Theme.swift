@@ -14,6 +14,8 @@ enum Theme {
     static let accent = Color(hex: "#C6F432")
     /// Текст поверх лайма
     static let onAccent = Color(hex: "#111214")
+    /// Тёмный лайм под белым текстом: системные кнопки смахивания в списках
+    static let accentStrong = Color(hex: "#5E7A0F")
 
     /// Цвета долей категорий: от самой крупной к самой мелкой
     static let shades: [Color] = [
@@ -68,15 +70,17 @@ struct MonoCircleButton: View {
                 .background(filled ? Theme.accent : Theme.surfaceRaised)
                 .clipShape(Circle())
         }
+        .buttonStyle(PressableButtonStyle(scale: 0.88))
         .accessibilityLabel(label)
     }
 }
 
-/// Переключатель в виде капсулы: активный вариант лаймовый, остальные приглушены
+/// Переключатель в виде капсулы: лаймовая подложка перетекает к выбранному варианту, остальные приглушены
 struct MonoSegmentedControl<Option: Hashable>: View {
     let options: [Option]
     let title: (Option) -> String
     @Binding var selection: Option
+    @Namespace private var namespace
 
     var body: some View {
         HStack(spacing: 4) {
@@ -92,8 +96,9 @@ struct MonoSegmentedControl<Option: Hashable>: View {
     private func segment(for option: Option) -> some View {
         let isSelected = option == selection
         return Button {
+            guard option != selection else { return }
             HapticManager.shared.selection()
-            withAnimation(.easeInOut(duration: 0.2)) {
+            withAnimation(Motion.spring) {
                 selection = option
             }
         } label: {
@@ -103,9 +108,16 @@ struct MonoSegmentedControl<Option: Hashable>: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity, minHeight: 40)
-                .background(isSelected ? Theme.accent : Color.clear)
-                .clipShape(Capsule())
+                .background {
+                    if isSelected {
+                        Capsule()
+                            .fill(Theme.accent)
+                            .matchedGeometryEffect(id: "selection", in: namespace)
+                    }
+                }
+                .contentShape(Capsule())
         }
+        .buttonStyle(PressableButtonStyle(scale: 0.97))
     }
 }
 
@@ -174,8 +186,10 @@ struct PrimaryButton: View {
                 .background(Theme.accent)
                 .clipShape(Capsule())
         }
+        .buttonStyle(.pressable)
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1.0 : 0.4)
+        .animation(Motion.spring, value: isEnabled)
     }
 }
 
@@ -192,6 +206,14 @@ extension View {
         self
             .background(Theme.background.ignoresSafeArea())
             .preferredColorScheme(.dark)
+    }
+
+    /// Строка List без системного фона, разделителей и отступов: экран выглядит как обычная прокрутка «Пульса»
+    func monoListRow() -> some View {
+        self
+            .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
     }
 
     /// Тёмный фон для экранов на основе Form и List
