@@ -102,7 +102,7 @@ final class AIChatStore {
     private static func greeting() -> ChatMessage {
         ChatMessage(
             role: .assistant,
-            text: "Привет! Пришлите скриншоты банковских СМС или вставьте их текст — я найду операции, привяжу к картам и разложу по категориям. Ещё можно спросить, например: «сколько я потратил на продукты за неделю?»"
+            text: String(localized: "Привет! Пришлите скриншоты банковских СМС или вставьте их текст — я найду операции, привяжу к картам и разложу по категориям. Ещё можно спросить, например: «сколько я потратил на продукты за неделю?»")
         )
     }
 
@@ -132,7 +132,7 @@ final class AIChatStore {
         // Вставленный текст СМС разбирается на телефоне и сразу становится черновиком
         let found = Self.bankOperations(in: trimmed)
         if !found.isEmpty {
-            presentDraft(found, intro: Self.foundText(count: found.count, source: "в тексте"))
+            presentDraft(found, intro: Self.foundText(count: found.count, source: .text))
             return
         }
 
@@ -148,7 +148,7 @@ final class AIChatStore {
             recognizedText: nil,
             history: history,
             provider: activeProvider,
-            workingText: "Думаю…",
+            workingText: String(localized: "Думаю…"),
             declinedReply: nil
         )
         Task {
@@ -160,7 +160,7 @@ final class AIChatStore {
 
     func send(screenshots items: [PhotosPickerItem]) async {
         guard !items.isEmpty, !isWorking else { return }
-        workingText = "Распознаю текст…"
+        workingText = String(localized: "Распознаю текст…")
         defer { workingText = nil }
 
         var images: [Data] = []
@@ -170,12 +170,12 @@ final class AIChatStore {
             }
         }
         guard !images.isEmpty else {
-            reply("Не получилось открыть изображения. Попробуйте выбрать их ещё раз.")
+            reply(String(localized: "Не получилось открыть изображения. Попробуйте выбрать их ещё раз."))
             return
         }
 
         let history = cloudHistory()
-        let label = images.count == 1 ? "Скриншот" : "Скриншоты: \(images.count)"
+        let label = images.count == 1 ? String(localized: "Скриншот") : String(localized: "Скриншоты: \(images.count)")
         messages.append(ChatMessage(role: .user, text: label, thumbnails: images.compactMap { Self.thumbnail(from: $0) }))
 
         var texts: [String] = []
@@ -189,7 +189,7 @@ final class AIChatStore {
         // Сначала разбор на телефоне: банковские СМС не уходят в облако
         let found = Self.bankOperations(in: recognized)
         if !found.isEmpty {
-            presentDraft(found, intro: Self.foundText(count: found.count, source: images.count == 1 ? "на скриншоте" : "на скриншотах"))
+            presentDraft(found, intro: Self.foundText(count: found.count, source: images.count == 1 ? .screenshot : .screenshots))
             return
         }
 
@@ -198,21 +198,21 @@ final class AIChatStore {
         let activeProvider = provider
         if AIKeyStore.key(for: activeProvider) != nil {
             await submit(CloudRequest(
-                question: "Разбери скриншоты: найди операции, которые нужно записать в учёт. Если операций нет, коротко скажи, что на скриншотах.",
+                question: String(localized: "Разбери скриншоты: найди операции, которые нужно записать в учёт. Если операций нет, коротко скажи, что на скриншотах."),
                 images: images,
                 recognizedText: recognized,
                 history: history,
                 provider: activeProvider,
-                workingText: "Разбираю скриншоты…",
-                declinedReply: "Данные не отправлены в \(activeProvider.company). Без этого я разберу только банковские СМС: подойдут СМС с суммой и маской карты, например «GNUM 3,500.00 AMD 4318***0640»."
+                workingText: String(localized: "Разбираю скриншоты…"),
+                declinedReply: String(localized: "Данные не отправлены в \(activeProvider.company). Без этого я разберу только банковские СМС: подойдут СМС с суммой и маской карты, например «GNUM 3,500.00 AMD 4318***0640».")
             ))
             return
         }
 
         if texts.isEmpty {
-            reply("Не нашёл текста на изображении. Нужен скриншот, где СМС банка видна целиком.")
+            reply(String(localized: "Не нашёл текста на изображении. Нужен скриншот, где СМС банка видна целиком."))
         } else {
-            reply("Текст распознал, но банковских СМС в нём нет. Подойдут СМС с суммой и маской карты, например «GNUM 3,500.00 AMD 4318***0640». Чтобы разбирать чеки и выписки, добавьте ключ Claude, ChatGPT или Gemini: Настройки → ИИ-помощник.")
+            reply(String(localized: "Текст распознал, но банковских СМС в нём нет. Подойдут СМС с суммой и маской карты, например «GNUM 3,500.00 AMD 4318***0640». Чтобы разбирать чеки и выписки, добавьте ключ Claude, ChatGPT или Gemini: Настройки → ИИ-помощник."))
         }
     }
 
@@ -237,7 +237,7 @@ final class AIChatStore {
 
     private func run(_ request: CloudRequest) async {
         guard let apiKey = AIKeyStore.key(for: request.provider) else {
-            reply("Ключ \(request.provider.displayName) не найден. Добавьте его в Настройках → ИИ-помощник.")
+            reply(String(localized: "Ключ \(request.provider.displayName) не найден. Добавьте его в Настройках → ИИ-помощник."))
             return
         }
         workingText = request.workingText
@@ -269,7 +269,7 @@ final class AIChatStore {
             reply(declinedReply)
         } else {
             let local = LocalFinanceAssistant.answer(request.question, financeService: FinanceService.shared)
-            reply("Данные не отправлены в \(request.provider.company). Отвечаю по данным на телефоне.\n\n" + local)
+            reply(String(localized: "Данные не отправлены в \(request.provider.company). Отвечаю по данным на телефоне.\n\n") + local)
         }
     }
 
@@ -293,7 +293,7 @@ final class AIChatStore {
             return
         } catch {
             HapticManager.shared.trigger(.error)
-            reply((error as? LocalizedError)?.errorDescription ?? "Не получилось получить ответ \(provider.displayName). Повторите запрос.")
+            reply((error as? LocalizedError)?.errorDescription ?? String(localized: "Не получилось получить ответ \(provider.displayName). Повторите запрос."))
         }
     }
 
@@ -324,9 +324,23 @@ final class AIChatStore {
         }
     }
 
-    private static func foundText(count: Int, source: String) -> String {
-        let text = count == 1 ? "Нашёл операцию \(source)." : "Нашёл операций \(source): \(count)."
-        return text + " Проверьте категории и нажмите «Записать»."
+    private enum FoundSource {
+        case text
+        case screenshot
+        case screenshots
+    }
+
+    private static func foundText(count: Int, source: FoundSource) -> String {
+        let found: String
+        switch (source, count == 1) {
+        case (.text, true): found = String(localized: "Нашёл операцию в тексте.")
+        case (.text, false): found = String(localized: "Нашёл операций в тексте: \(count).")
+        case (.screenshot, true): found = String(localized: "Нашёл операцию на скриншоте.")
+        case (.screenshot, false): found = String(localized: "Нашёл операций на скриншоте: \(count).")
+        case (.screenshots, true): found = String(localized: "Нашёл операцию на скриншотах.")
+        case (.screenshots, false): found = String(localized: "Нашёл операций на скриншотах: \(count).")
+        }
+        return found + " " + String(localized: "Проверьте категории и нажмите «Записать».")
     }
 
     private func presentDraft(_ found: [ParsedSMSTransaction], intro: String) {
@@ -339,7 +353,7 @@ final class AIChatStore {
 
         var text = intro
         if duplicates > 0 {
-            text += " Уже записаны: \(duplicates), их отметку я снял."
+            text += " " + String(localized: "Уже записаны: \(duplicates), их отметку я снял.")
         }
         HapticManager.shared.trigger(.success)
         messages.append(ChatMessage(role: .assistant, text: text, draft: OperationDraft(items: items)))
@@ -376,7 +390,7 @@ final class AIChatStore {
         let summary = AutomationService.shared.ingestAll(chosen.map(\.parsed))
         messages[index].draft?.isSaved = true
         HapticManager.shared.trigger(summary.failed > 0 ? .error : .success)
-        reply("Готово: \(summary.text). Балансы карт обновлены.")
+        reply(String(localized: "Готово: \(summary.text). Балансы карт обновлены."))
     }
 
     private func updateDraft(_ messageID: UUID, _ change: (inout OperationDraft) -> Void) {

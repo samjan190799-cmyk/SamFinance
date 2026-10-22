@@ -3,7 +3,8 @@ import SwiftUI
 /// Экран настроек приложения. Позволяет переключать язык (Русский, English, Հայերեն), экспортировать информацию и сбрасывать состояние.
 struct SettingsView: View {
     let financeService: FinanceService
-    @State private var languageManager = LanguageManager.shared
+    @State private var selectedLanguage = AppLanguage.selected
+    @State private var isShowingLanguageAlert = false
     @State private var currencyManager = CurrencyManager.shared
     @State private var isShowingConverter = false
     @State private var isShowingDeleteAlert = false
@@ -42,16 +43,19 @@ struct SettingsView: View {
                 
                 // Секция предпочтений и выбора языка и валюты
                 Section {
-                    Picker(selection: $languageManager.currentLanguage) {
+                    Picker(selection: $selectedLanguage) {
                         ForEach(AppLanguage.allCases) { lang in
-                            Text("\(lang.flagIcon)  \(lang.displayName)")
+                            Text(lang.displayName)
                                 .tag(lang)
                         }
                     } label: {
                         Label("app_language".localized, systemImage: "globe")
                     }
-                    .onChange(of: languageManager.currentLanguage) { _, _ in
+                    .onChange(of: selectedLanguage) { _, newValue in
+                        guard newValue != AppLanguage.selected else { return }
+                        AppLanguage.select(newValue)
                         HapticManager.shared.selection()
+                        isShowingLanguageAlert = true
                     }
                     
                     Picker(selection: $currencyManager.currentCurrency) {
@@ -140,7 +144,7 @@ struct SettingsView: View {
                         Task {
                             let granted = await PurchasePromptService.shared.requestAuthorization()
                             HapticManager.shared.trigger(granted ? .success : .warning)
-                            purchasePromptStatus = granted ? "Уведомления включены" : "Выключены в настройках iOS"
+                            purchasePromptStatus = granted ? String(localized: "Уведомления включены") : String(localized: "Выключены в настройках iOS")
                         }
                     } label: {
                         HStack {
@@ -175,6 +179,11 @@ struct SettingsView: View {
             }
             .monoForm()
             .tint(Theme.accent)
+            .alert(selectedLanguage.string("Язык изменится после перезапуска"), isPresented: $isShowingLanguageAlert) {
+                Button(selectedLanguage.string("Понятно")) {}
+            } message: {
+                Text(selectedLanguage.string("Закройте Hashiv (смахните его вверх в списке приложений) и откройте снова."))
+            }
             .sheet(isPresented: $isShowingConverter) {
                 CurrencyConverterView()
             }
@@ -267,13 +276,13 @@ struct SettingsView: View {
     }
 
     private var aiFooter: String {
-        var text = "Ключ каждого сервиса хранится в Keychain только на этом телефоне. С ключом ИИ-чат отвечает на любые вопросы, разбирает чеки, выписки и скриншоты моделью \(provider.model): вопрос, скриншоты и сводка ваших операций, карт (последние 4 цифры) и долгов отправляются в \(provider.company), оплата по тарифу ключа."
+        var text = String(localized: "Ключ каждого сервиса хранится в Keychain только на этом телефоне. С ключом ИИ-чат отвечает на любые вопросы, разбирает чеки, выписки и скриншоты моделью \(provider.model): вопрос, скриншоты и сводка ваших операций, карт (последние 4 цифры) и долгов отправляются в \(provider.company), оплата по тарифу ключа.")
         if provider == .openAI {
-            text += " Нужен ключ API с platform.openai.com: подписка ChatGPT для него не подходит."
+            text += " " + String(localized: "Нужен ключ API с platform.openai.com: подписка ChatGPT для него не подходит.")
         }
-        text += " Перед первой отправкой приложение спросит разрешение; оно сбрасывается, когда вы удаляете ключ."
-        text += " Банковские СМС по-прежнему распознаются на телефоне и в облако не уходят. Без ключа всё считается только на телефоне."
-        text += " Поле «Модель» можно оставить пустым: тогда используется \(provider.defaultModel)."
+        text += " " + String(localized: "Перед первой отправкой приложение спросит разрешение; оно сбрасывается, когда вы удаляете ключ.")
+        text += " " + String(localized: "Банковские СМС по-прежнему распознаются на телефоне и в облако не уходят. Без ключа всё считается только на телефоне.")
+        text += " " + String(localized: "Поле «Модель» можно оставить пустым: тогда используется \(provider.defaultModel).")
         return text
     }
 
@@ -291,9 +300,15 @@ struct SettingsView: View {
             apiKeyError = nil
             hasAPIKey = true
         } else {
-            apiKeyError = "Не получилось сохранить ключ в Keychain. Разблокируйте телефон и попробуйте ещё раз."
+            apiKeyError = String(localized: "Не получилось сохранить ключ в Keychain. Разблокируйте телефон и попробуйте ещё раз.")
             HapticManager.shared.trigger(.error)
         }
+    }
+
+    /// Поле CSV: значения с запятой, кавычкой или переводом строки берутся в кавычки
+    private static func csvField(_ value: String) -> String {
+        guard value.contains(where: { $0 == "," || $0 == "\"" || $0 == "\n" }) else { return value }
+        return "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
 
     private func exportDataToClipboard() {
@@ -303,12 +318,13 @@ struct SettingsView: View {
         
         for t in financeService.transactions {
             let dateStr = formatter.string(from: t.date)
-            csvText += "\(dateStr),\(t.type.rawValue),\(t.category.name),\(t.title),\(t.amount)\n"
+            let fields = [dateStr, t.type.rawValue, t.category.displayName, t.title, String(t.amount)]
+            csvText += fields.map(Self.csvField).joined(separator: ",") + "\n"
         }
         
         UIPasteboard.general.string = csvText
         withAnimation {
-            exportMessage = "Copied!"
+            exportMessage = String(localized: "Скопировано")
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             exportMessage = nil

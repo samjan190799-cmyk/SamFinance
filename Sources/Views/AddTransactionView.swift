@@ -64,7 +64,7 @@ struct AddTransactionView: View {
     // MARK: - Верхняя строка
     private var topBar: some View {
         HStack {
-            MonoCircleButton(systemName: "xmark", label: "Закрыть") {
+            MonoCircleButton(systemName: "xmark", label: String(localized: "Закрыть")) {
                 dismiss()
             }
             Spacer()
@@ -83,7 +83,7 @@ struct AddTransactionView: View {
     private var typePicker: some View {
         MonoSegmentedControl(
             options: [TransactionType.expense, TransactionType.income],
-            title: { $0 == .expense ? "Расход" : "Доход" },
+            title: { $0 == .expense ? String(localized: "Расход") : String(localized: "Доход") },
             selection: $transactionType
         )
         .padding(.top, 12)
@@ -98,7 +98,7 @@ struct AddTransactionView: View {
     // MARK: - Сумма
     private var amountDisplay: some View {
         VStack(alignment: .leading, spacing: 8) {
-            MonoLabel(text: "Сумма")
+            MonoLabel(text: String(localized: "Сумма"))
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(CurrencyManager.shared.baseCurrency.symbol)
                     .font(.system(size: 28, weight: .light))
@@ -191,7 +191,7 @@ struct AddTransactionView: View {
                 selectedCategory = category
             }
         } label: {
-            Text(category.name)
+            Text(category.displayName)
                 .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
                 .foregroundColor(isSelected ? Theme.onAccent : .white)
                 .padding(.horizontal, 18)
@@ -308,7 +308,7 @@ struct AddTransactionView: View {
                 }
             }
 
-            PrimaryButton(title: "Сохранить", isEnabled: parsedAmount > 0) {
+            PrimaryButton(title: String(localized: "Сохранить"), isEnabled: parsedAmount > 0) {
                 saveTransaction()
             }
         }
@@ -335,7 +335,7 @@ struct AddTransactionView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(KeypadButtonStyle())
-        .accessibilityLabel(key == "⌫" ? "Стереть" : key)
+        .accessibilityLabel(key == "⌫" ? String(localized: "Стереть") : key)
     }
 
     /// Галочка поверх экрана после сохранения
@@ -430,7 +430,7 @@ struct AddTransactionView: View {
         HapticManager.shared.impact(.light)
         guard let clipboardText = UIPasteboard.general.string, !clipboardText.isEmpty else {
             recognitionSucceeded = false
-            recognitionMessage = "Буфер обмена пуст."
+            recognitionMessage = String(localized: "Буфер обмена пуст.")
             return
         }
 
@@ -445,13 +445,13 @@ struct AddTransactionView: View {
 
             recognitionSucceeded = true
             withAnimation(Motion.spring) {
-                recognitionMessage = "Успешно распознано: \(parsed.title) (\(CurrencyManager.shared.format(parsed.amount)))"
+                recognitionMessage = String(localized: "Успешно распознано: \(parsed.title) (\(CurrencyManager.shared.format(parsed.amount)))")
             }
             HapticManager.shared.trigger(.success)
         } else {
             recognitionSucceeded = false
             withAnimation(Motion.spring) {
-                recognitionMessage = "Не удалось распознать формат СМС."
+                recognitionMessage = String(localized: "Не удалось распознать формат СМС.")
             }
             HapticManager.shared.trigger(.error)
         }
@@ -574,7 +574,7 @@ struct BatchSMSImportSheet: View {
         } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
-                    MonoLabel(text: "Найдено операций: \(recognizedTransactions.count)")
+                    MonoLabel(text: String(localized: "Найдено операций: \(recognizedTransactions.count)"))
 
                     ForEach(0..<recognizedTransactions.count, id: \.self) { index in
                         resultRow(recognizedTransactions[index])

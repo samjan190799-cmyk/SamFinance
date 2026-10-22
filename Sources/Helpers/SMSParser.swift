@@ -174,9 +174,9 @@ public struct SMSParser {
             let name = cleanCounterparty(firstDetail)
             counterparty = name.isEmpty ? nil : name
             if direction == .income {
-                title = name.isEmpty ? "Входящий перевод" : "Перевод от \(prettify(name))"
+                title = name.isEmpty ? String(localized: "Входящий перевод") : String(localized: "Перевод от \(prettify(name))")
             } else {
-                title = name.isEmpty ? "Перевод" : "Перевод · \(prettify(name))"
+                title = name.isEmpty ? String(localized: "Перевод") : String(localized: "Перевод · \(prettify(name))")
             }
             categoryName = "Переводы"
             merchant = name
@@ -187,13 +187,13 @@ public struct SMSParser {
             type = isIncome ? .income : .expense
 
             if operation.contains("ATM") {
-                title = "Снятие наличных"
+                title = String(localized: "Снятие наличных")
                 categoryName = "Прочее"
             } else if let match = categoryRule(for: combined) {
-                title = merchant.isEmpty ? "Операция по карте •••• \(last4)" : prettify(merchant)
+                title = merchant.isEmpty ? String(localized: "Операция по карте •••• \(last4)") : prettify(merchant)
                 categoryName = match.category
             } else {
-                title = merchant.isEmpty ? "Операция по карте •••• \(last4)" : prettify(merchant)
+                title = merchant.isEmpty ? String(localized: "Операция по карте •••• \(last4)") : prettify(merchant)
                 categoryName = type == .income ? "Зарплата" : "Прочее"
                 guessed = true
             }
@@ -356,7 +356,7 @@ public struct SMSParser {
         }
 
         let parsedDate = extractDate(from: text)
-        let title = brandName ?? (type == .income ? "Пополнение счета" : "Операция по карте")
+        let title = brandName ?? (type == .income ? String(localized: "Пополнение счета") : String(localized: "Операция по карте"))
         let last4 = firstMatch(cardMaskPattern, in: text).flatMap { capture(1, of: $0, in: text) }
 
         return ParsedSMSTransaction(

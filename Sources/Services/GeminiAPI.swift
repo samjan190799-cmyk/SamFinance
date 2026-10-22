@@ -82,7 +82,7 @@ enum GeminiAPI {
     /// Отправляет готовое тело запроса и возвращает текст ответа модели
     static func send(body: Data, apiKey: String) async throws -> String {
         guard let url = endpoint() else {
-            throw AIAPIError.server(.gemini, "название модели содержит недопустимые символы")
+            throw AIAPIError.server(.gemini, String(localized: "название модели содержит недопустимые символы"))
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

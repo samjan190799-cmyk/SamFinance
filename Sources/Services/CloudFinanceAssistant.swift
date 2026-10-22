@@ -144,7 +144,7 @@ enum CloudFinanceAssistant {
 
     private static func systemPrompt() -> String {
         """
-        Ты — помощник в приложении учёта личных финансов Hashiv. Отвечай по-русски, коротко и по делу, обычным текстом без Markdown; перечисления пиши строками, начинающимися с «• ».
+        Ты — помощник в приложении учёта личных финансов Hashiv. Отвечай на языке пользователя (\(AppLanguage.current.promptName)), коротко и по делу, обычным текстом без Markdown; перечисления пиши строками, начинающимися с «• ».
 
         Считай только по данным пользователя ниже. Если данных не хватает, так и скажи и не придумывай суммы.
 
@@ -292,7 +292,7 @@ enum CloudFinanceAssistant {
         let title = operation.title.trimmingCharacters(in: .whitespacesAndNewlines)
 
         return ParsedSMSTransaction(
-            title: title.isEmpty ? (brand ?? "Операция") : title,
+            title: title.isEmpty ? (brand ?? String(localized: "Операция")) : title,
             amount: operation.amount,
             currency: AppCurrency(rawValue: operation.currency) ?? .amd,
             type: TransactionType(rawValue: operation.type) ?? .expense,

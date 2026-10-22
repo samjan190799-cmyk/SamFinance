@@ -31,10 +31,10 @@ public enum AppCurrency: String, CaseIterable, Identifiable, Codable, Sendable {
     
     public var displayName: String {
         switch self {
-        case .amd: return "Армянский драм (֏)"
-        case .rub: return "Российский рубль (₽)"
-        case .usd: return "Доллар США ($)"
-        case .eur: return "Евро (€)"
+        case .amd: return String(localized: "Армянский драм (֏)")
+        case .rub: return String(localized: "Российский рубль (₽)")
+        case .usd: return String(localized: "Доллар США ($)")
+        case .eur: return String(localized: "Евро (€)")
         }
     }
 }

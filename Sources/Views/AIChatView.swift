@@ -26,7 +26,7 @@ struct AIChatView: View {
             store.refreshCloudState()
         }
         .alert(
-            "Отправить данные в \(store.pendingConsent?.provider.company ?? "облако")?",
+            "Отправить данные в \(store.pendingConsent?.provider.company ?? "")?",
             isPresented: consentBinding,
             presenting: store.pendingConsent
         ) { _ in
@@ -72,7 +72,7 @@ struct AIChatView: View {
                 Text("ИИ-помощник")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
-                Text(store.isCloudEnabled ? "\(store.provider.statusTitle) · СМС распознаются на телефоне" : "Без ключа \(store.provider.displayName): всё считается на телефоне")
+                Text(store.isCloudEnabled ? String(localized: "\(store.provider.statusTitle) · СМС распознаются на телефоне") : String(localized: "Без ключа \(store.provider.displayName): всё считается на телефоне"))
                     .font(.system(size: 13))
                     .foregroundColor(store.isCloudEnabled ? Theme.accent : Theme.textSecondary)
                     .lineLimit(1)
@@ -80,12 +80,12 @@ struct AIChatView: View {
             }
             Spacer()
             if !store.isFresh {
-                MonoCircleButton(systemName: "arrow.counterclockwise", label: "Начать заново") {
+                MonoCircleButton(systemName: "arrow.counterclockwise", label: String(localized: "Начать заново")) {
                     HapticManager.shared.impact(.light)
                     withAnimation { store.reset() }
                 }
             }
-            MonoCircleButton(systemName: "key", label: "Выбор ИИ и ключ в настройках") {
+            MonoCircleButton(systemName: "key", label: String(localized: "Выбор ИИ и ключ в настройках")) {
                 HapticManager.shared.impact(.light)
                 isShowingSettings = true
             }
@@ -204,7 +204,7 @@ struct AIChatView: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(images.count == 1 ? "Скриншот" : "Скриншотов: \(images.count)")
+        .accessibilityLabel(images.count == 1 ? String(localized: "Скриншот") : String(localized: "Скриншотов: \(images.count)"))
     }
 
     private var workingIndicator: some View {
@@ -227,15 +227,15 @@ struct AIChatView: View {
     // MARK: - Подсказки
     private var suggestions: some View {
         var questions = [
-            "Сколько я потратил за неделю?",
-            "Сколько ушло на продукты за месяц?",
-            "Какой у меня баланс?",
-            "Кому я должен?",
-            "Дай совет"
+            String(localized: "Сколько я потратил за неделю?"),
+            String(localized: "Сколько ушло на продукты за месяц?"),
+            String(localized: "Какой у меня баланс?"),
+            String(localized: "Кому я должен?"),
+            String(localized: "Дай совет")
         ]
         // Фразы о тратах превращает в операции только облачный ИИ
         if store.isCloudEnabled {
-            questions.insert("Вчера потратил 3 000 на такси", at: 0)
+            questions.insert(String(localized: "Вчера потратил 3 000 на такси"), at: 0)
         }
         return VStack(alignment: .leading, spacing: 8) {
             PhotosPicker(selection: $pickerItems, maxSelectionCount: 10, matching: .images) {
@@ -357,7 +357,7 @@ private struct DraftCard: View {
                     .transition(.scale(scale: 0.8).combined(with: .opacity))
             } else {
                 let count = draft.includedCount
-                PrimaryButton(title: count > 0 ? "Записать (\(count))" : "Ничего не отмечено", isEnabled: count > 0) {
+                PrimaryButton(title: count > 0 ? String(localized: "Записать (\(count))") : String(localized: "Ничего не отмечено"), isEnabled: count > 0) {
                     store.saveDraft(in: messageID)
                 }
                 .padding(.top, 12)
@@ -383,7 +383,7 @@ private struct DraftCard: View {
                     .frame(width: 44, height: 44)
             }
             .disabled(draft.isSaved)
-            .accessibilityLabel(item.isIncluded ? "Не записывать" : "Записать")
+            .accessibilityLabel(item.isIncluded ? String(localized: "Не записывать") : String(localized: "Записать"))
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(parsed.title)
@@ -417,12 +417,12 @@ private struct DraftCard: View {
                 Button {
                     store.setCategory(category, itemID: item.id, in: messageID)
                 } label: {
-                    Label(category.name, systemImage: category.icon)
+                    Label(category.displayName, systemImage: category.icon)
                 }
             }
         } label: {
             HStack(spacing: 4) {
-                Text(current.name)
+                Text(current.displayName)
                 if item.needsReview {
                     Text("· проверьте")
                         .foregroundColor(Theme.accent)
@@ -447,7 +447,7 @@ private struct DraftCard: View {
             parts.append(date.formatted(.dateTime.day().month(.abbreviated).hour().minute()))
         }
         if item.isDuplicate {
-            parts.append("уже записана")
+            parts.append(String(localized: "уже записана"))
         }
         return parts.joined(separator: " · ")
     }

@@ -16,6 +16,10 @@ targets:
       path: Sources/Info.plist
       properties:
         CFBundleDisplayName: Hashiv
+        CFBundleLocalizations:
+          - ru
+          - en
+          - hy
         UILaunchScreen: {}
         UIRequiresFullScreen: false
         ITSAppUsesNonExemptEncryption: false

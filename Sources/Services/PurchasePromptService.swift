@@ -78,7 +78,7 @@ public final class PurchasePromptService {
             list.map {
                 UNNotificationAction(
                     identifier: PurchasePromptID.categoryActionPrefix + $0.id.uuidString,
-                    title: $0.name,
+                    title: $0.displayName,
                     options: [.authenticationRequired]
                 )
             }
@@ -87,9 +87,9 @@ public final class PurchasePromptService {
         let kind = UNNotificationCategory(
             identifier: PurchasePromptID.kindCategory,
             actions: [
-                UNNotificationAction(identifier: PurchasePromptID.expenseAction, title: "Расход", options: [.authenticationRequired]),
-                UNNotificationAction(identifier: PurchasePromptID.incomeAction, title: "Доход", options: [.authenticationRequired]),
-                UNNotificationAction(identifier: PurchasePromptID.skipAction, title: "Пропустить", options: [.destructive])
+                UNNotificationAction(identifier: PurchasePromptID.expenseAction, title: String(localized: "Расход"), options: [.authenticationRequired]),
+                UNNotificationAction(identifier: PurchasePromptID.incomeAction, title: String(localized: "Доход"), options: [.authenticationRequired]),
+                UNNotificationAction(identifier: PurchasePromptID.skipAction, title: String(localized: "Пропустить"), options: [.destructive])
             ],
             intentIdentifiers: [],
             options: []
@@ -97,7 +97,7 @@ public final class PurchasePromptService {
         let expenseFirst = UNNotificationCategory(
             identifier: PurchasePromptID.expenseFirstCategory,
             actions: categoryActions(Array(expenseCategories.prefix(Self.firstPageSize))) + [
-                UNNotificationAction(identifier: PurchasePromptID.moreAction, title: "Ещё…", options: [.authenticationRequired])
+                UNNotificationAction(identifier: PurchasePromptID.moreAction, title: String(localized: "Ещё…"), options: [.authenticationRequired])
             ],
             intentIdentifiers: [],
             options: []
@@ -163,7 +163,7 @@ public final class PurchasePromptService {
         post(
             category: PurchasePromptID.kindCategory,
             title: header(for: context),
-            body: "Это расход или доход?",
+            body: String(localized: "Это расход или доход?"),
             context: context
         )
         return true
@@ -176,21 +176,21 @@ public final class PurchasePromptService {
             post(
                 category: PurchasePromptID.expenseFirstCategory,
                 title: header(for: context),
-                body: "Расход: на что потрачено?",
+                body: String(localized: "Расход: на что потрачено?"),
                 context: context.withKind(.expense)
             )
         case PurchasePromptID.incomeAction:
             post(
                 category: PurchasePromptID.incomeCategory,
                 title: header(for: context),
-                body: "Доход: откуда он?",
+                body: String(localized: "Доход: откуда он?"),
                 context: context.withKind(.income)
             )
         case PurchasePromptID.moreAction:
             post(
                 category: PurchasePromptID.expenseMoreCategory,
                 title: header(for: context),
-                body: "Расход: другие категории",
+                body: String(localized: "Расход: другие категории"),
                 context: context
             )
         case PurchasePromptID.skipAction:
@@ -217,7 +217,7 @@ public final class PurchasePromptService {
             type: kind,
             category: category,
             date: Date(timeIntervalSince1970: context.date),
-            notes: "Apple Pay, записано из подсказки после покупки",
+            notes: String(localized: "Apple Pay, записано из подсказки после покупки"),
             brandName: context.merchant,
             brandIcon: category.icon,
             brandColorHex: category.colorHex
@@ -230,16 +230,16 @@ public final class PurchasePromptService {
             AutomationService.shared.learnCategory(merchant: context.merchant, category: category)
             post(
                 category: "",
-                title: "Записано",
-                body: "\(context.merchant) · \(category.name) · \(amountText)",
+                title: String(localized: "Записано"),
+                body: "\(context.merchant) · \(category.displayName) · \(amountText)",
                 context: context,
                 withSound: false
             )
         } else {
             post(
                 category: "",
-                title: "Не удалось сохранить",
-                body: "\(context.merchant) · \(amountText). Откройте Hashiv и повторите.",
+                title: String(localized: "Не удалось сохранить"),
+                body: String(localized: "\(context.merchant) · \(amountText). Откройте Hashiv и повторите."),
                 context: context
             )
         }
