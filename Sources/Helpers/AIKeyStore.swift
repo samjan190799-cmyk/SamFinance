@@ -1,31 +1,39 @@
 import Foundation
 import Security
 
-/// Ключ Claude API пользователя в Keychain. Доступен только при разблокированном телефоне,
-/// не переезжает на другие устройства и в резервные копии, в файлах приложения не хранится.
-public enum AIKeyStore {
-    private static let service = "com.samvel.samfinance.anthropic-api-key"
+/// Ключи облачных ИИ пользователя в Keychain: у каждого сервиса своя запись. Доступны только при разблокированном
+/// телефоне, не переезжают на другие устройства и в резервные копии, в файлах приложения не хранятся.
+enum AIKeyStore {
     private static let account = "default"
 
-    private static var baseQuery: [String: Any] {
+    /// Запись Claude осталась под прежним именем: ключи, сохранённые до появления выбора сервиса, продолжают работать
+    private static func service(for provider: AIProvider) -> String {
+        switch provider {
+        case .claude: return "com.samvel.samfinance.anthropic-api-key"
+        case .openAI: return "com.samvel.samfinance.openai-api-key"
+        case .gemini: return "com.samvel.samfinance.gemini-api-key"
+        }
+    }
+
+    private static func baseQuery(for provider: AIProvider) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
+            kSecAttrService as String: service(for: provider),
             kSecAttrAccount as String: account
         ]
     }
 
     /// Сохраняет (или заменяет) ключ. Возвращает false, если Keychain отказал в записи.
     @discardableResult
-    public static func setKey(_ key: String) -> Bool {
+    static func setKey(_ key: String, for provider: AIProvider) -> Bool {
         guard let data = key.data(using: .utf8) else { return false }
 
         let status = SecItemUpdate(
-            baseQuery as CFDictionary,
+            baseQuery(for: provider) as CFDictionary,
             [kSecValueData as String: data] as CFDictionary
         )
         if status == errSecItemNotFound {
-            var query = baseQuery
+            var query = baseQuery(for: provider)
             query[kSecValueData as String] = data
             query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
             return SecItemAdd(query as CFDictionary, nil) == errSecSuccess
@@ -34,8 +42,8 @@ public enum AIKeyStore {
     }
 
     /// Ключ или nil, если его нет или телефон заблокирован
-    public static func key() -> String? {
-        var query = baseQuery
+    static func key(for provider: AIProvider) -> String? {
+        var query = baseQuery(for: provider)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
@@ -49,7 +57,7 @@ public enum AIKeyStore {
         return key
     }
 
-    public static func deleteKey() {
-        SecItemDelete(baseQuery as CFDictionary)
+    static func deleteKey(for provider: AIProvider) {
+        SecItemDelete(baseQuery(for: provider) as CFDictionary)
     }
 }

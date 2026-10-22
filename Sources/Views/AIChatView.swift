@@ -44,7 +44,7 @@ struct AIChatView: View {
                 Text("ИИ-помощник")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
-                Text(store.isCloudEnabled ? "Claude Opus 5.5 · СМС распознаются на телефоне" : "Без ключа Claude: всё считается на телефоне")
+                Text(store.isCloudEnabled ? "\(store.provider.statusTitle) · СМС распознаются на телефоне" : "Без ключа \(store.provider.displayName): всё считается на телефоне")
                     .font(.system(size: 13))
                     .foregroundColor(store.isCloudEnabled ? Theme.accent : Theme.textSecondary)
                     .lineLimit(1)
@@ -57,7 +57,7 @@ struct AIChatView: View {
                     withAnimation { store.reset() }
                 }
             }
-            MonoCircleButton(systemName: "key", label: "Ключ Claude в настройках") {
+            MonoCircleButton(systemName: "key", label: "Выбор ИИ и ключ в настройках") {
                 HapticManager.shared.impact(.light)
                 isShowingSettings = true
             }
