@@ -1,37 +1,67 @@
+import Combine
 import SwiftUI
 
-/// Вкладка нижней панели
-private struct MonoTab: Identifiable {
-    let index: Int
-    let title: String
-    let icon: String
+/// Разделы нижней панели
+enum AppTab: Int, CaseIterable, Identifiable {
+    case overview
+    case cards
+    case assistant
+    case debts
+    case report
 
-    var id: Int { index }
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .overview: return "Обзор"
+        case .cards: return "Карты"
+        case .assistant: return "ИИ"
+        case .debts: return "Долги"
+        case .report: return "Отчёт"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .overview: return "house"
+        case .cards: return "creditcard"
+        case .assistant: return "sparkles"
+        case .debts: return "person.2"
+        case .report: return "chart.bar"
+        }
+    }
+
+    /// Иконка активной вкладки
+    var selectedIcon: String {
+        switch self {
+        case .assistant: return "sparkles"
+        default: return "\(icon).fill"
+        }
+    }
 }
 
-/// Главный контейнер приложения. Три вкладки (Долги, Обзор, Карты) в плавающей панели
-/// и отдельная кнопка «+» для новой операции.
+/// Главный контейнер приложения: пять разделов в нижней панели, ИИ — один из них.
 struct ContentView: View {
     @State private var financeService = FinanceService.shared
     @State private var languageManager = LanguageManager.shared
-    @State private var selectedTab = 1 // По умолчанию открыт главный экран (индекс 1)
-    @State private var isShowingAddSheet = false
-
-    private let tabs: [MonoTab] = [
-        MonoTab(index: 0, title: "Долги", icon: "person.2"),
-        MonoTab(index: 1, title: "Обзор", icon: "house"),
-        MonoTab(index: 2, title: "Карты", icon: "creditcard")
-    ]
+    @State private var selectedTab: AppTab = .overview
+    /// Пока открыта клавиатура, панель прячется, чтобы поле ввода чата стояло прямо над клавиатурой
+    @State private var isKeyboardVisible = false
 
     var body: some View {
         tabContent
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .monoScreen()
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                bottomBar
+                if !isKeyboardVisible {
+                    tabBar
+                }
             }
-            .sheet(isPresented: $isShowingAddSheet) {
-                AddTransactionView(financeService: financeService)
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                isKeyboardVisible = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                isKeyboardVisible = false
             }
             .task {
                 // Курсы валют обновляются сами при каждом запуске
@@ -39,81 +69,62 @@ struct ContentView: View {
             }
     }
 
-    // MARK: - Содержимое выбранной вкладки
+    // MARK: - Содержимое выбранного раздела
     @ViewBuilder
     private var tabContent: some View {
         switch selectedTab {
-        case 0:
-            DebtsView(financeService: financeService)
-        case 2:
+        case .overview:
+            DashboardView(financeService: financeService) {
+                switchTo(.report)
+            }
+        case .cards:
             CardsView(financeService: financeService)
-        default:
-            DashboardView(financeService: financeService)
+        case .assistant:
+            AIChatView(financeService: financeService)
+        case .debts:
+            DebtsView(financeService: financeService)
+        case .report:
+            ReportView(financeService: financeService)
         }
+    }
+
+    private func switchTo(_ tab: AppTab) {
+        guard selectedTab != tab else { return }
+        HapticManager.shared.selection()
+        selectedTab = tab
     }
 
     // MARK: - Нижняя панель
-    private var bottomBar: some View {
-        HStack(spacing: 12) {
-            tabPill
-            addButton
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
-    }
-
-    private var tabPill: some View {
-        HStack(spacing: 4) {
-            ForEach(tabs) { tab in
+    private var tabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(AppTab.allCases) { tab in
                 tabButton(tab)
             }
         }
-        .padding(6)
-        .frame(height: 64)
-        .background(Theme.surface)
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(Theme.line, lineWidth: 1))
+        .padding(.horizontal, 8)
+        .padding(.top, 6)
+        .background(
+            Theme.tabBar
+                .ignoresSafeArea(edges: .bottom)
+                .overlay(alignment: .top) { MonoDivider() }
+        )
     }
 
-    private func tabButton(_ tab: MonoTab) -> some View {
-        let isSelected = selectedTab == tab.index
+    private func tabButton(_ tab: AppTab) -> some View {
+        let isSelected = selectedTab == tab
         return Button {
-            if selectedTab != tab.index {
-                HapticManager.shared.selection()
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    selectedTab = tab.index
-                }
-            }
+            switchTo(tab)
         } label: {
-            HStack(spacing: 8) {
-                Image(systemName: isSelected ? "\(tab.icon).fill" : tab.icon)
-                    .font(.system(size: 20, weight: .regular))
-                if isSelected {
-                    Text(tab.title)
-                        .font(.system(size: 14, weight: .semibold))
-                }
+            VStack(spacing: 4) {
+                Image(systemName: isSelected ? tab.selectedIcon : tab.icon)
+                    .font(.system(size: 20, weight: isSelected ? .semibold : .regular))
+                Text(tab.title)
+                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
             }
-            .foregroundColor(isSelected ? .white : Theme.textTertiary)
-            .frame(maxWidth: isSelected ? .infinity : 64, maxHeight: .infinity)
-            .background(isSelected ? Theme.line : Color.clear)
-            .clipShape(Capsule())
+            .foregroundColor(isSelected ? Theme.accent : Theme.textSecondary)
+            .frame(maxWidth: .infinity, minHeight: 50)
         }
         .accessibilityLabel(tab.title)
-    }
-
-    private var addButton: some View {
-        Button {
-            HapticManager.shared.impact(.light)
-            isShowingAddSheet = true
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 24, weight: .medium))
-                .foregroundColor(.black)
-                .frame(width: 64, height: 64)
-                .background(Color.white)
-                .clipShape(Circle())
-        }
-        .accessibilityLabel("Новая операция")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

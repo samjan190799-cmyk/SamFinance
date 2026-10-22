@@ -223,8 +223,8 @@ public final class AutomationService {
             holderName: holder,
             balance: balance,
             type: "Карта •••• \(last4)",
-            colorHex: "#2C2C2E",
-            gradientColors: ["#2C2C2E", "#1C1C1E"],
+            colorHex: "#2A2B30",
+            gradientColors: ["#2A2B30", "#1C1D21"],
             isFrozen: false,
             expiryDate: "—",
             balanceUpdatedAt: date

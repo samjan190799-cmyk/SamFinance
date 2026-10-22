@@ -45,7 +45,7 @@ struct CurrencyConverterView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(hex: "#0E0F12")
+                Theme.background
                     .ignoresSafeArea()
                 
                 ScrollView {
@@ -90,7 +90,7 @@ struct CurrencyConverterView: View {
                 .foregroundColor(.white)
         }
         .padding(20)
-        .background(Color(hex: "#17181A"))
+        .background(Theme.surface)
         .cornerRadius(24)
         .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.06), lineWidth: 1))
     }
@@ -107,13 +107,12 @@ struct CurrencyConverterView: View {
         } label: {
             ZStack {
                 Circle()
-                    .fill(Color.white)
+                    .fill(Theme.accent)
                     .frame(width: 44, height: 44)
                 Image(systemName: "arrow.up.arrow.down")
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.black)
+                    .foregroundColor(Theme.onAccent)
             }
-            .shadow(color: Color.white.opacity(0.2), radius: 8, x: 0, y: 4)
         }
     }
     
@@ -165,7 +164,7 @@ struct CurrencyConverterView: View {
             }
         }
         .padding(20)
-        .background(Color(hex: "#17181A"))
+        .background(Theme.surface)
         .cornerRadius(24)
         .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.06), lineWidth: 1))
     }

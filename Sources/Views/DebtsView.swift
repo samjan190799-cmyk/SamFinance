@@ -33,7 +33,7 @@ struct DebtsView: View {
                 segmentView
                 debtsList
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 20)
             .padding(.bottom, 24)
         }
         .scrollIndicators(.hidden)
@@ -47,11 +47,10 @@ struct DebtsView: View {
     private var headerView: some View {
         HStack {
             Text("debts_title".localized)
-                .font(.system(size: 28, weight: .semibold))
-                .tracking(-0.5)
+                .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
             Spacer()
-            MonoCircleButton(systemName: "plus", label: "add_debt".localized) {
+            MonoCircleButton(systemName: "plus", label: "add_debt".localized, filled: true) {
                 HapticManager.shared.impact(.light)
                 isShowingAddSheet = true
             }
@@ -61,34 +60,28 @@ struct DebtsView: View {
 
     // MARK: - Итоги
     private var summaryView: some View {
-        HStack(alignment: .top, spacing: 0) {
-            summaryColumn(title: "Мне должны", amount: owedToMe, color: Theme.accent)
-
-            Rectangle()
-                .fill(Theme.hairline)
-                .frame(width: 1)
-
-            summaryColumn(title: "Я должен", amount: iOwe, color: .white)
-                .padding(.leading, 24)
+        HStack(spacing: 10) {
+            summaryTile(title: "Мне должны", amount: owedToMe, highlighted: true)
+            summaryTile(title: "Я должен", amount: iOwe, highlighted: false)
         }
-        .padding(.vertical, 20)
-        .overlay(alignment: .top) { MonoDivider() }
-        .overlay(alignment: .bottom) { MonoDivider() }
-        .padding(.top, 28)
+        .padding(.top, 20)
     }
 
-    private func summaryColumn(title: String, amount: Double, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            MonoLabel(text: title)
+    private func summaryTile(title: String, amount: Double, highlighted: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+                .opacity(0.8)
             Text(CurrencyManager.shared.format(amount))
-                .font(.system(size: 26, weight: .light))
-                .tracking(-0.5)
-                .monospacedDigit()
-                .foregroundColor(color)
+                .font(Theme.number(24, weight: .bold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
         }
+        .foregroundColor(highlighted ? Theme.onAccent : .white)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(highlighted ? Theme.accent : Theme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
     }
 
     // MARK: - Переключатель
@@ -177,8 +170,7 @@ struct DebtRowView: View {
                 Spacer(minLength: 8)
 
                 Text("\(debt.isLent ? "+" : "−")\(CurrencyManager.shared.format(debt.amount))")
-                    .font(.system(size: 16))
-                    .monospacedDigit()
+                    .font(Theme.number(16))
                     .foregroundColor(amountColor)
                     .strikethrough(debt.isPaid)
 

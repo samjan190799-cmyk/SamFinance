@@ -31,16 +31,16 @@ extension TransactionType: Identifiable {
     public var id: String { rawValue }
 }
 
-/// Главный экран: баланс, быстрые действия, траты за период, категории, совет и последние операции.
+/// Раздел «Обзор»: лаймовая карточка баланса, траты за неделю, главные категории и последние операции.
 @MainActor
 struct DashboardView: View {
     let financeService: FinanceService
+    /// Переход в раздел «Отчёт» по нажатию на графики
+    var onOpenReport: () -> Void = {}
+
     @State private var addSheetType: TransactionType? = nil
     @State private var isShowingSettingsSheet = false
-    @State private var isShowingAIAdvisorSheet = false
-    @State private var isShowingFullChartSheet = false
     @State private var isShowingAllTransactions = false
-    @State private var selectedPeriod: TimePeriodFilter = .month
 
     // Распознавание СМС из буфера обмена
     @State private var detectedBatchTransactions: [ParsedSMSTransaction] = []
@@ -51,17 +51,15 @@ struct DashboardView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 headerView
-                balanceSection
-                quickActions
+                balanceCard
                 smsSection
-                periodPicker
-                spendingSection
-                DashboardCategoriesSection(financeService: financeService, selectedPeriod: selectedPeriod)
-                    .padding(.top, 36)
-                advisorCard
+                WeekSpendingCard(financeService: financeService, onTap: onOpenReport)
+                    .padding(.top, 16)
+                TopCategoriesRow(financeService: financeService, onTap: onOpenReport)
+                    .padding(.top, 16)
                 recentTransactionsSection
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 20)
             .padding(.bottom, 24)
         }
         .scrollIndicators(.hidden)
@@ -75,12 +73,6 @@ struct DashboardView: View {
         .sheet(isPresented: $isShowingSettingsSheet) {
             SettingsView(financeService: financeService)
         }
-        .sheet(isPresented: $isShowingAIAdvisorSheet) {
-            AIFinancialAdvisorSheet(financeService: financeService)
-        }
-        .sheet(isPresented: $isShowingFullChartSheet) {
-            FullExpenseChartView(financeService: financeService)
-        }
         .sheet(isPresented: $isShowingAllTransactions) {
             TransactionsView(financeService: financeService)
         }
@@ -88,12 +80,20 @@ struct DashboardView: View {
 
     // MARK: - Шапка
     private var headerView: some View {
-        HStack {
-            Text(Date.now, format: .dateTime.day().month(.wide))
-                .font(.system(size: 15))
-                .foregroundColor(Theme.textSecondary)
+        HStack(spacing: 8) {
+            Text("Обзор")
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
             Spacer()
-            MonoCircleButton(systemName: "slider.horizontal.3", label: "Настройки") {
+            MonoCircleButton(systemName: "doc.on.clipboard", label: "Распознать СМС из буфера") {
+                HapticManager.shared.impact(.light)
+                scanClipboard()
+            }
+            MonoCircleButton(systemName: "plus", label: "Новая операция", filled: true) {
+                HapticManager.shared.impact(.light)
+                addSheetType = .expense
+            }
+            MonoCircleButton(systemName: "gearshape", label: "Настройки") {
                 HapticManager.shared.impact(.light)
                 isShowingSettingsSheet = true
             }
@@ -101,85 +101,69 @@ struct DashboardView: View {
         .padding(.top, 8)
     }
 
-    // MARK: - Баланс
-    private var balanceSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            MonoLabel(text: "total_balance".localized)
+    // MARK: - Карточка баланса
+    private var monthIncome: Double {
+        financeService.transactions
+            .filter { $0.type == .income && TimePeriodFilter.month.contains($0.date) }
+            .reduce(0.0) { $0 + $1.amount }
+    }
 
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(CurrencyManager.shared.currentCurrency.symbol)
-                    .font(.system(size: 28, weight: .light))
-                    .foregroundColor(Theme.textTertiary)
+    private var monthExpense: Double {
+        financeService.transactions
+            .filter { $0.type == .expense && TimePeriodFilter.month.contains($0.date) }
+            .reduce(0.0) { $0 + $1.amount }
+    }
+
+    private var balanceCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Баланс")
+                Spacer()
+                Text(Date.now, format: .dateTime.month(.wide))
+            }
+            .font(.system(size: 14, weight: .medium))
+
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(CurrencyManager.shared.formatNumber(financeService.totalBalance))
-                    .font(.system(size: 56, weight: .light))
-                    .tracking(-2)
-                    .monospacedDigit()
-                    .foregroundColor(.white)
+                    .font(Theme.number(48, weight: .bold))
+                    .tracking(-1.5)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
+                Text(CurrencyManager.shared.currentCurrency.symbol)
+                    .font(Theme.number(24, weight: .bold))
             }
+            .padding(.top, 6)
 
-            if let trend = spendingTrendText {
-                trend
-                    .font(.system(size: 14))
+            BalanceSparkline(financeService: financeService)
+                .frame(height: 40)
+                .padding(.top, 12)
+
+            HStack(spacing: 8) {
+                balancePill("+\(CurrencyManager.shared.format(monthIncome))")
+                balancePill("−\(CurrencyManager.shared.format(monthExpense))")
+                Spacer(minLength: 0)
+                Text("за 30 дней")
+                    .font(.system(size: 12))
+                    .opacity(0.7)
             }
+            .padding(.top, 12)
         }
-        .padding(.top, 28)
+        .foregroundColor(Theme.onAccent)
+        .padding(22)
+        .background(Theme.accent)
+        .clipShape(RoundedRectangle(cornerRadius: 32))
+        .padding(.top, 20)
     }
 
-    /// Динамика трат: последние 30 дней к предыдущим 30
-    private var spendingTrendText: Text? {
-        let calendar = Calendar.current
-        let now = Date()
-        guard let start = calendar.date(byAdding: .day, value: -30, to: now),
-              let previousStart = calendar.date(byAdding: .day, value: -60, to: now) else {
-            return nil
-        }
-        let expenses = financeService.transactions.filter { $0.type == .expense }
-        let current = expenses.filter { $0.date >= start }.reduce(0.0) { $0 + $1.amount }
-        let previous = expenses.filter { $0.date >= previousStart && $0.date < start }.reduce(0.0) { $0 + $1.amount }
-        guard previous > 0 else { return nil }
-
-        let percent = Int(((current - previous) / previous * 100).rounded())
-        if percent < 0 {
-            return Text("−\(abs(percent))% трат к предыдущим 30 дням").foregroundColor(Theme.accent)
-        } else if percent > 0 {
-            return Text("+\(percent)% трат к предыдущим 30 дням").foregroundColor(Theme.textSecondary)
-        }
-        return Text("Траты на уровне предыдущих 30 дней").foregroundColor(Theme.textSecondary)
-    }
-
-    // MARK: - Быстрые действия
-    private var quickActions: some View {
-        HStack(spacing: 12) {
-            quickAction(title: "Расход", icon: "arrow.up.right") {
-                addSheetType = .expense
-            }
-            quickAction(title: "Доход", icon: "arrow.down.left") {
-                addSheetType = .income
-            }
-            quickAction(title: "Из СМС", icon: "message") {
-                scanClipboard()
-            }
-        }
-        .padding(.top, 28)
-    }
-
-    private func quickAction(title: String, icon: String, action: @escaping () -> Void) -> some View {
-        Button {
-            HapticManager.shared.impact(.light)
-            action()
-        } label: {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 20))
-                Text(title)
-                    .font(.system(size: 13))
-            }
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity, minHeight: 76)
-            .overlay(RoundedRectangle(cornerRadius: 22).stroke(Theme.line, lineWidth: 1))
-        }
+    private func balancePill(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 13, weight: .semibold))
+            .monospacedDigit()
+            .lineLimit(1)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Theme.onAccent.opacity(0.12))
+            .clipShape(Capsule())
     }
 
     // MARK: - Распознанные СМС
@@ -187,12 +171,12 @@ struct DashboardView: View {
     private var smsSection: some View {
         if !detectedBatchTransactions.isEmpty {
             smsBanner
-                .padding(.top, 20)
+                .padding(.top, 16)
         } else if let clipboardMessage {
             Text(clipboardMessage)
                 .font(.system(size: 13))
-                .foregroundColor(Theme.textTertiary)
-                .padding(.top, 16)
+                .foregroundColor(Theme.textSecondary)
+                .padding(.top, 14)
         }
     }
 
@@ -202,9 +186,9 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(count > 1 ? "Найдено СМС в буфере: \(count)" : "Найдена СМС в буфере")
                     .font(.system(size: 12))
-                    .foregroundColor(Theme.textTertiary)
+                    .foregroundColor(Theme.textSecondary)
                 Text(smsSummary)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(1)
             }
@@ -229,17 +213,17 @@ struct DashboardView: View {
             } label: {
                 Text(count > 1 ? "Записать все" : "Записать")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(Theme.onAccent)
                     .padding(.horizontal, 18)
                     .frame(height: 44)
-                    .background(Color.white)
+                    .background(Theme.accent)
                     .clipShape(Capsule())
             }
         }
         .padding(.leading, 16)
         .padding(.trailing, 8)
         .padding(.vertical, 8)
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.line, lineWidth: 1))
+        .monoSurface(cornerRadius: 22)
     }
 
     private var smsSummary: String {
@@ -250,75 +234,6 @@ struct DashboardView: View {
         guard let parsed = detectedBatchTransactions.first else { return "" }
         let sign = parsed.type == .income ? "+" : "−"
         return "\(parsed.title) · \(sign)\(CurrencyManager.shared.format(parsed.amount))"
-    }
-
-    // MARK: - Период и траты
-    private var periodPicker: some View {
-        MonoSegmentedControl(
-            options: TimePeriodFilter.allCases,
-            title: { $0.rawValue },
-            selection: $selectedPeriod
-        )
-        .padding(.top, 28)
-    }
-
-    private var filteredSpendingAmount: Double {
-        financeService.transactions
-            .filter { $0.type == .expense && selectedPeriod.contains($0.date) }
-            .reduce(0.0) { $0 + $1.amount }
-    }
-
-    private var spendingSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            MonoLabel(text: "Траты (\(selectedPeriod.rawValue.lowercased()))")
-            Text(CurrencyManager.shared.format(filteredSpendingAmount))
-                .font(.system(size: 32))
-                .tracking(-1)
-                .monospacedDigit()
-                .foregroundColor(.white)
-
-            DashboardSpendingChart(financeService: financeService, selectedPeriod: selectedPeriod) {
-                HapticManager.shared.impact(.medium)
-                isShowingFullChartSheet = true
-            }
-            .padding(.top, 12)
-        }
-        .padding(.top, 32)
-    }
-
-    // MARK: - Совет
-    private var advisorCard: some View {
-        Button {
-            HapticManager.shared.impact(.light)
-            isShowingAIAdvisorSheet = true
-        } label: {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 18))
-                    .foregroundColor(Theme.accent)
-                    .frame(width: 40, height: 40)
-                    .overlay(Circle().stroke(Theme.line, lineWidth: 1))
-
-                VStack(alignment: .leading, spacing: 6) {
-                    MonoLabel(text: "Совет")
-                    Text(adviceText)
-                        .font(.system(size: 15))
-                        .lineSpacing(3)
-                        .foregroundColor(Color(hex: "#E5E5EA"))
-                        .multilineTextAlignment(.leading)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .monoSurface()
-        }
-        .buttonStyle(.plain)
-        .padding(.top, 32)
-    }
-
-    private var adviceText: String {
-        AIService.shared.generateInsights(financeService: financeService).first?.message ?? ""
     }
 
     // MARK: - Последние операции
@@ -336,16 +251,16 @@ struct DashboardView: View {
                     isShowingAllTransactions = true
                 } label: {
                     Text("Проверить категории: \(financeService.reviewCount)")
-                        .font(.system(size: 14))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(Theme.accent)
                         .frame(minHeight: 44, alignment: .leading)
                 }
             }
 
             if financeService.transactions.isEmpty {
-                Text("Операций пока нет. Добавьте первую кнопкой «+» или из СМС.")
+                Text("Операций пока нет. Добавьте первую кнопкой «+», из СМС или через ИИ.")
                     .font(.system(size: 14))
-                    .foregroundColor(Theme.textTertiary)
+                    .foregroundColor(Theme.textSecondary)
                     .padding(.vertical, 12)
             } else {
                 ForEach(financeService.transactions.prefix(5)) { transaction in
@@ -353,33 +268,32 @@ struct DashboardView: View {
                 }
             }
         }
-        .padding(.top, 32)
+        .padding(.top, 28)
     }
 
     private func transactionRow(_ transaction: Transaction) -> some View {
         let isIncome = transaction.type == .income
         let sign = isIncome ? "+" : "−"
-        let day = transaction.date.formatted(.dateTime.day().month(.abbreviated))
+        let time = transaction.date.formatted(.dateTime.day().month(.abbreviated))
         return VStack(spacing: 0) {
-            HStack(spacing: 14) {
+            HStack(spacing: 12) {
                 MonoInitialBadge(title: transaction.title)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(transaction.title)
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white)
                         .lineLimit(1)
-                    Text("\(transaction.category.name) · \(day)")
+                    Text("\(transaction.category.name) · \(time)")
                         .font(.system(size: 13))
-                        .foregroundColor(Theme.textTertiary)
+                        .foregroundColor(Theme.textSecondary)
                         .lineLimit(1)
                 }
 
                 Spacer(minLength: 8)
 
                 Text("\(sign)\(CurrencyManager.shared.format(transaction.amount))")
-                    .font(.system(size: 16))
-                    .monospacedDigit()
+                    .font(Theme.number(16))
                     .foregroundColor(isIncome ? Theme.accent : .white)
             }
             .frame(minHeight: 64)
@@ -389,16 +303,20 @@ struct DashboardView: View {
 
     // MARK: - Буфер обмена
 
-    /// Явная проверка буфера по кнопке «Из СМС»
+    /// Явная проверка буфера по кнопке в шапке
     private func scanClipboard() {
         lastCheckedClipboardString = ""
         checkClipboardForSMS()
         if detectedBatchTransactions.isEmpty {
-            clipboardMessage = "В буфере нет банковских СМС"
-            Task {
-                try? await Task.sleep(for: .seconds(3))
-                clipboardMessage = nil
-            }
+            showClipboardMessage("В буфере нет банковских СМС")
+        }
+    }
+
+    private func showClipboardMessage(_ message: String) {
+        clipboardMessage = message
+        Task {
+            try? await Task.sleep(for: .seconds(4))
+            clipboardMessage = nil
         }
     }
 
@@ -427,11 +345,6 @@ struct DashboardView: View {
         withAnimation {
             detectedBatchTransactions = []
         }
-
-        clipboardMessage = String(summary.text.prefix(1)).uppercased() + String(summary.text.dropFirst())
-        Task {
-            try? await Task.sleep(for: .seconds(4))
-            clipboardMessage = nil
-        }
+        showClipboardMessage(String(summary.text.prefix(1)).uppercased() + String(summary.text.dropFirst()))
     }
 }

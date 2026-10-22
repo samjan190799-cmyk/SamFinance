@@ -32,10 +32,10 @@ struct CardsView: View {
                             )
                         }
                     }
-                    .padding(.top, 24)
+                    .padding(.top, 20)
                 }
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 20)
             .padding(.bottom, 24)
         }
         .scrollIndicators(.hidden)
@@ -55,11 +55,10 @@ struct CardsView: View {
     private var headerView: some View {
         HStack {
             Text("cards_title".localized)
-                .font(.system(size: 28, weight: .semibold))
-                .tracking(-0.5)
+                .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
             Spacer()
-            MonoCircleButton(systemName: "plus", label: "order_card".localized) {
+            MonoCircleButton(systemName: "plus", label: "order_card".localized, filled: true) {
                 HapticManager.shared.impact(.light)
                 isShowingAddCardSheet = true
             }
@@ -85,10 +84,10 @@ struct CardsView: View {
             } label: {
                 Text("add_card".localized)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(Theme.onAccent)
                     .padding(.horizontal, 28)
                     .frame(height: 48)
-                    .background(Color.white)
+                    .background(Theme.accent)
                     .clipShape(Capsule())
             }
             .padding(.top, 8)
@@ -149,10 +148,11 @@ struct CardWithGoalsSection: View {
     private func outlineButton(title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 14))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity, minHeight: 44)
-                .overlay(Capsule().stroke(Theme.line, lineWidth: 1))
+                .background(Theme.surfaceRaised)
+                .clipShape(Capsule())
         }
     }
 
@@ -300,16 +300,16 @@ struct CardItemView: View {
             Spacer(minLength: 12)
             bottomRow
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, 22)
         .padding(.vertical, 22)
         .frame(maxWidth: .infinity)
-        .frame(height: 188)
+        .frame(height: 196)
         .foregroundColor(primaryColor)
         .background(
             LinearGradient(colors: fillColors, startPoint: .topLeading, endPoint: .bottomTrailing)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 24))
-        .overlay(RoundedRectangle(cornerRadius: 24).stroke(Theme.line, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 28))
+        .overlay(RoundedRectangle(cornerRadius: 28).stroke(Theme.line, lineWidth: isLightCard ? 0 : 1))
         .opacity(card.isFrozen ? 0.5 : 1.0)
     }
 
@@ -332,14 +332,12 @@ struct CardItemView: View {
 
     private var balanceBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("total_balance".localized.uppercased())
-                .font(.system(size: 12, weight: .medium))
-                .tracking(1)
+            Text("total_balance".localized)
+                .font(.system(size: 13, weight: .medium))
                 .foregroundColor(secondaryColor)
             Text(CurrencyManager.shared.format(card.balance))
-                .font(.system(size: 34, weight: .light))
+                .font(Theme.number(34, weight: .bold))
                 .tracking(-1)
-                .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
         }
@@ -379,12 +377,12 @@ struct AddCardView: View {
         ]
     }
 
-    /// Монохромные темы карты: белая, графитовая, чёрная с контуром и мятная
+    /// Темы карты «Пульс»: лаймовая, графитовая, чёрная с контуром и светлая
     let themes = [
-        (colorHex: "#FFFFFF", gradient: ["#FFFFFF", "#E5E5EA"]),
-        (colorHex: "#2C2C2E", gradient: ["#2C2C2E", "#1C1C1E"]),
+        (colorHex: "#C6F432", gradient: ["#C6F432", "#B2E01E"]),
+        (colorHex: "#2A2B30", gradient: ["#2A2B30", "#1C1D21"]),
         (colorHex: "#000000", gradient: ["#000000", "#000000"]),
-        (colorHex: "#8CF0C0", gradient: ["#8CF0C0", "#5FD6A3"])
+        (colorHex: "#F4F4F5", gradient: ["#F4F4F5", "#DCDCE0"])
     ]
 
     /// Маска формата карточного номера: 5244 8721 9012 7642
@@ -482,10 +480,10 @@ struct AddCardView: View {
         let isSelected = cardPurpose == purpose
         return Text(purpose)
             .font(.system(size: 13))
-            .foregroundColor(isSelected ? .black : .white)
+            .foregroundColor(isSelected ? Theme.onAccent : .white)
             .padding(.horizontal, 12)
             .frame(minHeight: 32)
-            .background(isSelected ? Color.white : Color.clear)
+            .background(isSelected ? Theme.accent : Color.clear)
             .clipShape(Capsule())
             .overlay(Capsule().stroke(Theme.line, lineWidth: isSelected ? 0 : 1))
             .onTapGesture {
@@ -499,7 +497,7 @@ struct AddCardView: View {
         return Circle()
             .fill(LinearGradient(colors: theme.gradient.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing))
             .frame(width: 44, height: 44)
-            .overlay(Circle().stroke(isSelected ? Color.white : Theme.line, lineWidth: isSelected ? 2 : 1))
+            .overlay(Circle().stroke(isSelected ? Theme.accent : Theme.line, lineWidth: isSelected ? 2 : 1))
             .padding(3)
             .onTapGesture {
                 HapticManager.shared.impact(.light)
@@ -593,8 +591,8 @@ struct AddGoalForCardView: View {
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             targetAmount: targetAmount,
             currentAmount: 0.0,
-            colorHex: "#8CF0C0",
-            gradientColors: ["#8CF0C0", "#5FD6A3"]
+            colorHex: "#C6F432",
+            gradientColors: ["#C6F432", "#B2E01E"]
         )
         financeService.addGoal(goal)
         HapticManager.shared.trigger(.success)
@@ -672,9 +670,9 @@ struct CardDetailsSheet: View {
                 Text(isCopied ? "copied".localized : "copy_number".localized)
             }
             .font(.system(size: 16, weight: .semibold))
-            .foregroundColor(.black)
-            .frame(maxWidth: .infinity, minHeight: 56)
-            .background(isCopied ? Theme.accent : Color.white)
+            .foregroundColor(Theme.onAccent)
+            .frame(maxWidth: .infinity, minHeight: 54)
+            .background(Theme.accent)
             .clipShape(Capsule())
         }
         .disabled(fullNumber == nil)

@@ -152,10 +152,10 @@ struct AddTransactionView: View {
         } label: {
             Text(category.name)
                 .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
-                .foregroundColor(isSelected ? .black : .white)
+                .foregroundColor(isSelected ? Theme.onAccent : .white)
                 .padding(.horizontal, 18)
                 .frame(height: 44)
-                .background(isSelected ? Color.white : Color.clear)
+                .background(isSelected ? Theme.accent : Color.clear)
                 .clipShape(Capsule())
                 .overlay(Capsule().stroke(Theme.line, lineWidth: isSelected ? 0 : 1))
         }
@@ -259,18 +259,9 @@ struct AddTransactionView: View {
                 }
             }
 
-            Button {
+            PrimaryButton(title: "Сохранить", isEnabled: parsedAmount > 0) {
                 saveTransaction()
-            } label: {
-                Text("Сохранить")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.black)
-                    .frame(maxWidth: .infinity, minHeight: 56)
-                    .background(Color.white)
-                    .clipShape(Capsule())
             }
-            .disabled(parsedAmount <= 0)
-            .opacity(parsedAmount <= 0 ? 0.4 : 1.0)
         }
         .padding(.horizontal, 24)
         .padding(.top, 8)
@@ -465,10 +456,10 @@ struct BatchSMSImportSheet: View {
             } label: {
                 Text("Распознать все СМС (\(recognizedTransactions.count))")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(Theme.onAccent)
                     .padding(.horizontal, 16)
                     .frame(height: 44)
-                    .background(Color.white)
+                    .background(Theme.accent)
                     .clipShape(Capsule())
             }
         }
