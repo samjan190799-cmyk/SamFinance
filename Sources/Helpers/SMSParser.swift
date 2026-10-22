@@ -305,7 +305,8 @@ public struct SMSParser {
         let sanitizedText = sanitizeTextForAmountExtraction(text)
 
         // 2. Извлечение суммы
-        guard let amount = extractAmount(from: sanitizedText), amount > 0, amount < 100_000_000 else {
+        guard let amount = extractAmount(from: sanitizedText, allowBareNumber: looksLikeBankMessage(lowercased)),
+              amount > 0, amount < 100_000_000 else {
             return nil
         }
 
@@ -491,8 +492,18 @@ public struct SMSParser {
         return Double(cleaned.filter { $0.isNumber })
     }
 
+    /// Похоже ли сообщение на банковское: без этого голое число в тексте (номер, год, индекс) не считается суммой
+    private static func looksLikeBankMessage(_ lowercased: String) -> Bool {
+        if isHeaderOfSMS(lowercased) { return true }
+        let words = [
+            "vcharum", "poxancum", "mutq", "elq hashvic", "mnacord", "balance", "balans", "остаток", "баланс",
+            "payment", "transaction", "tranzakcia", "purchase", "withdraw", "refund", "transfer", "перевод", "карт"
+        ]
+        return words.contains { lowercased.contains($0) }
+    }
+
     /// Извлекает числовую сумму из очищенного текста СМС
-    private static func extractAmount(from text: String) -> Double? {
+    private static func extractAmount(from text: String, allowBareNumber: Bool) -> Double? {
         let patterns = [
             #"\b(\d{1,3}(?:[\s\u{00A0},]\d{3})*(?:[.,]\d{1,2})?)\s*(?:amd|֏|dram|драм|руб|руб.|рублей|₽|usd|\$|eur|€)\b"#,
             #"(?:amd|֏|dram|драм|руб|руб.|рублей|₽|usd|\$|eur|€)\s*(\d{1,3}(?:[\s\u{00A0},]\d{3})*(?:[.,]\d{1,2})?)\b"#,
@@ -508,7 +519,8 @@ public struct SMSParser {
             }
         }
 
-        // Безопасный фолбэк: ищем числа от 10 до 1,000,000 без суффиксов карт
+        // Фолбэк для банковских СМС без валюты: числа от 10 до 1,000,000 без суффиксов карт
+        guard allowBareNumber else { return nil }
         for match in allMatches(#"\b(\d{1,6}(?:[.,]\d{1,2})?)\b"#, in: text) {
             if let rawNumber = capture(1, of: match, in: text),
                let value = parseNumber(rawNumber),

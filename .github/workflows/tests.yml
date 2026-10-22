@@ -1,0 +1,80 @@
+name: Unit Tests
+
+# Запускает модульные тесты на симуляторе iPhone. Работает на любых pull request (в том числе не в main),
+# поэтому каждая ветка стопки PR проверяется тестами, а не только сборкой.
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Run Unit Tests
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Select Latest Xcode (Xcode 16+ for Swift 6)
+        run: |
+          LATEST_XCODE=$(ls -d /Applications/Xcode_*.app | grep -viE 'beta|_rc|candidate' | sort -V | tail -n 1)
+          echo "Using: $LATEST_XCODE"
+          sudo xcode-select -s "$LATEST_XCODE/Contents/Developer"
+          xcodebuild -version
+
+      - name: Generate Xcode Project
+        run: xcodegen generate
+
+      - name: Pick an iPhone Simulator
+        run: |
+          # Первый доступный iPhone с iOS 17 или новее: имена устройств меняются от версии Xcode к версии
+          UDID=$(xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)['devices']
+          for runtime in sorted(data, reverse=True):
+              if 'iOS' not in runtime:
+                  continue
+              version = runtime.rsplit('iOS-', 1)[-1].split('-')
+              if int(version[0]) < 17:
+                  continue
+              for device in data[runtime]:
+                  if device['name'].startswith('iPhone') and device['isAvailable']:
+                      print(device['udid'])
+                      sys.exit(0)
+          sys.exit('Нет подходящего симулятора')
+          ")
+          echo "Simulator: $UDID"
+          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+
+      - name: Run Tests
+        run: |
+          set -o pipefail
+          mkdir -p build
+          xcodebuild test \
+            -project SamFinance.xcodeproj \
+            -scheme SamFinanceTests \
+            -destination "id=$SIM_UDID" \
+            -resultBundlePath build/TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build/test.log | grep -E "Test Case|error:|warning: .*Tests/|Executed|TEST (SUCCEEDED|FAILED)" || true
+          # Итог определяем по самому xcodebuild, а не по фильтру выше
+          grep -q "TEST SUCCEEDED" build/test.log
+
+      - name: Upload Test Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: |
+            build/test.log
+            build/TestResults.xcresult
+          if-no-files-found: ignore
+          retention-days: 7
