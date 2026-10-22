@@ -17,7 +17,7 @@ struct CardEditorView: View {
         case purpose, bank, holder, balance, number, expiry
     }
 
-    @State private var page: Page = .details
+    @State private var page: Page = ScreenshotMode.scene == .cardEditor ? .style : .details
     @State private var purpose: String
     @State private var bankName: String
     @State private var holderName: String

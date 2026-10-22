@@ -4,7 +4,7 @@ import SwiftUI
 /// Строку можно смахнуть вправо, чтобы отметить погашение, и влево, чтобы удалить.
 struct DebtsView: View {
     let financeService: FinanceService
-    @State private var selectedSegment = 0 // 0: Кредиты, 1: Люди
+    @State private var selectedSegment = ScreenshotMode.scene == .debts ? 1 : 0 // 0: Кредиты, 1: Люди
     @State private var isShowingAddSheet = false
 
     private var visibleDebts: [Debt] {

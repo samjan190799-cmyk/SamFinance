@@ -71,6 +71,7 @@ struct ContentView: View {
                 // Курсы валют обновляются сами при каждом запуске
                 CurrencyService.shared.fetchLatestRates()
             }
+            .screenshotScene(selectedTab: $selectedTab, financeService: financeService)
     }
 
     // MARK: - Содержимое выбранного раздела
