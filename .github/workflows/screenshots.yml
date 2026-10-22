@@ -1,0 +1,153 @@
+name: App Store Screenshots
+
+# Снимает настоящие скриншоты для App Store: собирает отладочную сборку и запускает её на двух симуляторах:
+# large — iPhone Pro Max (1320x2868, экран 6,9"), medium — iPhone Pro (1206x2622, экран 6,3"; в App Store Connect это обязательный размер)
+# с демонстрационными данными (Sources/Helpers/DemoData.swift) и делает снимок каждого экрана на русском, английском и армянском.
+# Результат лежит в артефактах screenshots-large и screenshots-medium. Запуск: вручную или правкой файлов, перечисленных в paths.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/screenshots.yml'
+      - 'Sources/Helpers/ScreenshotMode.swift'
+      - 'Sources/Helpers/DemoData.swift'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    name: Capture Screenshots (${{ matrix.device }})
+    runs-on: macos-14
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [large, medium]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Select Latest Xcode (Xcode 16+ for Swift 6)
+        run: |
+          LATEST_XCODE=$(ls -d /Applications/Xcode_*.app | grep -viE 'beta|_rc|candidate' | sort -V | tail -n 1)
+          echo "Using: $LATEST_XCODE"
+          sudo xcode-select -s "$LATEST_XCODE/Contents/Developer"
+          xcodebuild -version
+
+      - name: Generate Xcode Project
+        run: xcodegen generate
+
+      - name: Pick a Simulator
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "
+          import json, re, sys
+          want = '${{ matrix.device }}'
+          data = json.load(sys.stdin)['devices']
+          for runtime in sorted(data, reverse=True):
+              if 'iOS' not in runtime:
+                  continue
+              version = runtime.rsplit('iOS-', 1)[-1].split('-')
+              if int(version[0]) < 17:
+                  continue
+              for device in sorted(data[runtime], key=lambda d: d['name'], reverse=True):
+                  name = device['name']
+                  if not device['isAvailable']:
+                      continue
+                  # large: iPhone Pro Max (6,9\"); medium: iPhone Pro или обычный iPhone (6,3\" и 6,1\")
+                  matches = ('Pro Max' in name) if want == 'large' else bool(re.fullmatch(r'iPhone \d+( Pro)?', name))
+                  if matches:
+                      print(device['udid'])
+                      sys.exit(0)
+          sys.exit('Нет подходящего симулятора для ' + want)
+          ")
+          echo "Simulator: $UDID"
+          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+
+      - name: Boot Simulator
+        run: |
+          xcrun simctl boot "$SIM_UDID"
+          xcrun simctl bootstatus "$SIM_UDID" -b
+          # Ровная строка состояния, как на снимках Apple
+          xcrun simctl status_bar "$SIM_UDID" override \
+            --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 \
+            --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+
+      - name: Build Debug App for Simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project SamFinance.xcodeproj \
+            -scheme SamFinance \
+            -configuration Debug \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath build \
+            SWIFT_ACTIVE_COMPILATION_CONDITIONS=DEBUG \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build.log
+
+      - name: Install App
+        run: |
+          APP=$(find build/Build/Products/Debug-iphonesimulator -maxdepth 1 -name "*.app" | head -1)
+          echo "App: $APP"
+          xcrun simctl install "$SIM_UDID" "$APP"
+          echo "BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")" >> "$GITHUB_ENV"
+
+      - name: Capture Screens
+        run: |
+          mkdir -p screenshots
+
+          capture() {
+            lang="$1"; locale="$2"; question="$3"; number="$4"; scene="$5"
+            xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" 2>/dev/null || true
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID" \
+              -AppleLanguages "($lang)" -AppleLocale "$locale" \
+              -ScreenshotScene "$scene" -ScreenshotQuestion "$question" > /dev/null
+            # Анимации появления и открытие экрана поверх вкладки успевают закончиться
+            sleep 7
+            mkdir -p "screenshots/$lang"
+            xcrun simctl io "$SIM_UDID" screenshot --type=png "screenshots/$lang/${number}_${scene}.png"
+          }
+
+          for entry in "ru|ru_RU|Сколько я потратил за неделю?" "en|en_US|How much did I spend this week?" "hy|hy_AM|Որքա՞ն եմ ծախսել այս շաբաթ"; do
+            lang="${entry%%|*}"; rest="${entry#*|}"; locale="${rest%%|*}"; question="${rest#*|}"
+            n=1
+            for scene in overview cards cardEditor savings goal chat debts report settings; do
+              capture "$lang" "$locale" "$question" "$(printf '%02d' $n)" "$scene"
+              n=$((n + 1))
+            done
+          done
+
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" 2>/dev/null || true
+          ls -l screenshots/*
+          # Размер каждого снимка: для 6,9" ждём 1320x2868
+          for file in screenshots/*/*.png; do
+            echo "$file $(sips -g pixelWidth -g pixelHeight "$file" | awk '/pixel/ {printf "%s ", $2}')"
+          done
+
+      - name: Upload Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ matrix.device }}
+          path: screenshots
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload Build Log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ matrix.device }}
+          path: build.log
+          if-no-files-found: ignore
+          retention-days: 7

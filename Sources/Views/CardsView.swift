@@ -69,6 +69,11 @@ struct CardsView: View {
         }
         .scrollIndicators(.hidden)
         .monoScreen()
+        #if DEBUG
+        .task {
+            await playTour()
+        }
+        #endif
         .sheet(isPresented: $isShowingAddCardSheet) {
             CardEditorView(financeService: financeService)
         }
@@ -86,12 +91,26 @@ struct CardsView: View {
         }
     }
 
+    #if DEBUG
+    /// Ролик App Store: карусель сама листает карты вперёд и возвращается к первой
+    private func playTour() async {
+        guard ScreenshotMode.isTour else { return }
+        for index in [1, 2, 0] {
+            try? await Task.sleep(for: .milliseconds(1200))
+            guard financeService.cards.indices.contains(index) else { continue }
+            withAnimation(.easeInOut(duration: 0.8)) {
+                centeredCardID = financeService.cards[index].id
+            }
+        }
+    }
+    #endif
+
     // MARK: - Карусель
     /// Соседние карты выглядывают по краям, уменьшены и повёрнуты к центру; листание с доводкой до карты
     private var carousel: some View {
         let tilt = reduceMotion ? 0.0 : 16.0
         return ScrollView(.horizontal) {
-            LazyHStack(spacing: 12) {
+            LazyHStack(spacing: 8) {
                 ForEach(financeService.cards) { card in
                     FlippableCardView(card: card)
                         .containerRelativeFrame(.horizontal)
@@ -113,7 +132,7 @@ struct CardsView: View {
                         }
                         .scrollTransition(axis: .horizontal) { content, phase in
                             content
-                                .scaleEffect(phase.isIdentity ? 1 : 0.88)
+                                .scaleEffect(phase.isIdentity ? 1 : 0.92)
                                 .rotation3DEffect(.degrees(phase.value * -tilt), axis: (x: 0, y: 1, z: 0))
                                 .opacity(phase.isIdentity ? 1 : 0.5)
                         }
@@ -121,7 +140,7 @@ struct CardsView: View {
             }
             .scrollTargetLayout()
         }
-        .contentMargins(.horizontal, 28, for: .scrollContent)
+        .contentMargins(.horizontal, 44, for: .scrollContent)
         .scrollTargetBehavior(.viewAligned)
         .scrollPosition(id: $centeredCardID)
         .scrollIndicators(.hidden)
@@ -373,6 +392,7 @@ struct CardGoalRowView: View {
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(.white)
                                 .lineLimit(1)
+                                .layoutPriority(1)
 
                             Spacer(minLength: 8)
 

@@ -102,9 +102,15 @@ struct GoalMoneySheet: View {
         }
         .task {
             // Клавиатура поднимается после появления листа: иначе фокус в поле нередко теряется
+            guard !ScreenshotMode.isTour else { return }
             try? await Task.sleep(for: .milliseconds(350))
             focusedField = .amount
         }
+        #if DEBUG
+        .task {
+            await playTour(goal)
+        }
+        #endif
     }
 
     /// Доли цели и «всё сразу»: остаток до цели при пополнении, вся сумма при снятии
@@ -165,6 +171,20 @@ struct GoalMoneySheet: View {
         }
         return String(localized: "Введите сумму больше нуля")
     }
+
+    #if DEBUG
+    /// Ролик App Store: остаток до цели набирается по цифре, затем пополнение отправляется и появляется поздравление
+    private func playTour(_ goal: Goal) async {
+        guard ScreenshotMode.isTour else { return }
+        try? await Task.sleep(for: .milliseconds(800))
+        for character in GoalQuickAmounts.plain(GoalPlan(goal: goal).remaining) {
+            amountText.append(character)
+            try? await Task.sleep(for: .milliseconds(140))
+        }
+        try? await Task.sleep(for: .milliseconds(800))
+        submit(goal)
+    }
+    #endif
 
     private func submit(_ goal: Goal) {
         guard let amount = parsedAmount else {
