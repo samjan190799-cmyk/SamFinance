@@ -306,6 +306,10 @@ struct AddDebtView: View {
             type: selectedType
         )
         financeService.addDebt(debt)
+        Task {
+            // Разрешение нужно для напоминаний о сроке долга
+            _ = await PurchasePromptService.shared.requestAuthorization()
+        }
         HapticManager.shared.trigger(.success)
         dismiss()
     }

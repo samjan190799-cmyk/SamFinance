@@ -345,6 +345,10 @@ struct AddTransactionView: View {
         )
 
         financeService.addTransaction(newTransaction)
+        if !trimmedTitle.isEmpty {
+            // В следующий раз этот магазин получит выбранную категорию сам
+            AutomationService.shared.learnCategory(merchant: trimmedTitle, category: selectedCategory)
+        }
         HapticManager.shared.trigger(.success)
         dismiss()
     }
@@ -516,21 +520,8 @@ struct BatchSMSImportSheet: View {
     }
 
     private func importAllRecognized() {
-        for parsed in recognizedTransactions {
-            let category = financeService.category(named: parsed.categoryName, type: parsed.type)
-            let transaction = Transaction(
-                title: parsed.title,
-                amount: parsed.amount,
-                type: parsed.type,
-                category: category,
-                date: parsed.date ?? Date(),
-                notes: "Импортировано из ранней истории СМС",
-                brandName: parsed.brandName,
-                brandIcon: category.icon,
-                brandColorHex: category.colorHex
-            )
-            financeService.addTransaction(transaction)
-        }
+        // Карта, баланс, дубли и категория обрабатываются автоматически, по порядку дат
+        _ = AutomationService.shared.ingestAll(recognizedTransactions)
 
         HapticManager.shared.trigger(.success)
         dismiss()

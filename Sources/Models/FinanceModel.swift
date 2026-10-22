@@ -36,7 +36,10 @@ public struct Category: Codable, Identifiable, Hashable, Sendable {
         Category(id: stableID(7), name: "Жилье", icon: "house.fill", colorHex: "#5E5CE6", type: .expense),
         Category(id: stableID(8), name: "Развлечения", icon: "gamecontroller.fill", colorHex: "#FFCC00", type: .expense),
         Category(id: stableID(9), name: "Здоровье", icon: "heart.text.square.fill", colorHex: "#FF3B30", type: .expense),
-        Category(id: stableID(10), name: "Долги", icon: "banknote.fill", colorHex: "#A2845E", type: .expense)
+        Category(id: stableID(10), name: "Долги", icon: "banknote.fill", colorHex: "#A2845E", type: .expense),
+        Category(id: stableID(11), name: "Прочее", icon: "ellipsis.circle.fill", colorHex: "#8E8E93", type: .expense),
+        Category(id: stableID(12), name: "Переводы", icon: "arrow.left.arrow.right", colorHex: "#5AC8FA", type: .expense),
+        Category(id: stableID(13), name: "Переводы", icon: "arrow.left.arrow.right", colorHex: "#5AC8FA", type: .income)
     ]
 
     /// Постоянный идентификатор встроенной категории по её номеру
@@ -56,8 +59,9 @@ public struct Card: Codable, Identifiable, Hashable, Sendable {
     public var gradientColors: [String] // Цвета для градиентного фона
     public var isFrozen: Bool
     public var expiryDate: String // Срок действия (MM/YY)
+    public var balanceUpdatedAt: Date? // На какой момент верен баланс: операции старше него баланс не меняют
 
-    public init(id: UUID = UUID(), last4: String, holderName: String, balance: Double, type: String = "Digital card", colorHex: String, gradientColors: [String], isFrozen: Bool = false, expiryDate: String = "08/29") {
+    public init(id: UUID = UUID(), last4: String, holderName: String, balance: Double, type: String = "Digital card", colorHex: String, gradientColors: [String], isFrozen: Bool = false, expiryDate: String = "08/29", balanceUpdatedAt: Date? = nil) {
         self.id = id
         self.last4 = last4
         self.holderName = holderName
@@ -67,6 +71,7 @@ public struct Card: Codable, Identifiable, Hashable, Sendable {
         self.gradientColors = gradientColors
         self.isFrozen = isFrozen
         self.expiryDate = expiryDate
+        self.balanceUpdatedAt = balanceUpdatedAt
     }
 
     /// Последние 4 цифры из номера в любом виде (с пробелами или без)
@@ -75,7 +80,7 @@ public struct Card: Codable, Identifiable, Hashable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, last4, holderName, balance, type, colorHex, gradientColors, isFrozen, expiryDate
+        case id, last4, holderName, balance, type, colorHex, gradientColors, isFrozen, expiryDate, balanceUpdatedAt
         case number // Только чтение: старые файлы хранили полный номер прямо в cards.json
     }
 
@@ -95,6 +100,7 @@ public struct Card: Codable, Identifiable, Hashable, Sendable {
         gradientColors = try container.decode([String].self, forKey: .gradientColors)
         isFrozen = try container.decode(Bool.self, forKey: .isFrozen)
         expiryDate = try container.decode(String.self, forKey: .expiryDate)
+        balanceUpdatedAt = try container.decodeIfPresent(Date.self, forKey: .balanceUpdatedAt)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -108,6 +114,7 @@ public struct Card: Codable, Identifiable, Hashable, Sendable {
         try container.encode(gradientColors, forKey: .gradientColors)
         try container.encode(isFrozen, forKey: .isFrozen)
         try container.encode(expiryDate, forKey: .expiryDate)
+        try container.encodeIfPresent(balanceUpdatedAt, forKey: .balanceUpdatedAt)
     }
 }
 
@@ -173,8 +180,14 @@ public struct Transaction: Codable, Identifiable, Hashable, Sendable {
     public var brandName: String? // Например, "Apple"
     public var brandIcon: String? // Системная иконка или логотип (для простоты системная иконка)
     public var brandColorHex: String? // Цвет точки индикатора рядом с логотипом
-    
-    public init(id: UUID = UUID(), title: String, amount: Double, type: TransactionType, category: Category, date: Date = Date(), notes: String? = nil, brandName: String? = nil, brandIcon: String? = nil, brandColorHex: String? = nil) {
+
+    // Автоматизация: все поля необязательные, чтобы старые файлы транзакций читались без потерь
+    public var cardId: UUID? // Карта, с которой прошла операция
+    public var externalKey: String? // Ключ СМС для защиты от дублей
+    public var needsReview: Bool? // Категория подобрана наугад: стоит проверить
+    public var balanceDelta: Double? // На сколько операция изменила баланс карты (чтобы откатить при удалении)
+
+    public init(id: UUID = UUID(), title: String, amount: Double, type: TransactionType, category: Category, date: Date = Date(), notes: String? = nil, brandName: String? = nil, brandIcon: String? = nil, brandColorHex: String? = nil, cardId: UUID? = nil, externalKey: String? = nil, needsReview: Bool? = nil, balanceDelta: Double? = nil) {
         self.id = id
         self.title = title
         self.amount = amount
@@ -185,5 +198,9 @@ public struct Transaction: Codable, Identifiable, Hashable, Sendable {
         self.brandName = brandName
         self.brandIcon = brandIcon
         self.brandColorHex = brandColorHex
+        self.cardId = cardId
+        self.externalKey = externalKey
+        self.needsReview = needsReview
+        self.balanceDelta = balanceDelta
     }
 }

@@ -79,14 +79,51 @@ public final class FinanceService {
 
     public func deleteTransaction(_ transaction: Transaction) {
         guard prepareForWrite(.transactions) else { return }
+        if let existing = transactions.first(where: { $0.id == transaction.id }) {
+            revertBalance(of: existing)
+        }
         transactions.removeAll { $0.id == transaction.id }
         saveData()
     }
 
     public func deleteTransactions(at offsets: IndexSet) {
         guard prepareForWrite(.transactions) else { return }
+        for index in offsets where transactions.indices.contains(index) {
+            revertBalance(of: transactions[index])
+        }
         transactions.remove(atOffsets: offsets)
         saveData()
+    }
+
+    /// Меняет категорию операции и снимает отметку «проверить»
+    public func updateCategory(transactionID: UUID, category: Category) {
+        guard prepareForWrite(.transactions) else { return }
+        if let index = transactions.firstIndex(where: { $0.id == transactionID }) {
+            transactions[index].category = category
+            transactions[index].brandIcon = category.icon
+            transactions[index].brandColorHex = category.colorHex
+            transactions[index].needsReview = nil
+            saveData()
+        }
+    }
+
+    /// Запоминает, на сколько операция изменила баланс карты
+    public func setBalanceDelta(transactionID: UUID, delta: Double) {
+        guard prepareForWrite(.transactions) else { return }
+        if let index = transactions.firstIndex(where: { $0.id == transactionID }) {
+            transactions[index].balanceDelta = delta
+            saveData()
+        }
+    }
+
+    /// Операция с таким ключом СМС уже записана
+    public func hasTransaction(externalKey: String) -> Bool {
+        transactions.contains { $0.externalKey == externalKey }
+    }
+
+    /// Сколько операций ждут проверки категории
+    public var reviewCount: Int {
+        transactions.filter { $0.needsReview == true }.count
     }
 
     /// Сбросить абсолютно все данные приложения (транзакции, карты, долги, цели)
@@ -121,13 +158,53 @@ public final class FinanceService {
         if !digits.isEmpty && !CardSecretsStore.setNumber(digits, for: card.id) {
             print("⚠️ Не удалось сохранить номер карты в Keychain")
         }
-        cards.append(card)
+        var newCard = card
+        if newCard.balanceUpdatedAt == nil {
+            newCard.balanceUpdatedAt = Date()
+        }
+        cards.append(newCard)
         saveCards()
     }
 
     /// Полный номер карты из Keychain (nil, если его нет или устройство заблокировано)
     public func cardNumber(for id: UUID) -> String? {
         CardSecretsStore.number(for: id)
+    }
+
+    /// Карта по последним четырём цифрам из СМС
+    public func card(withLast4 last4: String) -> Card? {
+        cards.first { $0.last4 == last4 }
+    }
+
+    /// Ставит баланс карты из СМС, если сообщение не старее последней сверки
+    public func syncCardBalance(id: UUID, balance: Double, asOf date: Date) {
+        guard prepareForWrite(.cards), let index = cards.firstIndex(where: { $0.id == id }) else { return }
+        if let updatedAt = cards[index].balanceUpdatedAt, date < updatedAt { return }
+        cards[index].balance = balance
+        cards[index].balanceUpdatedAt = date
+        saveCards()
+    }
+
+    /// Применяет операцию к балансу карты и возвращает изменение. Возвращает nil, если баланс не трогали:
+    /// у карты нет точки отсчёта или операция старше последней сверки.
+    @discardableResult
+    public func applyToCardBalance(id: UUID, delta: Double, asOf date: Date) -> Double? {
+        guard prepareForWrite(.cards), let index = cards.firstIndex(where: { $0.id == id }) else { return nil }
+        guard let updatedAt = cards[index].balanceUpdatedAt, date > updatedAt else { return nil }
+        cards[index].balance += delta
+        cards[index].balanceUpdatedAt = date
+        saveCards()
+        return delta
+    }
+
+    /// Откатывает изменение баланса, которое операция внесла в карту
+    private func revertBalance(of transaction: Transaction) {
+        guard let cardId = transaction.cardId,
+              let delta = transaction.balanceDelta,
+              prepareForWrite(.cards),
+              let index = cards.firstIndex(where: { $0.id == cardId }) else { return }
+        cards[index].balance -= delta
+        saveCards()
     }
 
     public func deleteCard(id: UUID) {
@@ -287,6 +364,7 @@ public final class FinanceService {
     private func loadDebts() {
         if let loaded = readStore([Debt].self, store: .debts, url: debtsURL, dateStrategy: .iso8601) {
             debts = loaded
+            DebtReminderService.shared.reschedule(loaded)
         }
     }
 
@@ -410,6 +488,7 @@ public final class FinanceService {
         } catch {
             print("⚠️ Не удалось сохранить долги: \(error.localizedDescription)")
         }
+        DebtReminderService.shared.reschedule(debts)
     }
     
     private func saveGoals() {

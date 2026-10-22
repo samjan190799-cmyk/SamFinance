@@ -33,6 +33,10 @@ struct ContentView: View {
             .sheet(isPresented: $isShowingAddSheet) {
                 AddTransactionView(financeService: financeService)
             }
+            .task {
+                // Курсы валют обновляются сами при каждом запуске
+                CurrencyService.shared.fetchLatestRates()
+            }
     }
 
     // MARK: - Содержимое выбранной вкладки
