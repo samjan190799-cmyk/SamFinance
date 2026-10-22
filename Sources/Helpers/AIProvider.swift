@@ -40,18 +40,18 @@ enum AIProvider: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .claude: return "sk-ant-…"
         case .openAI: return "sk-…"
-        case .gemini: return "Ключ из Google AI Studio"
+        case .gemini: return String(localized: "Ключ из Google AI Studio")
         }
     }
 
     var keyFormatHint: String {
         switch self {
         case .claude:
-            return "Ключ Claude начинается с «sk-ant-». Скопируйте его из консоли Anthropic целиком."
+            return String(localized: "Ключ Claude начинается с «sk-ant-». Скопируйте его из консоли Anthropic целиком.")
         case .openAI:
-            return "Ключ OpenAI начинается с «sk-». Нужен ключ API с platform.openai.com, а не пароль или подписка ChatGPT."
+            return String(localized: "Ключ OpenAI начинается с «sk-». Нужен ключ API с platform.openai.com, а не пароль или подписка ChatGPT.")
         case .gemini:
-            return "Ключ Gemini не похож на ключ API. Скопируйте его из Google AI Studio целиком."
+            return String(localized: "Ключ Gemini не похож на ключ API. Скопируйте его из Google AI Studio целиком.")
         }
     }
 
@@ -75,18 +75,9 @@ enum AIProvider: String, CaseIterable, Identifiable, Sendable {
 
     var consoleLinkTitle: String {
         switch self {
-        case .claude: return "Создать ключ в консоли Anthropic"
-        case .openAI: return "Создать ключ на platform.openai.com"
-        case .gemini: return "Создать ключ в Google AI Studio"
-        }
-    }
-
-    /// Где пополнить баланс ключа (для текста ошибки)
-    var consoleName: String {
-        switch self {
-        case .claude: return "консоли Anthropic"
-        case .openAI: return "кабинете OpenAI"
-        case .gemini: return "Google AI Studio"
+        case .claude: return String(localized: "Создать ключ в консоли Anthropic")
+        case .openAI: return String(localized: "Создать ключ на platform.openai.com")
+        case .gemini: return String(localized: "Создать ключ в Google AI Studio")
         }
     }
 
@@ -106,7 +97,7 @@ enum AIProvider: String, CaseIterable, Identifiable, Sendable {
 
     /// Что именно уйдёт и кому: показывается перед первой отправкой
     var consentMessage: String {
-        "Чтобы ответить, приложение отправит в \(company) (\(displayName)) ваш вопрос и скриншоты, а также сводку ваших операций, карт (только последние 4 цифры) и долгов. Банковские СМС распознаются на телефоне и не отправляются. Данные обрабатывает \(company) по условиям вашего ключа. Разрешение можно отозвать: удалите ключ в Настройках."
+        String(localized: "Чтобы ответить, приложение отправит в \(company) (\(displayName)) ваш вопрос и скриншоты, а также сводку ваших операций, карт (только последние 4 цифры) и долгов. Банковские СМС распознаются на телефоне и не отправляются. Данные обрабатывает \(company) по условиям вашего ключа. Разрешение можно отозвать: удалите ключ в Настройках.")
     }
 
     // MARK: - Модель

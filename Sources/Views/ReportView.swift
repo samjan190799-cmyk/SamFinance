@@ -43,7 +43,7 @@ struct ReportView: View {
 
                 MonoSegmentedControl(
                     options: TimePeriodFilter.allCases,
-                    title: { $0.rawValue },
+                    title: { $0.title },
                     selection: $selectedPeriod
                 )
                 .padding(.top, 16)
@@ -76,8 +76,8 @@ struct ReportView: View {
     private var totals: some View {
         let spent = periodExpenses.reduce(0.0) { $0 + $1.amount }
         return HStack(spacing: 10) {
-            totalTile(title: "Потрачено", value: spent, highlighted: true)
-            totalTile(title: "Получено", value: periodIncome, highlighted: false)
+            totalTile(title: String(localized: "Потрачено"), value: spent, highlighted: true)
+            totalTile(title: String(localized: "Получено"), value: periodIncome, highlighted: false)
         }
     }
 
@@ -177,7 +177,7 @@ struct ReportView: View {
     // MARK: - История
     private var history: some View {
         VStack(alignment: .leading, spacing: 8) {
-            MonoSectionHeader(title: "Расходы за период")
+            MonoSectionHeader(title: String(localized: "Расходы за период"))
 
             let expenses = periodExpenses
             if expenses.isEmpty {
@@ -203,7 +203,7 @@ struct ReportView: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white)
                         .lineLimit(1)
-                    Text("\(transaction.category.name) · \(transaction.date.formatted(.dateTime.day().month(.abbreviated)))")
+                    Text(verbatim: "\(transaction.category.displayName) · \(transaction.date.formatted(.dateTime.day().month(.abbreviated)))")
                         .font(.system(size: 13))
                         .foregroundColor(Theme.textSecondary)
                         .lineLimit(1)

@@ -183,6 +183,14 @@ struct CurrencyConverterView: View {
                 rateRow(currency: .usd)
                 rateRow(currency: .eur)
             }
+
+            // Бесплатный тариф источника курсов требует ссылку на него
+            if let url = URL(string: "https://www.exchangerate-api.com") {
+                Link("Rates By Exchange Rate API", destination: url)
+                    .font(.caption)
+                    .foregroundColor(Theme.textSecondary)
+                    .padding(.horizontal, 4)
+            }
         }
     }
     

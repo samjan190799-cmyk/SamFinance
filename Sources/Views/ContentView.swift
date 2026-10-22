@@ -13,11 +13,11 @@ enum AppTab: Int, CaseIterable, Identifiable, Hashable {
 
     var title: String {
         switch self {
-        case .overview: return "Обзор"
-        case .cards: return "Карты"
-        case .assistant: return "ИИ"
-        case .debts: return "Долги"
-        case .report: return "Отчёт"
+        case .overview: return String(localized: "Обзор")
+        case .cards: return String(localized: "Карты")
+        case .assistant: return String(localized: "ИИ")
+        case .debts: return String(localized: "Долги")
+        case .report: return String(localized: "Отчёт")
         }
     }
 
@@ -43,7 +43,6 @@ enum AppTab: Int, CaseIterable, Identifiable, Hashable {
 /// Главный контейнер приложения: пять разделов в нижней панели, ИИ — один из них.
 struct ContentView: View {
     @State private var financeService = FinanceService.shared
-    @State private var languageManager = LanguageManager.shared
     @State private var selectedTab: AppTab = .overview
     /// Пока открыта клавиатура, панель прячется, чтобы поле ввода чата стояло прямо над клавиатурой
     @State private var isKeyboardVisible = false

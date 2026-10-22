@@ -17,23 +17,27 @@ enum AIAPIError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidKey(let provider):
-            return "Ключ \(provider.displayName) не подошёл. Проверьте его в Настройках → ИИ-помощник."
+            return String(localized: "Ключ \(provider.displayName) не подошёл. Проверьте его в Настройках → ИИ-помощник.")
         case .noCredit(let provider):
-            return "На счёте ключа закончились средства. Пополните баланс в \(provider.consoleName)."
+            switch provider {
+            case .claude: return String(localized: "На счёте ключа закончились средства. Пополните баланс в консоли Anthropic.")
+            case .openAI: return String(localized: "На счёте ключа закончились средства. Пополните баланс в кабинете OpenAI.")
+            case .gemini: return String(localized: "На счёте ключа закончились средства. Пополните баланс в Google AI Studio.")
+            }
         case .rateLimited(let provider):
-            return "Слишком много запросов подряд или исчерпан лимит ключа \(provider.displayName). Подождите минуту и повторите."
+            return String(localized: "Слишком много запросов подряд или исчерпан лимит ключа \(provider.displayName). Подождите минуту и повторите.")
         case .overloaded(let provider):
-            return "Сервис \(provider.displayName) сейчас перегружен. Повторите чуть позже."
+            return String(localized: "Сервис \(provider.displayName) сейчас перегружен. Повторите чуть позже.")
         case .refused(let provider):
-            return "\(provider.displayName) не стал отвечать на этот запрос. Попробуйте сформулировать иначе."
+            return String(localized: "\(provider.displayName) не стал отвечать на этот запрос. Попробуйте сформулировать иначе.")
         case .cutOff:
-            return "Ответ получился слишком длинным и оборвался. Пришлите меньше скриншотов за раз."
+            return String(localized: "Ответ получился слишком длинным и оборвался. Пришлите меньше скриншотов за раз.")
         case .badResponse(let provider):
-            return "Не получилось разобрать ответ \(provider.displayName). Повторите запрос."
+            return String(localized: "Не получилось разобрать ответ \(provider.displayName). Повторите запрос.")
         case .network(let provider):
-            return "Нет связи с сервером \(provider.displayName). Проверьте интернет."
+            return String(localized: "Нет связи с сервером \(provider.displayName). Проверьте интернет.")
         case .server(let provider, let message):
-            return "\(provider.displayName) вернул ошибку: \(message)"
+            return String(localized: "\(provider.displayName) вернул ошибку: \(message)")
         }
     }
 
@@ -41,7 +45,7 @@ enum AIAPIError: LocalizedError {
     static func from(status: Int, data: Data, provider: AIProvider) -> AIAPIError {
         let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         let details = body?["error"] as? [String: Any]
-        let message = details?["message"] as? String ?? "код \(status)"
+        let message = details?["message"] as? String ?? String(localized: "код \(status)")
         let type = details?["type"] as? String ?? ""
         let code = details?["code"] as? String ?? ""
 

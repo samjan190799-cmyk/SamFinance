@@ -4,6 +4,14 @@
 <dict>
     <key>CFBundleName</key>
     <string>SamFinance</string>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>ru</string>
+        <string>en</string>
+        <string>hy</string>
+    </array>
     <key>CFBundleDisplayName</key>
     <string>Hashiv</string>
     <key>CFBundleIdentifier</key>

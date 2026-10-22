@@ -204,3 +204,17 @@ public struct Transaction: Codable, Identifiable, Hashable, Sendable {
         self.balanceDelta = balanceDelta
     }
 }
+
+
+extension Category {
+    /// Встроенные категории показываются на языке приложения, свои — как назвал их пользователь
+    public var displayName: String {
+        Category.displayName(for: name)
+    }
+
+    public static func displayName(for name: String) -> String {
+        builtInNames.contains(name) ? NSLocalizedString(name, comment: "") : name
+    }
+
+    private static let builtInNames: Set<String> = Set(defaultCategories.map(\.name))
+}

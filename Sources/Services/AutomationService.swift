@@ -21,17 +21,18 @@ enum IngestResult {
         switch self {
         case .recorded(let transaction, let createdCard):
             let sign = transaction.type == .income ? "+" : "−"
-            var text = "Записано: \(transaction.title) · \(sign)\(CurrencyManager.shared.format(transaction.amount))"
+            let amountText = "\(sign)\(CurrencyManager.shared.format(transaction.amount))"
+            var text = String(localized: "Записано: \(transaction.title) · \(amountText)")
             if createdCard {
-                text += ". Добавлена новая карта"
+                text += ". " + String(localized: "Добавлена новая карта")
             }
             return text
         case .duplicate:
-            return "Эта операция уже записана"
+            return String(localized: "Эта операция уже записана")
         case .skippedTransfer:
-            return "Перевод между своими картами не учтён, баланс карты обновлён"
+            return String(localized: "Перевод между своими картами не учтён, баланс карты обновлён")
         case .storageUnavailable:
-            return "Данные Hashiv сейчас недоступны. Операция не сохранена"
+            return String(localized: "Данные Hashiv сейчас недоступны. Операция не сохранена")
         }
     }
 }
@@ -44,10 +45,10 @@ struct IngestSummary {
     var failed = 0
 
     var text: String {
-        var parts = ["записано: \(recorded)"]
-        if duplicates > 0 { parts.append("дубли: \(duplicates)") }
-        if skippedTransfers > 0 { parts.append("переводы между своими картами: \(skippedTransfers)") }
-        if failed > 0 { parts.append("не сохранено: \(failed)") }
+        var parts = [String(localized: "записано: \(recorded)")]
+        if duplicates > 0 { parts.append(String(localized: "дубли: \(duplicates)")) }
+        if skippedTransfers > 0 { parts.append(String(localized: "переводы между своими картами: \(skippedTransfers)")) }
+        if failed > 0 { parts.append(String(localized: "не сохранено: \(failed)")) }
         return parts.joined(separator: ", ")
     }
 }
@@ -171,7 +172,7 @@ public final class AutomationService {
             type: parsed.type,
             category: category,
             date: date,
-            notes: "Автоматически из СМС",
+            notes: String(localized: "Автоматически из СМС"),
             brandName: parsed.brandName,
             brandIcon: category.icon,
             brandColorHex: category.colorHex,
@@ -222,7 +223,7 @@ public final class AutomationService {
             last4: last4,
             holderName: holder,
             balance: balance,
-            type: "Карта •••• \(last4)",
+            type: String(localized: "Карта •••• \(last4)"),
             colorHex: "#2A2B30",
             gradientColors: ["#2A2B30", "#1C1D21"],
             isFrozen: false,

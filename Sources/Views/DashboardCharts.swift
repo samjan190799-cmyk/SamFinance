@@ -41,10 +41,10 @@ func compactAmount(_ amountInBase: Double) -> String {
     let value = CurrencyManager.shared.convertFromBase(amountInBase)
     let symbol = CurrencyManager.shared.currentCurrency.symbol
     if value >= 1_000_000 {
-        return String(format: "%.1f млн %@", value / 1_000_000, symbol)
+        return String(format: String(localized: "%.1f млн %@"), value / 1_000_000, symbol)
     }
     if value >= 1_000 {
-        return "\(Int((value / 1_000).rounded()))к \(symbol)"
+        return String(localized: "\(Int((value / 1_000).rounded()))к \(symbol)")
     }
     return "\(Int(value.rounded())) \(symbol)"
 }
@@ -197,7 +197,7 @@ struct TopCategoriesRow: View {
                 .font(.system(size: 20))
                 .foregroundColor(highlighted ? Theme.accent : .white)
             Spacer(minLength: 12)
-            Text(item.category.name)
+            Text(item.category.displayName)
                 .font(.system(size: 12))
                 .foregroundColor(Theme.textSecondary)
                 .lineLimit(1)
@@ -242,12 +242,12 @@ struct DashboardCategoriesSection: View {
 
         var result: [CategorySlice] = []
         for (index, item) in sorted.prefix(4).enumerated() {
-            result.append(CategorySlice(id: item.key, name: item.key, amount: item.value, share: item.value / total, color: Theme.shades[index]))
+            result.append(CategorySlice(id: item.key, name: Category.displayName(for: item.key), amount: item.value, share: item.value / total, color: Theme.shades[index]))
         }
 
         let rest = sorted.dropFirst(4).reduce(0.0) { $0 + $1.value }
         if rest > 0 {
-            result.append(CategorySlice(id: "other", name: "Остальное", amount: rest, share: rest / total, color: Theme.shades[4]))
+            result.append(CategorySlice(id: "other", name: String(localized: "Остальное"), amount: rest, share: rest / total, color: Theme.shades[4]))
         }
         return result
     }
@@ -255,7 +255,7 @@ struct DashboardCategoriesSection: View {
     var body: some View {
         let items = slices
         return VStack(alignment: .leading, spacing: 0) {
-            MonoSectionHeader(title: "Категории")
+            MonoSectionHeader(title: String(localized: "Категории"))
 
             if items.isEmpty {
                 Text("no_chart_data".localized)

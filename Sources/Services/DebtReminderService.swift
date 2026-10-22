@@ -29,8 +29,8 @@ public final class DebtReminderService {
         guard let fireDate = calendar.date(from: components), fireDate > Date() else { return nil }
 
         let content = UNMutableNotificationContent()
-        content.title = debt.isLent ? "Срок возврата долга: \(debt.name)" : "Срок платежа: \(debt.name)"
-        content.body = "\(CurrencyManager.shared.format(debt.amount)) · сегодня"
+        content.title = debt.isLent ? String(localized: "Срок возврата долга: \(debt.name)") : String(localized: "Срок платежа: \(debt.name)")
+        content.body = String(localized: "\(CurrencyManager.shared.format(debt.amount)) · сегодня")
         content.sound = .default
 
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)

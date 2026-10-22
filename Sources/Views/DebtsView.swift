@@ -70,8 +70,8 @@ struct DebtsView: View {
     // MARK: - Итоги
     private var summaryView: some View {
         HStack(spacing: 10) {
-            summaryTile(title: "Мне должны", amount: owedToMe, highlighted: true)
-            summaryTile(title: "Я должен", amount: iOwe, highlighted: false)
+            summaryTile(title: String(localized: "Мне должны"), amount: owedToMe, highlighted: true)
+            summaryTile(title: String(localized: "Я должен"), amount: iOwe, highlighted: false)
         }
         .padding(.top, 20)
     }
@@ -115,7 +115,7 @@ struct DebtsView: View {
                 Text("Пусто")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(.white)
-                Text(selectedSegment == 0 ? "У вас нет активных кредитов." : "У вас нет активных долгов людям.")
+                Text(selectedSegment == 0 ? String(localized: "У вас нет активных кредитов.") : String(localized: "У вас нет активных долгов людям."))
                     .font(.system(size: 14))
                     .foregroundColor(Theme.textTertiary)
                     .multilineTextAlignment(.center)
@@ -133,7 +133,7 @@ struct DebtsView: View {
                         Button {
                             togglePaid(debt)
                         } label: {
-                            Label(debt.isPaid ? "Вернуть" : "Погашен", systemImage: debt.isPaid ? "arrow.uturn.backward" : "checkmark")
+                            Label(debt.isPaid ? String(localized: "Вернуть") : String(localized: "Погашен"), systemImage: debt.isPaid ? "arrow.uturn.backward" : "checkmark")
                         }
                         .tint(debt.isPaid ? Theme.surfaceRaised : Theme.accentStrong)
                     }
@@ -177,9 +177,9 @@ struct DebtRowView: View {
 
     private var directionText: String {
         if debt.type == .credit {
-            return "Кредит"
+            return String(localized: "Кредит")
         }
-        return debt.isLent ? "Мне должны" : "Я должен"
+        return debt.isLent ? String(localized: "Мне должны") : String(localized: "Я должен")
     }
 
     private var amountColor: Color {
@@ -227,7 +227,7 @@ struct DebtRowView: View {
                 }
                 // Кнопка только в своей рамке: в List без этого нажатие на всю строку отмечало бы погашение
                 .buttonStyle(.borderless)
-                .accessibilityLabel(debt.isPaid ? "Вернуть в активные" : "Отметить погашенным")
+                .accessibilityLabel(debt.isPaid ? String(localized: "Вернуть в активные") : String(localized: "Отметить погашенным"))
             }
             .frame(minHeight: 72)
             .contentShape(Rectangle())
@@ -239,9 +239,9 @@ struct DebtRowView: View {
     private var subtitle: String {
         let date = debt.dueDate.formatted(.dateTime.day().month(.abbreviated))
         if debt.isPaid {
-            return "Погашено · \(date)"
+            return String(localized: "Погашено · \(date)")
         }
-        return "\(directionText) · до \(date)"
+        return String(localized: "\(directionText) · до \(date)")
     }
 }
 
@@ -275,7 +275,7 @@ struct AddDebtView: View {
                 }
 
                 Section {
-                    TextField(selectedType == .credit ? "Название банка / кредитора" : "Имя человека", text: $name)
+                    TextField(selectedType == .credit ? String(localized: "Название банка / кредитора") : String(localized: "Имя человека"), text: $name)
                         .textInputAutocapitalization(.words)
 
                     HStack {

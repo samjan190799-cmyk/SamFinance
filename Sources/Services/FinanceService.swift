@@ -212,6 +212,12 @@ public final class FinanceService {
         cards.removeAll { $0.id == id }
         saveCards()
         CardSecretsStore.deleteNumber(for: id)
+
+        // Копилки удалённой карты без неё нигде не показываются, поэтому уходят вместе с ней
+        if goals.contains(where: { $0.cardId == id }), prepareForWrite(.goals) {
+            goals.removeAll { $0.cardId == id }
+            saveGoals()
+        }
     }
 
     // MARK: - API для долгов (Debts)

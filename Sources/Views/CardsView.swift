@@ -8,7 +8,6 @@ struct CardsView: View {
     @State private var isShowingAddCardSheet = false
     @State private var selectedCardForDetails: Card? = nil
     @State private var selectedCardForNewGoal: Card? = nil
-    @State private var languageManager = LanguageManager.shared
     /// Карта в центре карусели; nil, пока пользователь не листал (тогда текущая — первая)
     @State private var centeredCardID: UUID? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -507,7 +506,7 @@ struct FlippableCardView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
-        .accessibilityHint(isFlipped ? "Показать лицевую сторону" : "Показать оборот карты")
+        .accessibilityHint(isFlipped ? String(localized: "Показать лицевую сторону") : String(localized: "Показать оборот карты"))
     }
 
     private func flip() {
@@ -655,7 +654,7 @@ struct AddCardView: View {
             colorHex: theme.colorHex,
             gradientColors: theme.gradient,
             isFrozen: false,
-            expiryDate: normalizedExpiry ?? "ММ/ГГ"
+            expiryDate: normalizedExpiry ?? String(localized: "ММ/ГГ")
         )
     }
 
@@ -688,7 +687,7 @@ struct AddCardView: View {
                         .textInputAutocapitalization(.characters)
 
                     HStack {
-                        Text("base_balance".localized)
+                        Text(String(localized: "Баланс (\(CurrencyManager.shared.baseCurrency.symbol))"))
                         Spacer()
                         TextField("0", text: $balanceString)
                             .keyboardType(.decimalPad)
@@ -706,7 +705,7 @@ struct AddCardView: View {
                     HStack {
                         Text("expiry_date".localized)
                         Spacer()
-                        TextField("ММ/ГГ", text: $expiryDate)
+                        TextField(String(localized: "ММ/ГГ"), text: $expiryDate)
                             .keyboardType(.numbersAndPunctuation)
                             .multilineTextAlignment(.trailing)
                     }
@@ -824,7 +823,7 @@ struct AddGoalForCardView: View {
                     TextField("goal".localized, text: $title)
 
                     HStack {
-                        Text("base_balance".localized)
+                        Text(String(localized: "Цель (\(CurrencyManager.shared.baseCurrency.symbol))"))
                         Spacer()
                         TextField("0", text: $targetAmountString)
                             .keyboardType(.decimalPad)
@@ -901,7 +900,7 @@ struct CardDetailsSheet: View {
                 detailRow(title: "card_holder".localized, value: card.holderName)
                 detailRow(title: "full_card_number".localized, value: displayedNumber)
                 detailRow(title: "expiry_date".localized, value: card.expiryDate)
-                detailRow(title: "Статус", value: card.isFrozen ? "freeze".localized : "Активна", showsDivider: false)
+                detailRow(title: String(localized: "Статус"), value: card.isFrozen ? "freeze".localized : String(localized: "Активна"), showsDivider: false)
             }
             .padding(.horizontal, 16)
             .monoSurface()

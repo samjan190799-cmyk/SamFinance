@@ -40,7 +40,7 @@ struct TransactionsView: View {
             List {
                 MonoSegmentedControl(
                     options: [Filter.all, Filter.review],
-                    title: { $0 == .all ? "Все" : "Проверить (\(financeService.reviewCount))" },
+                    title: { $0 == .all ? String(localized: "Все") : String(localized: "Проверить (\(financeService.reviewCount))") },
                     selection: $filter
                 )
                 .padding(.top, 8)
@@ -73,7 +73,7 @@ struct TransactionsView: View {
     private var content: some View {
         let dayGroups = groups
         if dayGroups.isEmpty {
-            Text(filter == .review ? "Все категории проверены." : "Операций пока нет.")
+            Text(filter == .review ? String(localized: "Все категории проверены.") : String(localized: "Операций пока нет."))
                 .font(.system(size: 14))
                 .foregroundColor(Theme.textTertiary)
                 .frame(maxWidth: .infinity)
@@ -115,10 +115,10 @@ struct TransactionsView: View {
     private func dayTitle(_ day: Date) -> String {
         let calendar = Calendar.current
         if calendar.isDateInToday(day) {
-            return "Сегодня"
+            return String(localized: "Сегодня")
         }
         if calendar.isDateInYesterday(day) {
-            return "Вчера"
+            return String(localized: "Вчера")
         }
         return day.formatted(.dateTime.day().month(.wide))
     }
@@ -140,7 +140,7 @@ struct TransactionsView: View {
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.white)
                             .lineLimit(1)
-                        Text(needsReview ? "\(transaction.category.name) · проверить" : transaction.category.name)
+                        Text(needsReview ? String(localized: "\(transaction.category.displayName) · проверить") : transaction.category.displayName)
                             .font(.system(size: 13))
                             .foregroundColor(needsReview ? Theme.accent : Theme.textTertiary)
                             .lineLimit(1)
@@ -229,7 +229,7 @@ private struct CategoryPickerSheet: View {
                 choose(category)
             } label: {
                 HStack {
-                    Text(category.name)
+                    Text(category.displayName)
                         .font(.system(size: 16))
                         .foregroundColor(.white)
                     Spacer()

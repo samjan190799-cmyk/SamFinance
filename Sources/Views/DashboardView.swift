@@ -9,6 +9,16 @@ public enum TimePeriodFilter: String, CaseIterable, Identifiable {
 
     public var id: String { rawValue }
 
+    /// Название периода на языке приложения
+    var title: String {
+        switch self {
+        case .today: return String(localized: "Сегодня")
+        case .week: return String(localized: "Неделя")
+        case .month: return String(localized: "Месяц")
+        case .allTime: return String(localized: "Всё время")
+        }
+    }
+
     /// Входит ли дата в период: сегодня, последние 7 или 30 дней, всё время
     func contains(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> Bool {
         switch self {
@@ -86,15 +96,15 @@ struct DashboardView: View {
                 .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
             Spacer()
-            MonoCircleButton(systemName: "doc.on.clipboard", label: "Распознать СМС из буфера") {
+            MonoCircleButton(systemName: "doc.on.clipboard", label: String(localized: "Распознать СМС из буфера")) {
                 HapticManager.shared.impact(.light)
                 scanClipboard()
             }
-            MonoCircleButton(systemName: "plus", label: "Новая операция", filled: true) {
+            MonoCircleButton(systemName: "plus", label: String(localized: "Новая операция"), filled: true) {
                 HapticManager.shared.impact(.light)
                 addSheetType = .expense
             }
-            MonoCircleButton(systemName: "gearshape", label: "Настройки") {
+            MonoCircleButton(systemName: "gearshape", label: String(localized: "Настройки")) {
                 HapticManager.shared.impact(.light)
                 isShowingSettingsSheet = true
             }
@@ -192,7 +202,7 @@ struct DashboardView: View {
         let count = detectedBatchTransactions.count
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(count > 1 ? "Найдено СМС в буфере: \(count)" : "Найдена СМС в буфере")
+                Text(count > 1 ? String(localized: "Найдено СМС в буфере: \(count)") : String(localized: "Найдена СМС в буфере"))
                     .font(.system(size: 12))
                     .foregroundColor(Theme.textSecondary)
                 Text(smsSummary)
@@ -219,7 +229,7 @@ struct DashboardView: View {
             Button {
                 addDetectedTransaction()
             } label: {
-                Text(count > 1 ? "Записать все" : "Записать")
+                Text(count > 1 ? String(localized: "Записать все") : String(localized: "Записать"))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(Theme.onAccent)
                     .padding(.horizontal, 18)
@@ -237,7 +247,7 @@ struct DashboardView: View {
     private var smsSummary: String {
         if detectedBatchTransactions.count > 1 {
             let total = detectedBatchTransactions.reduce(0.0) { $0 + $1.amount }
-            return "Всего на сумму: \(CurrencyManager.shared.format(total))"
+            return String(localized: "Всего на сумму: \(CurrencyManager.shared.format(total))")
         }
         guard let parsed = detectedBatchTransactions.first else { return "" }
         let sign = parsed.type == .income ? "+" : "−"
@@ -248,8 +258,8 @@ struct DashboardView: View {
     private var recentTransactionsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             MonoSectionHeader(
-                title: "Последние операции",
-                trailing: "Все",
+                title: String(localized: "Последние операции"),
+                trailing: String(localized: "Все"),
                 onTrailingTap: { isShowingAllTransactions = true }
             )
 
@@ -294,7 +304,7 @@ struct DashboardView: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white)
                         .lineLimit(1)
-                    Text("\(transaction.category.name) · \(time)")
+                    Text(verbatim: "\(transaction.category.displayName) · \(time)")
                         .font(.system(size: 13))
                         .foregroundColor(Theme.textSecondary)
                         .lineLimit(1)
@@ -318,7 +328,7 @@ struct DashboardView: View {
         let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let batch = text.isEmpty ? [] : SMSParser.parseBatch(text: text)
         guard !batch.isEmpty else {
-            showClipboardMessage("В буфере нет банковских СМС")
+            showClipboardMessage(String(localized: "В буфере нет банковских СМС"))
             return
         }
         withAnimation(Motion.spring) {

@@ -174,9 +174,9 @@ public struct SMSParser {
             let name = cleanCounterparty(firstDetail)
             counterparty = name.isEmpty ? nil : name
             if direction == .income {
-                title = name.isEmpty ? "Входящий перевод" : "Перевод от \(prettify(name))"
+                title = name.isEmpty ? String(localized: "Входящий перевод") : String(localized: "Перевод от \(prettify(name))")
             } else {
-                title = name.isEmpty ? "Перевод" : "Перевод · \(prettify(name))"
+                title = name.isEmpty ? String(localized: "Перевод") : String(localized: "Перевод · \(prettify(name))")
             }
             categoryName = "Переводы"
             merchant = name
@@ -187,13 +187,13 @@ public struct SMSParser {
             type = isIncome ? .income : .expense
 
             if operation.contains("ATM") {
-                title = "Снятие наличных"
+                title = String(localized: "Снятие наличных")
                 categoryName = "Прочее"
             } else if let match = categoryRule(for: combined) {
-                title = merchant.isEmpty ? "Операция по карте •••• \(last4)" : prettify(merchant)
+                title = merchant.isEmpty ? String(localized: "Операция по карте •••• \(last4)") : prettify(merchant)
                 categoryName = match.category
             } else {
-                title = merchant.isEmpty ? "Операция по карте •••• \(last4)" : prettify(merchant)
+                title = merchant.isEmpty ? String(localized: "Операция по карте •••• \(last4)") : prettify(merchant)
                 categoryName = type == .income ? "Зарплата" : "Прочее"
                 guessed = true
             }
@@ -305,7 +305,8 @@ public struct SMSParser {
         let sanitizedText = sanitizeTextForAmountExtraction(text)
 
         // 2. Извлечение суммы
-        guard let amount = extractAmount(from: sanitizedText), amount > 0, amount < 100_000_000 else {
+        guard let amount = extractAmount(from: sanitizedText, allowBareNumber: looksLikeBankMessage(lowercased)),
+              amount > 0, amount < 100_000_000 else {
             return nil
         }
 
@@ -356,7 +357,7 @@ public struct SMSParser {
         }
 
         let parsedDate = extractDate(from: text)
-        let title = brandName ?? (type == .income ? "Пополнение счета" : "Операция по карте")
+        let title = brandName ?? (type == .income ? String(localized: "Пополнение счета") : String(localized: "Операция по карте"))
         let last4 = firstMatch(cardMaskPattern, in: text).flatMap { capture(1, of: $0, in: text) }
 
         return ParsedSMSTransaction(
@@ -491,12 +492,22 @@ public struct SMSParser {
         return Double(cleaned.filter { $0.isNumber })
     }
 
+    /// Похоже ли сообщение на банковское: без этого голое число в тексте (номер, год, индекс) не считается суммой
+    private static func looksLikeBankMessage(_ lowercased: String) -> Bool {
+        if isHeaderOfSMS(lowercased) { return true }
+        let words = [
+            "vcharum", "poxancum", "mutq", "elq hashvic", "mnacord", "balance", "balans", "остаток", "баланс",
+            "payment", "transaction", "tranzakcia", "purchase", "withdraw", "refund", "transfer", "перевод", "карт"
+        ]
+        return words.contains { lowercased.contains($0) }
+    }
+
     /// Извлекает числовую сумму из очищенного текста СМС
-    private static func extractAmount(from text: String) -> Double? {
+    private static func extractAmount(from text: String, allowBareNumber: Bool) -> Double? {
         let patterns = [
-            #"\b(\d{1,3}(?:[\s\u{00A0},]\d{3})*(?:[.,]\d{1,2})?)\s*(?:amd|֏|dram|драм|руб|руб.|рублей|₽|usd|\$|eur|€)\b"#,
-            #"(?:amd|֏|dram|драм|руб|руб.|рублей|₽|usd|\$|eur|€)\s*(\d{1,3}(?:[\s\u{00A0},]\d{3})*(?:[.,]\d{1,2})?)\b"#,
-            #"\b(?:vcharum|poxancum|vcharvel|tranzakcia|transakcia|оплата|списание|зачисление|покупка|расход|доход|payment|charge|spent|amount)\b[^\d]*?(\d{1,3}(?:[\s\u{00A0},]\d{3})*(?:[.,]\d{1,2})?)\b"#
+            #"\b(\d{1,3}(?:[\s\x{00A0},]\d{3})*(?:[.,]\d{1,2})?)\s*(?:amd|֏|dram|драм|руб|руб.|рублей|₽|usd|\$|eur|€)\b"#,
+            #"(?:amd|֏|dram|драм|руб|руб.|рублей|₽|usd|\$|eur|€)\s*(\d{1,3}(?:[\s\x{00A0},]\d{3})*(?:[.,]\d{1,2})?)\b"#,
+            #"\b(?:vcharum|poxancum|vcharvel|tranzakcia|transakcia|оплата|списание|зачисление|покупка|расход|доход|payment|charge|spent|amount)\b[^\d]*?(\d{1,3}(?:[\s\x{00A0},]\d{3})*(?:[.,]\d{1,2})?)\b"#
         ]
 
         for pattern in patterns {
@@ -508,7 +519,8 @@ public struct SMSParser {
             }
         }
 
-        // Безопасный фолбэк: ищем числа от 10 до 1,000,000 без суффиксов карт
+        // Фолбэк для банковских СМС без валюты: числа от 10 до 1,000,000 без суффиксов карт
+        guard allowBareNumber else { return nil }
         for match in allMatches(#"\b(\d{1,6}(?:[.,]\d{1,2})?)\b"#, in: text) {
             if let rawNumber = capture(1, of: match, in: text),
                let value = parseNumber(rawNumber),

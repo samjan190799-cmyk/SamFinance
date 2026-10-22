@@ -88,7 +88,7 @@ public struct RecordPurchaseIntent: AppIntent {
         }
         let name = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
         let shown = await PurchasePromptService.shared.postKindPrompt(
-            merchant: name.isEmpty ? "Покупка" : name,
+            merchant: name.isEmpty ? String(localized: "Покупка") : name,
             amount: value,
             date: Date()
         )

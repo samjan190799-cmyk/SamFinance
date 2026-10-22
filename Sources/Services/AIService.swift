@@ -41,15 +41,15 @@ public final class AIService {
             let savingsRate = ((totalIncomeVal - totalExpenseVal) / totalIncomeVal) * 100
             if savingsRate >= 20 {
                 insights.append(AIFinancialInsight(
-                    title: "Отличный норматив сбережений!",
-                    message: "Вы сохраняете \(Int(savingsRate))% от своего дохода. Это выше рекомендуемого стандарта (20%).",
+                    title: String(localized: "Отличный норматив сбережений!"),
+                    message: String(localized: "Вы сохраняете \(Int(savingsRate))% от своего дохода. Это выше рекомендуемого стандарта (20%)."),
                     iconName: "chart.line.uptrend.xyaxis.circle.fill",
                     type: .positive
                 ))
             } else if savingsRate < 5 {
                 insights.append(AIFinancialInsight(
-                    title: "Внимание к расходам",
-                    message: "Расходы составляют \(Int(100 - savingsRate))% от доходов. Рекомендуем отложить часть денег в копилки.",
+                    title: String(localized: "Внимание к расходам"),
+                    message: String(localized: "Расходы составляют \(Int(100 - savingsRate))% от доходов. Рекомендуем отложить часть денег в копилки."),
                     iconName: "exclamationmark.triangle.fill",
                     type: .warning
                 ))
@@ -69,8 +69,8 @@ public final class AIService {
         if let topCategory = categoryTotals.max(by: { $0.value < $1.value }) {
             let topCatFormatted = CurrencyManager.shared.format(topCategory.value)
             insights.append(AIFinancialInsight(
-                title: "Основная статья расходов",
-                message: "За последние 30 дней больше всего потрачено на «\(topCategory.key)» — \(topCatFormatted).",
+                title: String(localized: "Основная статья расходов"),
+                message: String(localized: "За последние 30 дней больше всего потрачено на «\(Category.displayName(for: topCategory.key))» — \(topCatFormatted)."),
                 iconName: "bag.fill.badge.plus",
                 type: .info
             ))
@@ -83,8 +83,8 @@ public final class AIService {
             let avgDaily = recentExpenseVal / 30.0
             let avgDailyFormatted = CurrencyManager.shared.format(avgDaily)
             insights.append(AIFinancialInsight(
-                title: "Средний дневной расход",
-                message: "В среднем вы расходуете около \(avgDailyFormatted) в день. Контролируйте этот показатель для удержания бюджета.",
+                title: String(localized: "Средний дневной расход"),
+                message: String(localized: "В среднем вы расходуете около \(avgDailyFormatted) в день. Контролируйте этот показатель для удержания бюджета."),
                 iconName: "calendar.badge.clock",
                 type: .info
             ))
@@ -97,8 +97,8 @@ public final class AIService {
         
         if !cards.isEmpty {
             insights.append(AIFinancialInsight(
-                title: "Привязанные карты (\(cards.count))",
-                message: "Капитал распределен по \(cards.count) картам и \(activeGoalsCount) накопительным финансовым целям.",
+                title: String(localized: "Привязанные карты (\(cards.count))"),
+                message: String(localized: "Карт: \(cards.count), активных целей накопления: \(activeGoalsCount)."),
                 iconName: "creditcard.fill",
                 type: .positive
             ))
@@ -106,8 +106,8 @@ public final class AIService {
         
         if insights.isEmpty {
             insights.append(AIFinancialInsight(
-                title: "Добро пожаловать в Hashiv!",
-                message: "Добавьте первые транзакции или импортируйте СМС для формирования персонального ИИ-анализа трат.",
+                title: String(localized: "Добро пожаловать в Hashiv!"),
+                message: String(localized: "Добавьте первые транзакции или импортируйте СМС для формирования персонального ИИ-анализа трат."),
                 iconName: "sparkles",
                 type: .positive
             ))
