@@ -125,7 +125,7 @@ public final class LanguageManager {
         // Настройки
         "settings_title": [.russian: "Настройки", .english: "Settings", .armenian: "Կարգավորումներ"],
         "profile": [.russian: "Профиль", .english: "Profile", .armenian: "Անձնական էջ"],
-        "user_name": [.russian: "Пользователь SamFinance", .english: "SamFinance User", .armenian: "SamFinance Օգտատեր"],
+        "user_name": [.russian: "Пользователь Hashiv", .english: "Hashiv User", .armenian: "Hashiv Օգտատեր"],
         "preferences": [.russian: "Предпочтения", .english: "Preferences", .armenian: "Նախապատվություններ"],
         "app_language": [.russian: "Язык приложения", .english: "App Language", .armenian: "Հավելվածի լեզուն"],
         "main_currency": [.russian: "Основная валюта", .english: "Primary Currency", .armenian: "Հիմնական արժույթ"],

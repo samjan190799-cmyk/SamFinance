@@ -15,6 +15,7 @@ targets:
     info:
       path: Sources/Info.plist
       properties:
+        CFBundleDisplayName: Hashiv
         UILaunchScreen: {}
         UIRequiresFullScreen: false
         ITSAppUsesNonExemptEncryption: false

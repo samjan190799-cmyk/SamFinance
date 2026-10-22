@@ -31,7 +31,7 @@ enum IngestResult {
         case .skippedTransfer:
             return "Перевод между своими картами не учтён, баланс карты обновлён"
         case .storageUnavailable:
-            return "Данные SamFinance сейчас недоступны. Операция не сохранена"
+            return "Данные Hashiv сейчас недоступны. Операция не сохранена"
         }
     }
 }

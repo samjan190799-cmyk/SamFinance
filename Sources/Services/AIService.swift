@@ -106,7 +106,7 @@ public final class AIService {
         
         if insights.isEmpty {
             insights.append(AIFinancialInsight(
-                title: "Добро пожаловать в SamFinance!",
+                title: "Добро пожаловать в Hashiv!",
                 message: "Добавьте первые транзакции или импортируйте СМС для формирования персонального ИИ-анализа трат.",
                 iconName: "sparkles",
                 type: .positive

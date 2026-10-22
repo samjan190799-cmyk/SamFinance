@@ -239,7 +239,7 @@ public final class PurchasePromptService {
             post(
                 category: "",
                 title: "Не удалось сохранить",
-                body: "\(context.merchant) · \(amountText). Откройте SamFinance и повторите.",
+                body: "\(context.merchant) · \(amountText). Откройте Hashiv и повторите.",
                 context: context
             )
         }

@@ -11,7 +11,7 @@ enum RecordPurchaseError: Error, CustomLocalizedStringResourceConvertible {
         case .invalidAmount:
             return "Не удалось понять сумму покупки."
         case .notificationsDisabled:
-            return "Уведомления SamFinance выключены: подсказка о покупке не может появиться. Включите их в настройках iOS."
+            return "Уведомления Hashiv выключены: подсказка о покупке не может появиться. Включите их в настройках iOS."
         }
     }
 }
@@ -58,7 +58,7 @@ enum PurchaseAmountParser {
 @available(iOS 16.0, *)
 public struct RecordPurchaseIntent: AppIntent {
     public static var title: LocalizedStringResource { "Записать покупку Apple Pay" }
-    public static var description: IntentDescription? { "Показывает подсказку «Расход или доход?», затем категорию, и сохраняет покупку в SamFinance." }
+    public static var description: IntentDescription? { "Показывает подсказку «Расход или доход?», затем категорию, и сохраняет покупку в Hashiv." }
 
     // Магазин и сумма берутся из переменных автоматизации «Транзакция»
     @Parameter(title: "Магазин")
