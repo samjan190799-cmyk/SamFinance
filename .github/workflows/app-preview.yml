@@ -91,12 +91,15 @@ jobs:
           # Режим заданий: без него фоновая запись игнорирует SIGINT и не успевает закрыть файл
           set -m
 
-          record() {
+          # Первый запуск после установки бывает вялым: прогреваем приложение, прежде чем писать экран
+          xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID" -ScreenshotScene overview > /dev/null
+          sleep 12
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" 2>/dev/null || true
+
+          record_once() {
             lang="$1"; locale="$2"; question="$3"
             xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" 2>/dev/null || true
-            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID" \
-              -AppleLanguages "($lang)" -AppleLocale "$locale" \
-              -ScreenshotTour 1 -ScreenshotQuestion "$question" > /dev/null
+            xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"               -AppleLanguages "($lang)" -AppleLocale "$locale"               -ScreenshotTour 1 -ScreenshotQuestion "$question" > /dev/null
             # Запись начинается сразу после запуска; сценарий стартует через 5 секунд и идёт около 28
             xcrun simctl io "$SIM_UDID" recordVideo --codec=h264 --force "raw/$lang.mp4" &
             REC_PID=$!
@@ -106,14 +109,29 @@ jobs:
             xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" 2>/dev/null || true
           }
 
+          # Если экран «замёрз» и запись вышла короткой, пишем заново (до трёх попыток)
+          record() {
+            for attempt in 1 2 3; do
+              record_once "$@"
+              duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "raw/$1.mp4" 2>/dev/null || echo 0)
+              echo "== $1, попытка $attempt: запись $duration с"
+              if python3 -c "import sys; sys.exit(0 if float('${duration:-0}') > 25 else 1)"; then
+                return 0
+              fi
+            done
+            return 0
+          }
+
           record ru ru_RU "Сколько я потратил за неделю?"
           record en en_US "How much did I spend this week?"
           record hy hy_AM "Որքա՞ն եմ ծախսել այս շաբաթ"
 
           for lang in ru en hy; do
             echo "== raw $lang"
-            ffprobe -v error -select_streams v:0 -count_frames \
-              -show_entries stream=width,height,nb_read_frames,duration -of default=nw=1 "raw/$lang.mp4"
+            ffprobe -v error -select_streams v:0 -count_frames               -show_entries stream=width,height,nb_read_frames,duration -of default=nw=1 "raw/$lang.mp4"
+            # Сколько кадров пришло в каждую секунду записи: по этому видно, насколько плавным был экран
+            ffprobe -v error -select_streams v:0 -show_entries frame=pts_time -of csv=p=0 "raw/$lang.mp4"               | awk -F, '{b=int($1); c[b]++; if (b>m) m=b} END {for (i=0;i<=m;i++) printf "%d:%d ", i, c[i]; print ""}'
+            ffmpeg -y -v error -i "raw/$lang.mp4" -vf "fps=1/2,scale=166:-1,tile=10x2" -frames:v 1 "preview/rawsheet_$lang.jpg" || true
           done
 
       - name: Encode for App Store
@@ -122,19 +140,14 @@ jobs:
           START="${PREVIEW_START:-3.5}"
           LENGTH="${PREVIEW_LENGTH:-29}"
           for lang in ru en hy; do
-            ffmpeg -y -v error -ss "$START" -i "raw/$lang.mp4" \
-              -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=48000" \
-              -t "$LENGTH" \
-              -vf "scale=886:1920:flags=lanczos,fps=30,format=yuv420p" \
-              -c:v libx264 -profile:v high -level 4.0 -b:v 10M -maxrate 12M -bufsize 20M \
-              -c:a aac -b:a 256k -ar 48000 -ac 2 -shortest -movflags +faststart \
-              "preview/hashiv_preview_$lang.mp4"
             echo "== $lang"
-            ffprobe -v error -show_entries stream=codec_name,width,height,r_frame_rate,sample_rate,channels:format=duration,size \
-              -of default=nw=1 "preview/hashiv_preview_$lang.mp4"
+            if ! ffmpeg -y -v error -ss "$START" -i "raw/$lang.mp4"               -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=48000"               -t "$LENGTH"               -vf "scale=886:1920:flags=lanczos,fps=30,format=yuv420p"               -c:v libx264 -profile:v high -level 4.0 -b:v 10M -maxrate 12M -bufsize 20M               -c:a aac -b:a 256k -ar 48000 -ac 2 -shortest -movflags +faststart               "preview/hashiv_preview_$lang.mp4"; then
+              echo "::warning::Не удалось собрать ролик $lang"
+              continue
+            fi
+            ffprobe -v error -show_entries stream=codec_type,codec_name,width,height,r_frame_rate,sample_rate,channels:format=duration,size               -of default=nw=1 "preview/hashiv_preview_$lang.mp4"
             # Контрольные кадры: по одному каждые 2 секунды
-            ffmpeg -y -v error -i "preview/hashiv_preview_$lang.mp4" \
-              -vf "fps=1/2,scale=222:-1,tile=8x2" -frames:v 1 "preview/sheet_$lang.jpg"
+            ffmpeg -y -v error -i "preview/hashiv_preview_$lang.mp4"               -vf "fps=1/2,scale=222:-1,tile=8x2" -frames:v 1 "preview/sheet_$lang.jpg" || true
           done
           ls -l preview
 
