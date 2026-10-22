@@ -51,6 +51,7 @@ struct DashboardView: View {
     @State private var addSheetType: TransactionType? = nil
     @State private var isShowingSettingsSheet = false
     @State private var isShowingAllTransactions = false
+    @State private var isShowingSavings = false
 
     // Распознавание СМС из буфера обмена: только по кнопке в шапке, иначе iOS каждый раз спрашивала бы разрешение на вставку
     @State private var detectedBatchTransactions: [ParsedSMSTransaction] = []
@@ -70,8 +71,13 @@ struct DashboardView: View {
                 TopCategoriesRow(financeService: financeService, onTap: onOpenReport)
                     .padding(.top, 16)
                     .appearAnimation(order: 3)
+                SavingsPreviewCard(financeService: financeService) {
+                    isShowingSavings = true
+                }
+                .padding(.top, 28)
+                .appearAnimation(order: 4)
                 recentTransactionsSection
-                    .appearAnimation(order: 4)
+                    .appearAnimation(order: 5)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 24)
@@ -86,6 +92,9 @@ struct DashboardView: View {
         }
         .sheet(isPresented: $isShowingAllTransactions) {
             TransactionsView(financeService: financeService)
+        }
+        .sheet(isPresented: $isShowingSavings) {
+            SavingsView(financeService: financeService)
         }
     }
 

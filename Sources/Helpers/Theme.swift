@@ -31,15 +31,33 @@ enum Theme {
         .system(size: size, weight: weight, design: .rounded)
     }
 
-    /// Светлая ли заливка: поверх светлой нужен тёмный текст
-    static func isLight(hex: String) -> Bool {
+    /// Яркость цвета от 0 (чёрный) до 1 (белый)
+    static func luminance(hex: String) -> Double {
         let cleaned = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var value: UInt64 = 0
         Scanner(string: cleaned).scanHexInt64(&value)
         let red = Double((value >> 16) & 0xFF) / 255
         let green = Double((value >> 8) & 0xFF) / 255
         let blue = Double(value & 0xFF) / 255
-        return 0.299 * red + 0.587 * green + 0.114 * blue > 0.6
+        return 0.299 * red + 0.587 * green + 0.114 * blue
+    }
+
+    /// Светлая ли заливка: поверх светлой нужен тёмный текст
+    static func isLight(hex: String) -> Bool {
+        luminance(hex: hex) > 0.6
+    }
+
+    /// Цвет для полосок и значков на тёмном фоне: слишком тёмный цвет подсвечивается, иначе он слился бы с фоном
+    static func visibleTint(hex: String) -> Color {
+        guard luminance(hex: hex) < 0.3 else { return Color(hex: hex) }
+        let cleaned = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var value: UInt64 = 0
+        Scanner(string: cleaned).scanHexInt64(&value)
+        func lifted(_ shift: UInt64) -> Double {
+            let channel = Double((value >> shift) & 0xFF)
+            return (channel + (255 - channel) * 0.6) / 255
+        }
+        return Color(.sRGB, red: lifted(16), green: lifted(8), blue: lifted(0), opacity: 1)
     }
 }
 

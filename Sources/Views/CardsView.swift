@@ -9,6 +9,7 @@ struct CardsView: View {
     @State private var selectedCardForDetails: Card? = nil
     @State private var cardBeingEdited: Card? = nil
     @State private var selectedCardForNewGoal: Card? = nil
+    @State private var isShowingSavings = false
     /// Карта в центре карусели; nil, пока пользователь не листал (тогда текущая — первая)
     @State private var centeredCardID: UUID? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -47,6 +48,9 @@ struct CardsView: View {
                             onEdit: {
                                 cardBeingEdited = card
                             },
+                            onShowAllGoals: {
+                                isShowingSavings = true
+                            },
                             onAddGoal: {
                                 selectedCardForNewGoal = card
                             }
@@ -75,7 +79,10 @@ struct CardsView: View {
             CardDetailsSheet(card: card)
         }
         .sheet(item: $selectedCardForNewGoal) { card in
-            AddGoalForCardView(card: card, financeService: financeService)
+            GoalEditorView(financeService: financeService, request: GoalEditorRequest(card: card))
+        }
+        .sheet(isPresented: $isShowingSavings) {
+            SavingsView(financeService: financeService)
         }
     }
 
@@ -230,6 +237,7 @@ struct CardWithGoalsSection: View {
     let financeService: FinanceService
     let onShowDetails: () -> Void
     let onEdit: () -> Void
+    let onShowAllGoals: () -> Void
     let onAddGoal: () -> Void
 
     private var goals: [Goal] {
@@ -240,8 +248,28 @@ struct CardWithGoalsSection: View {
         VStack(alignment: .leading, spacing: 0) {
             actionButtons
 
+            reservedLine
+
             goalsSection
                 .padding(.top, 24)
+        }
+    }
+
+    /// Сколько денег карты лежит в копилках и сколько свободно
+    @ViewBuilder
+    private var reservedLine: some View {
+        if !goals.isEmpty {
+            HStack {
+                Text(String(localized: "В копилках: \(CurrencyManager.shared.format(SavingsSummary.reserved(on: card.id, in: financeService.goals)))"))
+                Spacer(minLength: 8)
+                Text(String(localized: "Свободно: \(CurrencyManager.shared.format(financeService.freeBalance(of: card)))"))
+            }
+            .font(.system(size: 13))
+            .monospacedDigit()
+            .foregroundColor(Theme.textSecondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .padding(.top, 14)
         }
     }
 
@@ -304,51 +332,74 @@ struct CardWithGoalsSection: View {
                 }
                 .padding(.top, 4)
             }
+
+            if !financeService.goals.isEmpty {
+                Button {
+                    HapticManager.shared.impact(.light)
+                    onShowAllGoals()
+                } label: {
+                    Text(String(localized: "Все копилки"))
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(Theme.accent)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .padding(.top, 4)
+            }
         }
     }
 }
 
-/// Строка копилки, привязанной к карте: название, накоплено из цели и тонкая полоска прогресса
+/// Строка копилки под картой: название, накоплено, прогресс и статус. Нажатие открывает копилку, «Пополнить» сразу вносит сумму.
 struct CardGoalRowView: View {
     let goal: Goal
     let financeService: FinanceService
-    @State private var isShowingDepositAlert = false
-    @State private var depositAmountString = ""
-    /// Полоска прогресса наполняется при показе и после пополнения
-    @State private var isFilled = false
-
-    private var progressPercent: Double {
-        guard goal.targetAmount > 0 else { return 0.0 }
-        return min(max(goal.currentAmount / goal.targetAmount, 0.0), 1.0)
-    }
+    @State private var isShowingDetail = false
+    @State private var moneyMode: GoalMoveMode?
 
     var body: some View {
+        let plan = GoalPlan(goal: goal)
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(goal.title)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
+                Button {
+                    HapticManager.shared.impact(.light)
+                    isShowingDetail = true
+                } label: {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Image(systemName: goal.iconName)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(goal.tint)
+                            Text(goal.title)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
 
-                    Spacer(minLength: 8)
+                            Spacer(minLength: 8)
 
-                    Text("\(CurrencyManager.shared.format(goal.currentAmount)) / \(CurrencyManager.shared.format(goal.targetAmount))")
-                        .font(.system(size: 14))
-                        .monospacedDigit()
-                        .contentTransition(.numericText(value: goal.currentAmount))
-                        .foregroundColor(Theme.textSecondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                            Text(verbatim: "\(CurrencyManager.shared.format(goal.currentAmount)) / \(CurrencyManager.shared.format(goal.targetAmount))")
+                                .font(.system(size: 14))
+                                .monospacedDigit()
+                                .contentTransition(.numericText(value: goal.currentAmount))
+                                .foregroundColor(Theme.textSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+
+                        GoalProgressBar(progress: plan.progress, tint: goal.tint, height: 4)
+                    }
+                    .contentShape(Rectangle())
                 }
-
-                progressBar
+                .buttonStyle(.plain)
 
                 HStack {
+                    Text(GoalText.caption(goal: goal, plan: plan))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(GoalText.statusColor(plan.status))
+                        .lineLimit(1)
                     Spacer()
                     Button {
                         HapticManager.shared.impact(.light)
-                        isShowingDepositAlert = true
+                        moneyMode = .deposit
                     } label: {
                         Text("deposit".localized)
                             .font(.system(size: 13))
@@ -361,46 +412,12 @@ struct CardGoalRowView: View {
 
             MonoDivider()
         }
-        .contextMenu {
-            Button(role: .destructive) {
-                financeService.deleteGoal(id: goal.id)
-            } label: {
-                Label("delete_card".localized, systemImage: "trash")
-            }
+        .sheet(item: $moneyMode) { mode in
+            GoalMoneySheet(financeService: financeService, goalID: goal.id, mode: mode)
+                .presentationDetents([.medium, .large])
         }
-        .alert(goal.title, isPresented: $isShowingDepositAlert) {
-            TextField("Сумма (\(CurrencyManager.shared.currentCurrency.symbol))", text: $depositAmountString)
-                .keyboardType(.decimalPad)
-            Button("cancel".localized, role: .cancel) {
-                depositAmountString = ""
-            }
-            Button("deposit".localized) {
-                if let amount = Double(depositAmountString.replacingOccurrences(of: ",", with: ".")) {
-                    HapticManager.shared.trigger(.success)
-                    withAnimation(Motion.spring) {
-                        financeService.addFundsToGoal(id: goal.id, amount: amount)
-                    }
-                }
-                depositAmountString = ""
-            }
-        }
-    }
-
-    private var progressBar: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Theme.hairline)
-                Capsule()
-                    .fill(Theme.accent)
-                    .frame(width: geo.size.width * CGFloat(isFilled ? progressPercent : 0))
-            }
-        }
-        .frame(height: 4)
-        .onAppear {
-            withAnimation(Motion.spring.delay(0.25)) {
-                isFilled = true
-            }
+        .sheet(isPresented: $isShowingDetail) {
+            GoalDetailSheet(financeService: financeService, goalID: goal.id)
         }
     }
 }
@@ -619,80 +636,6 @@ struct CardBackView: View {
         }
         .cardFace(palette)
         .opacity(card.isFrozen ? 0.5 : 1.0)
-    }
-}
-
-/// Модальный экран создания цели для конкретной карты
-struct AddGoalForCardView: View {
-    @Environment(\.dismiss) private var dismiss
-    let card: Card
-    let financeService: FinanceService
-
-    @State private var title: String = ""
-    @State private var targetAmountString: String = ""
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Text("\(card.type) (•••• \(card.last4))")
-                        .font(.subheadline.bold())
-                        .foregroundColor(Theme.textSecondary)
-                } header: {
-                    Text("card_purpose".localized)
-                }
-
-                Section {
-                    TextField("goal".localized, text: $title)
-
-                    HStack {
-                        Text(String(localized: "Цель (\(CurrencyManager.shared.baseCurrency.symbol))"))
-                        Spacer()
-                        TextField("0", text: $targetAmountString)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                    }
-                } header: {
-                    Text("goal".localized)
-                }
-            }
-            .monoForm()
-            .navigationTitle("new_card_goal".localized)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("cancel".localized) {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("save".localized) {
-                        saveGoal()
-                    }
-                    .disabled(isSaveDisabled)
-                }
-            }
-        }
-    }
-
-    private var isSaveDisabled: Bool {
-        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-        Double(targetAmountString.replacingOccurrences(of: ",", with: ".")) ?? 0 <= 0
-    }
-
-    private func saveGoal() {
-        guard let targetAmount = Double(targetAmountString.replacingOccurrences(of: ",", with: ".")) else { return }
-        let goal = Goal(
-            cardId: card.id,
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            targetAmount: targetAmount,
-            currentAmount: 0.0,
-            colorHex: "#C6F432",
-            gradientColors: ["#C6F432", "#B2E01E"]
-        )
-        financeService.addGoal(goal)
-        HapticManager.shared.trigger(.success)
-        dismiss()
     }
 }
 
