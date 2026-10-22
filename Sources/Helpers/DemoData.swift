@@ -5,7 +5,7 @@ import Foundation
 /// Названия магазинов выдуманные и одинаковые на всех языках; категории, карты и копилки переводятся как обычно.
 @MainActor
 enum DemoData {
-    static func seed(_ service: FinanceService, now: Date = Date()) {
+    static func seed(_ service: FinanceService, now: Date = Date(), forTour: Bool = false) {
         service.resetAllData()
         func ago(_ days: Double, hours: Double = 0) -> Date {
             now.addingTimeInterval(-days * 86_400 - hours * 3_600)
@@ -122,6 +122,25 @@ enum DemoData {
                 GoalEntry(date: ago(4), amount: 40_000)
             ]
         ))
+
+        // Для ролика: копилка, которая закроется одним пополнением
+        if forTour {
+            let gift = idea("gift")
+            service.addGoal(Goal(
+                cardId: main.id, title: gift.title, targetAmount: 120_000, currentAmount: 100_000,
+                colorHex: gift.colors[0], gradientColors: gift.colors,
+                deadline: now.addingTimeInterval(30 * 86_400), symbol: gift.symbol, createdAt: ago(40),
+                entries: [
+                    GoalEntry(date: ago(30), amount: 60_000),
+                    GoalEntry(date: ago(10), amount: 40_000)
+                ]
+            ))
+        }
+    }
+
+    /// Копилка, до цели которой осталась малая часть: её пополнение в ролике доводит цель до конца
+    static func nearlyDoneGoal(in service: FinanceService) -> Goal? {
+        service.goals.first { !$0.isCompleted && $0.targetAmount > 0 && $0.currentAmount / $0.targetAmount > 0.8 }
     }
 
     /// Банковская СМС для чата: покупка по карте 4821 два часа назад

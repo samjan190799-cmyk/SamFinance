@@ -17,7 +17,7 @@ struct CardEditorView: View {
         case purpose, bank, holder, balance, number, expiry
     }
 
-    @State private var page: Page = ScreenshotMode.scene == .cardEditor ? .style : .details
+    @State private var page: Page = ScreenshotMode.scene == .cardEditor || ScreenshotMode.isTour ? .style : .details
     @State private var purpose: String
     @State private var bankName: String
     @State private var holderName: String
@@ -236,6 +236,11 @@ struct CardEditorView: View {
             .onAppear {
                 loadStoredNumber()
             }
+            #if DEBUG
+            .task {
+                await playTour()
+            }
+            #endif
             .onChange(of: numberText) { _, newValue in
                 let formatted = CardInput.formatNumber(newValue, network: network)
                 if formatted != newValue {
@@ -250,6 +255,27 @@ struct CardEditorView: View {
             }
         }
     }
+
+    #if DEBUG
+    /// Ролик App Store: цвет, узор и значок меняются сами, карта сверху отвечает на каждое изменение
+    private func playTour() async {
+        guard ScreenshotMode.isTour else { return }
+        try? await Task.sleep(for: .milliseconds(900))
+        let steps: [(String, CardPattern, String)] = [
+            ("ocean", CardPattern.waves, "airplane"),
+            ("violet", CardPattern.dots, "gift.fill"),
+            ("sunset", CardPattern.lines, "cart.fill")
+        ]
+        for step in steps {
+            withAnimation(Motion.bouncy) {
+                gradient = CardPreset.all.first { $0.id == step.0 }?.colors ?? gradient
+                pattern = step.1
+                symbol = step.2
+            }
+            try? await Task.sleep(for: .milliseconds(1100))
+        }
+    }
+    #endif
 
     private func pageTitle(_ page: Page) -> String {
         page == .details ? String(localized: "Данные") : String(localized: "Оформление")

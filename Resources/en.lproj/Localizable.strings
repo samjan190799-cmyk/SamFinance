@@ -106,6 +106,7 @@
 "Вернуть" = "Undo";
 "Вернуть в активные" = "Mark as active again";
 "Версия" = "Version";
+"Весь учёт в одном месте" = "All your money in one place";
 "Включить подсказки покупок" = "Turn on purchase prompts";
 "Владелец карты" = "Card holder";
 "Внимание к расходам" = "Watch your spending";
@@ -219,6 +220,7 @@
 "Конвертер валют" = "Currency converter";
 "Копилка" = "Goal";
 "Копилки" = "Goals";
+"Копилки с планом накопления" = "Goals with a savings plan";
 "Копилок пока нет" = "No goals yet";
 "Копилок пока нет. Создайте первую в разделе «Обзор» → «Копилки»." = "No goals yet. Create the first one in Overview → Goals.";
 "Копите на цели" = "Save for your goals";
@@ -323,6 +325,7 @@
 "Отпуск" = "Vacation";
 "Отстаёт от плана" = "Behind plan";
 "Отчёт" = "Report";
+"Отчёты по дням и категориям" = "Reports by day and category";
 "Оформление" = "Style";
 "Парсит текст банковской СМС, записывает операцию в Hashiv и обновляет баланс карты." = "Reads the text of a bank SMS, records the transaction in Hashiv and updates the card balance.";
 "Первый цвет" = "First color";
@@ -396,8 +399,10 @@
 "Российский рубль (₽)" = "Russian ruble (₽)";
 "С указанным сроком приложение подскажет, сколько откладывать в неделю или месяц." = "With a deadline, the app suggests how much to set aside each week or month.";
 "С чего начать" = "Where to start";
+"СМС и скриншоты сами становятся операциями" = "SMS and screenshots become transactions";
 "Сверх цели: %@" = "Over target: %@";
 "Свободно: %@" = "Free: %@";
+"Свои карты: листайте и настраивайте" = "Your cards: swipe and customize";
 "Сегодня" = "Today";
 "Сервис %@ сейчас перегружен. Повторите чуть позже." = "The %@ service is overloaded right now. Please try again a little later.";
 "Серебро" = "Silver";
@@ -469,6 +474,7 @@
 "Фоновые команды СМС (Siri Shortcuts)" = "Background SMS actions (Siri Shortcuts)";
 "Фриланс" = "Freelance";
 "Хобби" = "Hobby";
+"Цвет, узор и значок: оформите карту по-своему" = "Color, pattern and icon: make the card yours";
 "Цель (%@)" = "Target (%@)";
 "Цель достигнута!" = "Goal reached!";
 "Чаще всего: %@ (%lld)." = "Most often: %@ (%lld).";

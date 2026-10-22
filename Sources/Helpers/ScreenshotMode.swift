@@ -11,20 +11,32 @@ enum ScreenshotScene: String, CaseIterable, Identifiable {
     case debts
     case report
     case settings
+    /// Пополнение почти собранной копилки: только для ролика
+    case goalMoney
 
     var id: String { rawValue }
 }
 
-/// Режим снимков для App Store. Только в отладочной сборке на симуляторе: запуск с аргументами
-/// `-ScreenshotScene <имя>` и, для чата, `-ScreenshotQuestion <вопрос>` подставляет демонстрационные данные и открывает нужный экран.
-/// В выпускной сборке (TestFlight, App Store) и на настоящем телефоне этого кода нет, `scene` всегда пуст.
+/// Режим снимков и ролика для App Store. Только в отладочной сборке на симуляторе: запуск с аргументами
+/// `-ScreenshotScene <имя>` и, для чата, `-ScreenshotQuestion <вопрос>` подставляет демонстрационные данные и открывает нужный экран;
+/// `-ScreenshotTour` проигрывает сценарий ролика (App Preview).
+/// В выпускной сборке (TestFlight, App Store) и на настоящем телефоне этого кода нет, `scene` пуст, а `isTour` ложно.
 enum ScreenshotMode {
     static let scene: ScreenshotScene? = {
         #if DEBUG
-        guard ProcessInfo.processInfo.environment["SIMULATOR_DEVICE_NAME"] != nil else { return nil }
+        guard isSimulator else { return nil }
         return argument(after: "-ScreenshotScene").flatMap { ScreenshotScene(rawValue: $0) }
         #else
         return nil
+        #endif
+    }()
+
+    /// Идёт ролик: экраны сами листаются и меняются по сценарию
+    static let isTour: Bool = {
+        #if DEBUG
+        return isSimulator && ProcessInfo.processInfo.arguments.contains("-ScreenshotTour")
+        #else
+        return false
         #endif
     }()
 
@@ -38,6 +50,10 @@ enum ScreenshotMode {
     }()
 
     #if DEBUG
+    private static var isSimulator: Bool {
+        ProcessInfo.processInfo.environment["SIMULATOR_DEVICE_NAME"] != nil
+    }
+
     private static func argument(after name: String) -> String? {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: name), arguments.indices.contains(index + 1) else { return nil }
@@ -63,16 +79,26 @@ private struct ScreenshotSceneModifier: ViewModifier {
     @Binding var selectedTab: AppTab
     let financeService: FinanceService
     @State private var cover: ScreenshotScene?
+    /// Подпись поверх ролика
+    @State private var caption: String?
 
     func body(content: Content) -> some View {
         content
+            .tourCaption(caption)
             .task {
-                await prepare()
+                if ScreenshotMode.isTour {
+                    await playTour()
+                } else {
+                    await prepare()
+                }
             }
             .fullScreenCover(item: $cover) { scene in
                 coverContent(scene)
+                    .tourCaption(caption)
             }
     }
+
+    // MARK: - Снимки
 
     /// Подставляет данные, выбирает вкладку и, если нужно, открывает экран поверх неё
     private func prepare() async {
@@ -80,7 +106,7 @@ private struct ScreenshotSceneModifier: ViewModifier {
         DemoData.seed(financeService)
 
         switch scene {
-        case .overview, .savings, .goal, .settings:
+        case .overview, .savings, .goal, .settings, .goalMoney:
             selectedTab = .overview
         case .cards, .cardEditor:
             selectedTab = .cards
@@ -117,9 +143,122 @@ private struct ScreenshotSceneModifier: ViewModifier {
             )
         case .settings:
             SettingsView(financeService: financeService)
+        case .goalMoney:
+            GoalMoneySheet(
+                financeService: financeService,
+                goalID: DemoData.nearlyDoneGoal(in: financeService)?.id ?? UUID(),
+                mode: .deposit
+            )
         default:
             EmptyView()
         }
+    }
+
+    // MARK: - Ролик
+
+    private func show(_ text: String) {
+        withAnimation(Motion.spring) {
+            caption = text
+        }
+    }
+
+    private func pause(_ seconds: Double) async {
+        try? await Task.sleep(for: .seconds(seconds))
+    }
+
+    /// Сценарий около 27 секунд: обзор, листание карт, оформление карты, копилки, достижение цели, чат, отчёт.
+    /// Экраны внутри (карусель, редактор, пополнение) играют свои части сами, когда `ScreenshotMode.isTour` истинно.
+    private func playTour() async {
+        DemoData.seed(financeService, forTour: true)
+        selectedTab = .overview
+
+        // Запись успевает начаться до первого кадра сценария
+        await pause(5)
+        show(String(localized: "Весь учёт в одном месте"))
+        await pause(3.0)
+
+        withAnimation(Motion.spring) {
+            selectedTab = .cards
+        }
+        show(String(localized: "Свои карты: листайте и настраивайте"))
+        await pause(4.6)
+
+        cover = .cardEditor
+        show(String(localized: "Цвет, узор и значок: оформите карту по-своему"))
+        await pause(4.6)
+
+        cover = nil
+        await pause(0.6)
+        withAnimation(Motion.spring) {
+            selectedTab = .overview
+        }
+        cover = .savings
+        show(String(localized: "Копилки с планом накопления"))
+        await pause(2.6)
+
+        cover = nil
+        await pause(0.7)
+        cover = .goalMoney
+        show(String(localized: "Цель достигнута!"))
+        await pause(4.2)
+
+        cover = nil
+        await pause(0.6)
+        let store = AIChatStore.shared
+        store.reset()
+        store.clearMessages()
+        withAnimation(Motion.spring) {
+            selectedTab = .assistant
+        }
+        show(String(localized: "СМС и скриншоты сами становятся операциями"))
+        await pause(0.8)
+        store.send(text: DemoData.sampleSMS())
+        await pause(1.8)
+        if let question = ScreenshotMode.question {
+            store.send(text: question)
+        }
+        await pause(1.6)
+
+        withAnimation(Motion.spring) {
+            selectedTab = .report
+        }
+        show(String(localized: "Отчёты по дням и категориям"))
+        await pause(2.8)
+
+        withAnimation(Motion.spring) {
+            caption = nil
+        }
+    }
+}
+
+/// Подпись поверх ролика: лаймовая плашка над нижней панелью
+private struct TourCaption: ViewModifier {
+    let text: String?
+
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .bottom) {
+            if let text {
+                Text(text)
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .foregroundColor(Theme.onAccent)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(Theme.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: 22))
+                    .padding(.horizontal, 28)
+                    .padding(.bottom, 112)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .id(text)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+}
+
+private extension View {
+    func tourCaption(_ text: String?) -> some View {
+        modifier(TourCaption(text: text))
     }
 }
 #endif

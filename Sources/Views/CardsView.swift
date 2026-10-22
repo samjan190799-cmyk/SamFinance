@@ -69,6 +69,11 @@ struct CardsView: View {
         }
         .scrollIndicators(.hidden)
         .monoScreen()
+        #if DEBUG
+        .task {
+            await playTour()
+        }
+        #endif
         .sheet(isPresented: $isShowingAddCardSheet) {
             CardEditorView(financeService: financeService)
         }
@@ -85,6 +90,20 @@ struct CardsView: View {
             SavingsView(financeService: financeService)
         }
     }
+
+    #if DEBUG
+    /// Ролик App Store: карусель сама листает карты вперёд и возвращается к первой
+    private func playTour() async {
+        guard ScreenshotMode.isTour else { return }
+        for index in [1, 2, 0] {
+            try? await Task.sleep(for: .milliseconds(1200))
+            guard financeService.cards.indices.contains(index) else { continue }
+            withAnimation(.easeInOut(duration: 0.8)) {
+                centeredCardID = financeService.cards[index].id
+            }
+        }
+    }
+    #endif
 
     // MARK: - Карусель
     /// Соседние карты выглядывают по краям, уменьшены и повёрнуты к центру; листание с доводкой до карты

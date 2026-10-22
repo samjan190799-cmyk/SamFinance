@@ -111,6 +111,10 @@ final class AIChatStore {
 
     #if DEBUG
     /// Для снимков App Store: переписка начинается с первого сообщения, приветствие не обрезается под шапкой
+    func clearMessages() {
+        messages = []
+    }
+
     func dropGreeting() {
         if messages.count > 1, messages.first?.role == .assistant {
             messages.removeFirst()
