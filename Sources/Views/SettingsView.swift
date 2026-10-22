@@ -163,6 +163,23 @@ struct SettingsView: View {
                     Text("В Быстрых командах: Автоматизация → Транзакция → выберите карты → «Выполнять сразу» → действие «Записать покупку Apple Pay», подставьте Магазин и Сумму из транзакции. После оплаты придёт уведомление: расход или доход, затем категория.")
                 }
 
+                // О приложении: политика конфиденциальности и версия
+                Section {
+                    NavigationLink {
+                        PrivacyPolicyView()
+                    } label: {
+                        Label(String(localized: "Политика конфиденциальности"), systemImage: "hand.raised.fill")
+                    }
+                    HStack {
+                        Label(String(localized: "Версия"), systemImage: "info.circle")
+                        Spacer()
+                        Text(appVersion)
+                            .foregroundColor(.secondary)
+                    }
+                } header: {
+                    Text(String(localized: "О приложении"))
+                }
+
                 // Опасная зона
                 Section {
                     Button(role: .destructive) {
@@ -202,6 +219,14 @@ struct SettingsView: View {
         }
     }
     
+    /// Версия и номер сборки для обращения в поддержку
+    private var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = info?["CFBundleVersion"] as? String ?? "1"
+        return "\(version) (\(build))"
+    }
+
     // MARK: - Облачный ИИ
     private var aiKeySection: some View {
         Section {

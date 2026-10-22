@@ -104,6 +104,7 @@
 "Введите сумму, которую хотите внести в эту копилку." = "Enter the amount you want to add to this goal.";
 "Вернуть" = "Undo";
 "Вернуть в активные" = "Mark as active again";
+"Версия" = "Version";
 "Включить подсказки покупок" = "Turn on purchase prompts";
 "Владелец карты" = "Card holder";
 "Внимание к расходам" = "Watch your spending";
@@ -272,6 +273,7 @@
 "Не получилось разобрать ответ %@. Повторите запрос." = "Could not read the reply from %@. Please try again.";
 "Не получилось сохранить ключ в Keychain. Разблокируйте телефон и попробуйте ещё раз." = "Could not save the key to the Keychain. Unlock your phone and try again.";
 "Не считать переводы между своими картами" = "Do not count transfers between my own cards";
+"Не удалось открыть текст политики." = "Could not open the policy text.";
 "Не удалось понять сумму покупки." = "Could not understand the purchase amount.";
 "Не удалось распознать формат СМС." = "Could not recognize the SMS format.";
 "Не удалось сохранить" = "Could not save";
@@ -287,6 +289,7 @@
 "Номер не проходит проверку: возможно, в нём опечатка" = "The number fails the check: it may contain a typo";
 "Номер не сохранён на этом устройстве. Введите его снова, если хотите сохранить." = "The number is not stored on this device. Enter it again to save it.";
 "Нужен ключ API с platform.openai.com: подписка ChatGPT для него не подходит." = "You need an API key from platform.openai.com: a ChatGPT subscription does not work for it.";
+"О приложении" = "About";
 "Обзор" = "Overview";
 "Обновить" = "Refresh";
 "Океан" = "Ocean";
@@ -343,6 +346,7 @@
 "Покупка" = "Purchase";
 "Покупки" = "Shopping";
 "Поле «Модель» можно оставить пустым: тогда используется %@." = "You can leave the “Model” field empty: then %@ is used.";
+"Политика конфиденциальности" = "Privacy policy";
 "Полный номер хранится только в защищённом хранилище этого устройства. Код CVV приложение не сохраняет." = "The full number is kept only in this device's secure storage. The app never stores the CVV.";
 "Получено" = "Received";
 "Поменять цвета местами" = "Swap colors";
@@ -434,6 +438,7 @@
 "Сумма" = "Amount";
 "Сумма (%@)" = "Amount (%@)";
 "Текст СМС" = "SMS text";
+"Текст политики доступен на русском и английском языках." = "The policy text is available in Russian and English.";
 "Текст распознал, но банковских СМС в нём нет. Подойдут СМС с суммой и маской карты, например «GNUM 3,500.00 AMD 4318***0640». Чтобы разбирать чеки и выписки, добавьте ключ Claude, ChatGPT или Gemini: Настройки → ИИ-помощник." = "I read the text, but there is no bank SMS in it. An SMS with an amount and a masked card number works, for example “GNUM 3,500.00 AMD 4318***0640”. To read receipts and statements, add a Claude, ChatGPT or Gemini key: Settings → AI assistant.";
 "Техника" = "Gadgets";
 "Точки" = "Dots";
