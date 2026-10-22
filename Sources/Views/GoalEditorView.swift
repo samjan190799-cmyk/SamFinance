@@ -176,7 +176,7 @@ struct GoalEditorView: View {
             }
             .monoForm()
             .scrollDismissesKeyboard(.interactively)
-            .navigationTitle(isEditing ? String(localized: "Редактирование копилки") : String(localized: "Новая копилка"))
+            .navigationTitle(isEditing ? String(localized: "Правка копилки") : String(localized: "Новая копилка"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

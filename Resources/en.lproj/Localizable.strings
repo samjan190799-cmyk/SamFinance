@@ -362,6 +362,8 @@
 "Пополняйте копилку регулярно, и здесь появится прогноз" = "Keep adding to the goal and a forecast will appear here";
 "Последние операции" = "Recent transactions";
 "Потрачено" = "Spent";
+"Правка карты" = "Edit card";
+"Правка копилки" = "Edit goal";
 "При текущем темпе цель будет достигнута к %@" = "At the current pace you will reach the goal by %@";
 "Привет! Пришлите скриншоты банковских СМС или вставьте их текст — я найду операции, привяжу к картам и разложу по категориям. Ещё можно спросить, например: «сколько я потратил на продукты за неделю?»" = "Hi! Send screenshots of bank SMS or paste their text, and I will find the transactions, link them to your cards and sort them into categories. You can also ask, for example: “how much did I spend on groceries this week?”";
 "Привязанные карты (%lld)" = "Linked cards (%lld)";
@@ -391,8 +393,6 @@
 "Расход: на что потрачено?" = "Expense: what was it for?";
 "Расходы за период" = "Spending for the period";
 "Расходы составляют %lld%% от доходов. Рекомендуем отложить часть денег в копилки." = "Expenses are %lld%% of income. We recommend setting some money aside into goals.";
-"Редактирование карты" = "Edit card";
-"Редактирование копилки" = "Edit goal";
 "Результат конвертации" = "Conversion result";
 "Рестораны" = "Restaurants";
 "Роза" = "Rose";

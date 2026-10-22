@@ -201,7 +201,7 @@ struct CardEditorView: View {
                 .scrollDismissesKeyboard(.interactively)
             }
             .monoScreen()
-            .navigationTitle(isEditing ? String(localized: "Редактирование карты") : "new_card".localized)
+            .navigationTitle(isEditing ? String(localized: "Правка карты") : "new_card".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

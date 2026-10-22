@@ -168,6 +168,8 @@ struct DashboardView: View {
                 Text("за 30 дней")
                     .font(.system(size: 12))
                     .opacity(0.7)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
             .padding(.top, 12)
         }
@@ -185,6 +187,8 @@ struct DashboardView: View {
             .contentTransition(.numericText())
             .animation(Motion.digits, value: text)
             .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .layoutPriority(1)
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .background(Theme.onAccent.opacity(0.12))
