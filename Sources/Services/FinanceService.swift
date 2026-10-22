@@ -93,6 +93,7 @@ public final class FinanceService {
     public func resetAllData() {
         // Пользователь явно просит стереть всё — защита от перезаписи больше не нужна
         unreadableStores.removeAll()
+        CardSecretsStore.deleteAll()
         transactions.removeAll()
         cards.removeAll()
         debts.removeAll()
@@ -113,16 +114,27 @@ public final class FinanceService {
         }
     }
 
-    public func addCard(_ card: Card) {
+    /// Добавляет карту. Полный номер уходит в Keychain, в файле карт остаются только последние 4 цифры.
+    public func addCard(_ card: Card, number: String) {
         guard prepareForWrite(.cards) else { return }
+        let digits = number.filter { $0.isNumber }
+        if !digits.isEmpty && !CardSecretsStore.setNumber(digits, for: card.id) {
+            print("⚠️ Не удалось сохранить номер карты в Keychain")
+        }
         cards.append(card)
         saveCards()
+    }
+
+    /// Полный номер карты из Keychain (nil, если его нет или устройство заблокировано)
+    public func cardNumber(for id: UUID) -> String? {
+        CardSecretsStore.number(for: id)
     }
 
     public func deleteCard(id: UUID) {
         guard prepareForWrite(.cards) else { return }
         cards.removeAll { $0.id == id }
         saveCards()
+        CardSecretsStore.deleteNumber(for: id)
     }
 
     // MARK: - API для долгов (Debts)
@@ -232,9 +244,44 @@ public final class FinanceService {
     }
 
     private func loadCards() {
+        let numbersMigrated = migrateLegacyCardNumbers()
         if let loaded = readStore([Card].self, store: .cards, url: cardsURL) {
             cards = loaded
+            // Старые поля number и cvv убираем из файла, только когда все номера уже лежат в Keychain
+            if numbersMigrated {
+                saveCards()
+            }
         }
+    }
+
+    /// Старый формат cards.json хранил полный номер карты и CVV открытым текстом.
+    private struct LegacyCardNumber: Decodable {
+        let id: UUID
+        let number: String?
+    }
+
+    /// Переносит номера карт из старого cards.json в Keychain.
+    /// Возвращает true, если в файле были старые поля и все номера теперь в Keychain, то есть файл можно пересохранить без них.
+    private func migrateLegacyCardNumbers() -> Bool {
+        guard let data = try? Data(contentsOf: cardsURL),
+              let legacy = try? JSONDecoder().decode([LegacyCardNumber].self, from: data) else {
+            return false
+        }
+        let withNumbers = legacy.filter { !($0.number ?? "").isEmpty }
+        guard !withNumbers.isEmpty else { return false }
+
+        var allStored = true
+        for item in withNumbers {
+            let digits = (item.number ?? "").filter { $0.isNumber }
+            if digits.isEmpty { continue }
+            if !CardSecretsStore.setNumber(digits, for: item.id) {
+                allStored = false
+            }
+        }
+        if !allStored {
+            print("⚠️ Не удалось перенести номера карт в Keychain, старый файл пока не меняется")
+        }
+        return allStored
     }
 
     private func loadDebts() {
