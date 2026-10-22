@@ -42,9 +42,8 @@ struct DashboardView: View {
     @State private var isShowingSettingsSheet = false
     @State private var isShowingAllTransactions = false
 
-    // Распознавание СМС из буфера обмена
+    // Распознавание СМС из буфера обмена: только по кнопке в шапке, иначе iOS каждый раз спрашивала бы разрешение на вставку
     @State private var detectedBatchTransactions: [ParsedSMSTransaction] = []
-    @State private var lastCheckedClipboardString = ""
     @State private var clipboardMessage: String? = nil
 
     var body: some View {
@@ -69,9 +68,6 @@ struct DashboardView: View {
         }
         .scrollIndicators(.hidden)
         .monoScreen()
-        .onAppear {
-            checkClipboardForSMS()
-        }
         .sheet(item: $addSheetType) { type in
             AddTransactionView(financeService: financeService, initialType: type)
         }
@@ -317,12 +313,16 @@ struct DashboardView: View {
 
     // MARK: - Буфер обмена
 
-    /// Явная проверка буфера по кнопке в шапке
+    /// Проверка буфера по нажатию кнопки в шапке: к буферу приложение обращается только здесь
     private func scanClipboard() {
-        lastCheckedClipboardString = ""
-        checkClipboardForSMS()
-        if detectedBatchTransactions.isEmpty {
+        let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let batch = text.isEmpty ? [] : SMSParser.parseBatch(text: text)
+        guard !batch.isEmpty else {
             showClipboardMessage("В буфере нет банковских СМС")
+            return
+        }
+        withAnimation(Motion.spring) {
+            detectedBatchTransactions = batch
         }
     }
 
@@ -334,21 +334,6 @@ struct DashboardView: View {
             try? await Task.sleep(for: .seconds(4))
             withAnimation(Motion.spring) {
                 clipboardMessage = nil
-            }
-        }
-    }
-
-    private func checkClipboardForSMS() {
-        guard let clipboardString = UIPasteboard.general.string,
-              !clipboardString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              clipboardString != lastCheckedClipboardString else { return }
-
-        lastCheckedClipboardString = clipboardString
-
-        let batch = SMSParser.parseBatch(text: clipboardString)
-        if !batch.isEmpty {
-            withAnimation(Motion.spring) {
-                detectedBatchTransactions = batch
             }
         }
     }

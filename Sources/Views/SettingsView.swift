@@ -32,13 +32,8 @@ struct SettingsView: View {
                             .foregroundColor(.white)
                             .symbolRenderingMode(.hierarchical)
                         
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("user_name".localized)
-                                .font(.headline)
-                            Text("tariff".localized)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
+                        Text("user_name".localized)
+                            .font(.headline)
                     }
                     .padding(.vertical, 4)
                 } header: {
@@ -222,6 +217,7 @@ struct SettingsView: View {
                 Button(role: .destructive) {
                     HapticManager.shared.trigger(.warning)
                     AIKeyStore.deleteKey(for: provider)
+                    provider.setConsent(false)
                     hasAPIKey = false
                 } label: {
                     Label("Удалить ключ", systemImage: "trash")
@@ -275,6 +271,7 @@ struct SettingsView: View {
         if provider == .openAI {
             text += " Нужен ключ API с platform.openai.com: подписка ChatGPT для него не подходит."
         }
+        text += " Перед первой отправкой приложение спросит разрешение; оно сбрасывается, когда вы удаляете ключ."
         text += " Банковские СМС по-прежнему распознаются на телефоне и в облако не уходят. Без ключа всё считается только на телефоне."
         text += " Поле «Модель» можно оставить пустым: тогда используется \(provider.defaultModel)."
         return text

@@ -584,11 +584,11 @@ struct AddCardView: View {
     @Environment(\.dismiss) private var dismiss
     let financeService: FinanceService
 
-    @State private var cardPurpose: String = "card_for_gifts".localized
-    @State private var holderName: String = "SAMVEL USER"
-    @State private var balanceString: String = "1000"
-    @State private var cardNumberRaw: String = "5244872190127642"
-    @State private var expiryDate: String = "08/29"
+    @State private var cardPurpose: String = ""
+    @State private var holderName: String = ""
+    @State private var balanceString: String = ""
+    @State private var cardNumberRaw: String = ""
+    @State private var expiryDate: String = ""
     @State private var selectedThemeIndex = 0
 
     var defaultPurposes: [String] {
@@ -608,7 +608,7 @@ struct AddCardView: View {
         (colorHex: "#F4F4F5", gradient: ["#F4F4F5", "#DCDCE0"])
     ]
 
-    /// Маска формата карточного номера: 5244 8721 9012 7642
+    /// Маска формата карточного номера: 0000 0000 0000 0000
     private var formattedCardNumber: String {
         let clean = cardNumberRaw.filter { $0.isNumber }
         var result = ""
@@ -621,19 +621,41 @@ struct AddCardView: View {
         return result
     }
 
-    /// Как будет выглядеть карта: обновляется на лету при вводе и смене темы
+    private var parsedBalance: Double? {
+        Double(balanceString.replacingOccurrences(of: ",", with: "."))
+    }
+
+    /// Срок действия в виде ММ/ГГ; принимает «0829» и «08/29», иначе nil
+    private var normalizedExpiry: String? {
+        let digits = expiryDate.filter { $0.isNumber }
+        guard digits.count == 4, let month = Int(digits.prefix(2)), (1...12).contains(month) else { return nil }
+        return "\(digits.prefix(2))/\(digits.suffix(2))"
+    }
+
+    /// Все поля заполнены: ничего не подставляется за пользователя
+    private var isFormValid: Bool {
+        !cardPurpose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !holderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && parsedBalance != nil
+            && cardNumberRaw.filter { $0.isNumber }.count >= 13
+            && normalizedExpiry != nil
+    }
+
+    /// Как будет выглядеть карта: обновляется на лету при вводе и смене темы; пустые поля показаны заглушками
     private var previewCard: Card {
         let theme = themes[selectedThemeIndex]
-        let number = formattedCardNumber.isEmpty ? "5244 8721 9012 7642" : formattedCardNumber
+        let digits = cardNumberRaw.filter { $0.isNumber }
+        let trimmedHolder = holderName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedPurpose = cardPurpose.trimmingCharacters(in: .whitespacesAndNewlines)
         return Card(
-            last4: Card.lastFourDigits(of: number),
-            holderName: holderName.isEmpty ? "SAMVEL USER" : holderName,
-            balance: Double(balanceString.replacingOccurrences(of: ",", with: ".")) ?? 0,
-            type: cardPurpose,
+            last4: digits.count >= 4 ? Card.lastFourDigits(of: digits) : "0000",
+            holderName: trimmedHolder.isEmpty ? "card_holder".localized : trimmedHolder,
+            balance: parsedBalance ?? 0,
+            type: trimmedPurpose.isEmpty ? "new_card".localized : trimmedPurpose,
             colorHex: theme.colorHex,
             gradientColors: theme.gradient,
             isFrozen: false,
-            expiryDate: expiryDate.isEmpty ? "08/29" : expiryDate
+            expiryDate: normalizedExpiry ?? "ММ/ГГ"
         )
     }
 
@@ -676,7 +698,7 @@ struct AddCardView: View {
                     HStack {
                         Text("full_card_number".localized)
                         Spacer()
-                        TextField("5244 8721 9012 7642", text: $cardNumberRaw)
+                        TextField("0000 0000 0000 0000", text: $cardNumberRaw)
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.trailing)
                     }
@@ -684,7 +706,7 @@ struct AddCardView: View {
                     HStack {
                         Text("expiry_date".localized)
                         Spacer()
-                        TextField("08/29", text: $expiryDate)
+                        TextField("ММ/ГГ", text: $expiryDate)
                             .keyboardType(.numbersAndPunctuation)
                             .multilineTextAlignment(.trailing)
                     }
@@ -716,7 +738,7 @@ struct AddCardView: View {
                     Button("save".localized) {
                         saveCard()
                     }
-                    .disabled(cardPurpose.isEmpty || balanceString.isEmpty || cardNumberRaw.isEmpty)
+                    .disabled(!isFormValid)
                 }
             }
         }
@@ -759,18 +781,18 @@ struct AddCardView: View {
     }
 
     private func saveCard() {
-        guard let balance = Double(balanceString.replacingOccurrences(of: ",", with: ".")) else { return }
+        guard isFormValid, let balance = parsedBalance, let expiry = normalizedExpiry else { return }
         let theme = themes[selectedThemeIndex]
-        let number = formattedCardNumber.isEmpty ? "5244 8721 9012 7642" : formattedCardNumber
+        let number = formattedCardNumber
         let card = Card(
             last4: Card.lastFourDigits(of: number),
-            holderName: holderName.isEmpty ? "SAMVEL USER" : holderName,
+            holderName: holderName.trimmingCharacters(in: .whitespacesAndNewlines),
             balance: balance,
-            type: cardPurpose,
+            type: cardPurpose.trimmingCharacters(in: .whitespacesAndNewlines),
             colorHex: theme.colorHex,
             gradientColors: theme.gradient,
             isFrozen: false,
-            expiryDate: expiryDate.isEmpty ? "08/29" : expiryDate
+            expiryDate: expiry
         )
         financeService.addCard(card, number: number)
         HapticManager.shared.trigger(.success)
