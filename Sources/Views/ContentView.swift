@@ -2,7 +2,7 @@ import Combine
 import SwiftUI
 
 /// Разделы нижней панели
-enum AppTab: Int, CaseIterable, Identifiable {
+enum AppTab: Int, CaseIterable, Identifiable, Hashable {
     case overview
     case cards
     case assistant
@@ -47,9 +47,14 @@ struct ContentView: View {
     @State private var selectedTab: AppTab = .overview
     /// Пока открыта клавиатура, панель прячется, чтобы поле ввода чата стояло прямо над клавиатурой
     @State private var isKeyboardVisible = false
+    /// Сколько раз выбирали каждую вкладку: по изменению подпрыгивает только её иконка
+    @State private var tabBounces: [AppTab: Int] = [:]
+    @Namespace private var tabNamespace
 
     var body: some View {
         tabContent
+            .id(selectedTab)
+            .transition(.opacity.combined(with: .scale(scale: 0.985)))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .monoScreen()
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -91,7 +96,10 @@ struct ContentView: View {
     private func switchTo(_ tab: AppTab) {
         guard selectedTab != tab else { return }
         HapticManager.shared.selection()
-        selectedTab = tab
+        tabBounces[tab, default: 0] += 1
+        withAnimation(Motion.spring) {
+            selectedTab = tab
+        }
     }
 
     // MARK: - Нижняя панель
@@ -118,12 +126,23 @@ struct ContentView: View {
             VStack(spacing: 4) {
                 Image(systemName: isSelected ? tab.selectedIcon : tab.icon)
                     .font(.system(size: 20, weight: isSelected ? .semibold : .regular))
+                    .symbolEffect(.bounce, value: tabBounces[tab, default: 0])
                 Text(tab.title)
                     .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
             }
             .foregroundColor(isSelected ? Theme.accent : Theme.textSecondary)
             .frame(maxWidth: .infinity, minHeight: 50)
+            .background {
+                // Подложка перетекает от прежней вкладки к новой
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Theme.accent.opacity(0.12))
+                        .matchedGeometryEffect(id: "selectedTab", in: tabNamespace)
+                }
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(PressableButtonStyle(scale: 0.9))
         .accessibilityLabel(tab.title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }

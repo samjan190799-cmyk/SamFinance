@@ -18,6 +18,11 @@ struct AddTransactionView: View {
     @State private var recognitionMessage: String? = nil
     @State private var recognitionSucceeded = false
 
+    // Движение: сумма вздрагивает на лишней цифре, после сохранения показывается галочка
+    @State private var amountShake: CGFloat = 0
+    @State private var isSaved = false
+    @Namespace private var chipNamespace
+
     private static let keypadKeys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ",", "0", "⌫"]
 
     init(financeService: FinanceService, initialType: TransactionType = .expense) {
@@ -43,6 +48,12 @@ struct AddTransactionView: View {
             .scrollIndicators(.hidden)
 
             bottomPanel
+        }
+        .overlay {
+            if isSaved {
+                savedBadge
+                    .transition(.scale(scale: 0.4).combined(with: .opacity))
+            }
         }
         .monoScreen()
         .sheet(isPresented: $isShowingBatchImport) {
@@ -99,9 +110,26 @@ struct AddTransactionView: View {
                     .foregroundColor(amountString.isEmpty ? Theme.textTertiary : .white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
+                    // Каждая новая цифра въезжает, стёртая уезжает
+                    .contentTransition(.numericText())
+                    .animation(Motion.digits, value: displayAmount)
             }
+            .offset(x: amountShake)
         }
         .padding(.top, 24)
+    }
+
+    /// Сумма вздрагивает, когда цифру добавить нельзя
+    private func shakeAmount() {
+        HapticManager.shared.trigger(.error)
+        Task {
+            for offset: CGFloat in [12, -10, 7, -4, 0] {
+                withAnimation(.spring(response: 0.09, dampingFraction: 0.4)) {
+                    amountShake = offset
+                }
+                try? await Task.sleep(for: .milliseconds(60))
+            }
+        }
     }
 
     /// Введённая сумма с пробелами между разрядами
@@ -130,35 +158,55 @@ struct AddTransactionView: View {
     }
 
     // MARK: - Категории
+    /// Лента категорий: лаймовая подложка перетекает к выбранной, лента сама докручивает её до середины
     private var categoryChips: some View {
         let categories = financeService.categories.filter { $0.type == transactionType }
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(categories) { category in
-                    categoryChip(category)
+        return ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(categories) { category in
+                        categoryChip(category)
+                            .id(category.id)
+                            .transition(.scale(scale: 0.8).combined(with: .opacity))
+                    }
+                }
+                .padding(.horizontal, 24)
+            }
+            .onChange(of: selectedCategory.id) { _, id in
+                withAnimation(Motion.spring) {
+                    proxy.scrollTo(id, anchor: .center)
                 }
             }
-            .padding(.horizontal, 24)
         }
         .padding(.horizontal, -24)
         .padding(.top, 20)
+        .animation(Motion.spring, value: transactionType)
     }
 
     private func categoryChip(_ category: Category) -> some View {
         let isSelected = selectedCategory.id == category.id
         return Button {
             HapticManager.shared.selection()
-            selectedCategory = category
+            withAnimation(Motion.spring) {
+                selectedCategory = category
+            }
         } label: {
             Text(category.name)
                 .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
                 .foregroundColor(isSelected ? Theme.onAccent : .white)
                 .padding(.horizontal, 18)
                 .frame(height: 44)
-                .background(isSelected ? Theme.accent : Color.clear)
-                .clipShape(Capsule())
+                .background {
+                    if isSelected {
+                        Capsule()
+                            .fill(Theme.accent)
+                            .matchedGeometryEffect(id: "selectedChip", in: chipNamespace)
+                    }
+                }
                 .overlay(Capsule().stroke(Theme.line, lineWidth: isSelected ? 0 : 1))
+                .contentShape(Capsule())
         }
+        .buttonStyle(PressableButtonStyle(scale: 0.94))
     }
 
     // MARK: - Строки с деталями
@@ -204,6 +252,7 @@ struct AddTransactionView: View {
                     .font(.system(size: 13))
                     .foregroundColor(recognitionSucceeded ? Theme.accent : Theme.textSecondary)
                     .padding(.vertical, 8)
+                    .transition(.opacity.combined(with: .offset(y: -6)))
             }
 
             row {
@@ -283,8 +332,26 @@ struct AddTransactionView: View {
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity, minHeight: 52)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(KeypadButtonStyle())
         .accessibilityLabel(key == "⌫" ? "Стереть" : key)
+    }
+
+    /// Галочка поверх экрана после сохранения
+    private var savedBadge: some View {
+        ZStack {
+            Theme.background.opacity(0.6)
+                .ignoresSafeArea()
+            Image(systemName: "checkmark")
+                .font(.system(size: 40, weight: .bold))
+                .foregroundColor(Theme.onAccent)
+                .frame(width: 104, height: 104)
+                .background(Theme.accent)
+                .clipShape(Circle())
+                .symbolEffect(.bounce, value: isSaved)
+        }
+        .accessibilityLabel("Сохранено")
     }
 
     /// Ввод с клавиатуры: до 9 цифр в целой части и до 2 после запятой
@@ -292,18 +359,26 @@ struct AddTransactionView: View {
         HapticManager.shared.selection()
         switch key {
         case "⌫":
-            if !amountString.isEmpty {
+            if amountString.isEmpty {
+                shakeAmount()
+            } else {
                 amountString.removeLast()
             }
         case ",":
-            if !amountString.contains(",") {
+            if amountString.contains(",") {
+                shakeAmount()
+            } else {
                 amountString = amountString.isEmpty ? "0," : amountString + ","
             }
         default:
             let parts = amountString.split(separator: ",", omittingEmptySubsequences: false)
             if parts.count > 1 {
-                if parts[1].count >= 2 { return }
+                if parts[1].count >= 2 {
+                    shakeAmount()
+                    return
+                }
             } else if let integerPart = parts.first, integerPart.count >= 9 {
+                shakeAmount()
                 return
             }
             amountString = amountString == "0" ? key : amountString + key
@@ -317,7 +392,7 @@ struct AddTransactionView: View {
     // MARK: - Сохранение
     private func saveTransaction() {
         let amount = parsedAmount
-        guard amount > 0 else { return }
+        guard amount > 0, !isSaved else { return }
 
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalTitle = trimmedTitle.isEmpty ? selectedCategory.name : trimmedTitle
@@ -341,7 +416,13 @@ struct AddTransactionView: View {
             AutomationService.shared.learnCategory(merchant: trimmedTitle, category: selectedCategory)
         }
         HapticManager.shared.trigger(.success)
-        dismiss()
+        withAnimation(Motion.bouncy) {
+            isSaved = true
+        }
+        Task {
+            try? await Task.sleep(for: .milliseconds(550))
+            dismiss()
+        }
     }
 
     // MARK: - Распознавание СМС
@@ -363,11 +444,15 @@ struct AddTransactionView: View {
             }
 
             recognitionSucceeded = true
-            recognitionMessage = "Успешно распознано: \(parsed.title) (\(CurrencyManager.shared.format(parsed.amount)))"
+            withAnimation(Motion.spring) {
+                recognitionMessage = "Успешно распознано: \(parsed.title) (\(CurrencyManager.shared.format(parsed.amount)))"
+            }
             HapticManager.shared.trigger(.success)
         } else {
             recognitionSucceeded = false
-            recognitionMessage = "Не удалось распознать формат СМС."
+            withAnimation(Motion.spring) {
+                recognitionMessage = "Не удалось распознать формат СМС."
+            }
             HapticManager.shared.trigger(.error)
         }
     }
@@ -378,6 +463,22 @@ struct AddTransactionView: View {
             return String(Int(amount))
         }
         return String(format: "%.2f", amount).replacingOccurrences(of: ".", with: ",")
+    }
+}
+
+/// Клавиша цифровой клавиатуры: под пальцем вспыхивает круглая подложка и клавиша чуть сжимается
+private struct KeypadButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                Circle()
+                    .fill(Theme.surfaceRaised)
+                    .frame(width: 60, height: 60)
+                    .scaleEffect(configuration.isPressed ? 1 : 0.5)
+                    .opacity(configuration.isPressed ? 1 : 0)
+            }
+            .scaleEffect(configuration.isPressed ? 0.9 : 1)
+            .animation(Motion.bouncy, value: configuration.isPressed)
     }
 }
 
@@ -477,6 +578,7 @@ struct BatchSMSImportSheet: View {
 
                     ForEach(0..<recognizedTransactions.count, id: \.self) { index in
                         resultRow(recognizedTransactions[index])
+                            .appearAnimation(delay: min(Double(index), 12) * 0.03)
                     }
                 }
                 .padding(.horizontal, 24)

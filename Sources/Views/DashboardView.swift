@@ -51,13 +51,18 @@ struct DashboardView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 headerView
+                    .appearAnimation(order: 0)
                 balanceCard
+                    .appearAnimation(order: 1)
                 smsSection
                 WeekSpendingCard(financeService: financeService, onTap: onOpenReport)
                     .padding(.top, 16)
+                    .appearAnimation(order: 2)
                 TopCategoriesRow(financeService: financeService, onTap: onOpenReport)
                     .padding(.top, 16)
+                    .appearAnimation(order: 3)
                 recentTransactionsSection
+                    .appearAnimation(order: 4)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 24)
@@ -129,6 +134,9 @@ struct DashboardView: View {
                     .tracking(-1.5)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
+                    // Цифры баланса перетекают при каждой новой операции
+                    .contentTransition(.numericText(value: financeService.totalBalance))
+                    .animation(Motion.digits, value: financeService.totalBalance)
                 Text(CurrencyManager.shared.currentCurrency.symbol)
                     .font(Theme.number(24, weight: .bold))
             }
@@ -159,6 +167,8 @@ struct DashboardView: View {
         Text(text)
             .font(.system(size: 13, weight: .semibold))
             .monospacedDigit()
+            .contentTransition(.numericText())
+            .animation(Motion.digits, value: text)
             .lineLimit(1)
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
@@ -172,11 +182,13 @@ struct DashboardView: View {
         if !detectedBatchTransactions.isEmpty {
             smsBanner
                 .padding(.top, 16)
+                .transition(.move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.96, anchor: .top)))
         } else if let clipboardMessage {
             Text(clipboardMessage)
                 .font(.system(size: 13))
                 .foregroundColor(Theme.textSecondary)
                 .padding(.top, 14)
+                .transition(.opacity.combined(with: .offset(y: -6)))
         }
     }
 
@@ -263,8 +275,10 @@ struct DashboardView: View {
                     .foregroundColor(Theme.textSecondary)
                     .padding(.vertical, 12)
             } else {
-                ForEach(financeService.transactions.prefix(5)) { transaction in
+                ForEach(Array(financeService.transactions.prefix(5).enumerated()), id: \.element.id) { index, transaction in
                     transactionRow(transaction)
+                        .appearAnimation(delay: 0.25 + Double(index) * Motion.stagger)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
         }
@@ -313,10 +327,14 @@ struct DashboardView: View {
     }
 
     private func showClipboardMessage(_ message: String) {
-        clipboardMessage = message
+        withAnimation(Motion.spring) {
+            clipboardMessage = message
+        }
         Task {
             try? await Task.sleep(for: .seconds(4))
-            clipboardMessage = nil
+            withAnimation(Motion.spring) {
+                clipboardMessage = nil
+            }
         }
     }
 
@@ -329,7 +347,7 @@ struct DashboardView: View {
 
         let batch = SMSParser.parseBatch(text: clipboardString)
         if !batch.isEmpty {
-            withAnimation {
+            withAnimation(Motion.spring) {
                 detectedBatchTransactions = batch
             }
         }

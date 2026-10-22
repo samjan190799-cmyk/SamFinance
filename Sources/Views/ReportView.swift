@@ -7,6 +7,8 @@ struct ReportView: View {
     let financeService: FinanceService
     @State private var selectedPeriod: TimePeriodFilter = .month
     @State private var rawSelectedDate: Date? = nil
+    /// Столбики вырастают из нуля при показе экрана
+    @State private var isChartGrown = false
 
     private var chartPoints: [DailyAmount] {
         let days = selectedPeriod == .today ? 1 : (selectedPeriod == .week ? 7 : 30)
@@ -37,6 +39,7 @@ struct ReportView: View {
                     .foregroundColor(.white)
                     .frame(minHeight: 44)
                     .padding(.top, 8)
+                    .appearAnimation(order: 0)
 
                 MonoSegmentedControl(
                     options: TimePeriodFilter.allCases,
@@ -44,18 +47,23 @@ struct ReportView: View {
                     selection: $selectedPeriod
                 )
                 .padding(.top, 16)
+                .appearAnimation(order: 1)
 
                 totals
                     .padding(.top, 16)
+                    .appearAnimation(order: 2)
 
                 chartCard
                     .padding(.top, 16)
+                    .appearAnimation(order: 3)
 
                 DashboardCategoriesSection(financeService: financeService, selectedPeriod: selectedPeriod)
                     .padding(.top, 28)
+                    .appearAnimation(order: 4)
 
                 history
                     .padding(.top, 28)
+                    .appearAnimation(order: 5)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 24)
@@ -82,6 +90,8 @@ struct ReportView: View {
                 .font(Theme.number(22, weight: .bold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
+                .contentTransition(.numericText(value: value))
+                .animation(Motion.digits, value: value)
         }
         .foregroundColor(highlighted ? Theme.onAccent : .white)
         .padding(16)
@@ -102,6 +112,8 @@ struct ReportView: View {
                     Text("\(selectedPoint.date.formatted(.dateTime.day().month(.abbreviated))): \(CurrencyManager.shared.format(selectedPoint.amount))")
                         .font(Theme.number(13))
                         .foregroundColor(Theme.accent)
+                        .contentTransition(.numericText())
+                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing)))
                 }
             }
 
@@ -110,6 +122,7 @@ struct ReportView: View {
         }
         .padding(18)
         .monoSurface(cornerRadius: 28)
+        .animation(Motion.spring, value: selectedPoint?.date)
     }
 
     private var chart: some View {
@@ -119,13 +132,20 @@ struct ReportView: View {
             ForEach(data) { item in
                 BarMark(
                     x: .value("Дата", item.date, unit: .day),
-                    y: .value("Траты", item.amount)
+                    y: .value("Траты", isChartGrown ? item.amount : 0)
                 )
                 .foregroundStyle(isSelected(item, selected) ? Theme.accent : Theme.line)
                 .cornerRadius(4)
             }
         }
         .chartXSelection(value: $rawSelectedDate)
+        // Столбики пружинят при показе и при смене периода
+        .animation(Motion.spring, value: selectedPeriod)
+        .animation(Motion.spring.delay(0.15), value: isChartGrown)
+        .onAppear {
+            isChartGrown = true
+        }
+        .sensoryFeedback(.selection, trigger: selectedPoint?.date)
         .chartXAxis {
             AxisMarks(values: .automatic(desiredCount: 4)) { _ in
                 AxisValueLabel(format: .dateTime.day().month(.abbreviated))

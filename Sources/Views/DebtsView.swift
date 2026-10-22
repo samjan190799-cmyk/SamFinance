@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Экран долгов: две суммы сверху, переключатель «Кредиты / Люди» и список с отметкой о погашении.
+/// Строку можно смахнуть вправо, чтобы отметить погашение, и влево, чтобы удалить.
 struct DebtsView: View {
     let financeService: FinanceService
     @State private var selectedSegment = 0 // 0: Кредиты, 1: Люди
@@ -26,17 +27,25 @@ struct DebtsView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+        // List, а не ScrollView: строкам нужны системные жесты смахивания
+        List {
+            Group {
                 headerView
+                    .appearAnimation(order: 0)
                 summaryView
+                    .appearAnimation(order: 1)
                 segmentView
-                debtsList
+                    .appearAnimation(order: 2)
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 24)
+            .monoListRow()
+
+            debtsList
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .scrollIndicators(.hidden)
+        .environment(\.defaultMinListRowHeight, 0)
+        .animation(Motion.spring, value: selectedSegment)
         .monoScreen()
         .sheet(isPresented: $isShowingAddSheet) {
             AddDebtView(financeService: financeService)
@@ -76,6 +85,8 @@ struct DebtsView: View {
                 .font(Theme.number(24, weight: .bold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
+                .contentTransition(.numericText(value: amount))
+                .animation(Motion.digits, value: amount)
         }
         .foregroundColor(highlighted ? Theme.onAccent : .white)
         .padding(16)
@@ -111,22 +122,50 @@ struct DebtsView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 56)
+            .transition(.opacity)
+            .monoListRow()
         } else {
-            VStack(spacing: 0) {
-                ForEach(debts) { debt in
-                    DebtRowView(debt: debt, financeService: financeService)
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                HapticManager.shared.trigger(.warning)
-                                withAnimation {
-                                    financeService.deleteDebt(id: debt.id)
-                                }
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
+            ForEach(Array(debts.enumerated()), id: \.element.id) { index, debt in
+                DebtRowView(debt: debt, financeService: financeService)
+                    .appearAnimation(delay: 0.12 + Double(index) * Motion.stagger)
+                    .monoListRow()
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        Button {
+                            togglePaid(debt)
+                        } label: {
+                            Label(debt.isPaid ? "Вернуть" : "Погашен", systemImage: debt.isPaid ? "arrow.uturn.backward" : "checkmark")
                         }
-                }
+                        .tint(debt.isPaid ? Theme.surfaceRaised : Theme.accentStrong)
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            delete(debt)
+                        } label: {
+                            Label("Удалить", systemImage: "trash")
+                        }
+                    }
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            delete(debt)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
             }
+        }
+    }
+
+    private func togglePaid(_ debt: Debt) {
+        HapticManager.shared.trigger(.success)
+        withAnimation(Motion.spring) {
+            financeService.togglePayDebt(id: debt.id)
+        }
+    }
+
+    private func delete(_ debt: Debt) {
+        HapticManager.shared.trigger(.warning)
+        withAnimation(Motion.spring) {
+            financeService.deleteDebt(id: debt.id)
         }
     }
 }
@@ -176,20 +215,25 @@ struct DebtRowView: View {
 
                 Button {
                     HapticManager.shared.trigger(.success)
-                    withAnimation {
+                    withAnimation(Motion.spring) {
                         financeService.togglePayDebt(id: debt.id)
                     }
                 } label: {
                     Image(systemName: debt.isPaid ? "checkmark.circle.fill" : "circle")
                         .font(.system(size: 22))
                         .foregroundColor(debt.isPaid ? Theme.accent : Theme.textTertiary)
+                        .contentTransition(.symbolEffect(.replace))
                         .frame(width: 44, height: 44)
                 }
+                // Кнопка только в своей рамке: в List без этого нажатие на всю строку отмечало бы погашение
+                .buttonStyle(.borderless)
                 .accessibilityLabel(debt.isPaid ? "Вернуть в активные" : "Отметить погашенным")
             }
             .frame(minHeight: 72)
+            .contentShape(Rectangle())
             MonoDivider()
         }
+        .background(Theme.background)
     }
 
     private var subtitle: String {

@@ -49,10 +49,11 @@ func compactAmount(_ amountInBase: Double) -> String {
     return "\(Int(value.rounded())) \(symbol)"
 }
 
-/// Тонкая линия трат по дням на лаймовой карточке баланса
+/// Тонкая линия трат по дням на лаймовой карточке баланса: при показе прорисовывается слева направо
 @MainActor
 struct BalanceSparkline: View {
     let financeService: FinanceService
+    @State private var isDrawn = false
 
     var body: some View {
         let points = DailySpending.points(financeService: financeService, days: 30)
@@ -67,15 +68,25 @@ struct BalanceSparkline: View {
         }
         .chartXAxis(.hidden)
         .chartYAxis(.hidden)
+        .mask {
+            Rectangle()
+                .scaleEffect(x: isDrawn ? 1 : 0, anchor: .leading)
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.9).delay(0.15)) {
+                isDrawn = true
+            }
+        }
         .accessibilityLabel("Траты по дням за 30 дней")
     }
 }
 
-/// Столбики трат за последние 7 дней; сегодняшний день лаймовый
+/// Столбики трат за последние 7 дней; сегодняшний день лаймовый. При показе столбики вырастают по очереди.
 @MainActor
 struct WeekSpendingCard: View {
     let financeService: FinanceService
     let onTap: () -> Void
+    @State private var isGrown = false
 
     var body: some View {
         let days = DailySpending.points(financeService: financeService, days: 7)
@@ -91,12 +102,15 @@ struct WeekSpendingCard: View {
                     Text(CurrencyManager.shared.format(total))
                         .font(Theme.number(15))
                         .foregroundColor(.white)
+                        .contentTransition(.numericText(value: total))
+                        .animation(Motion.digits, value: total)
                 }
 
                 HStack(alignment: .bottom, spacing: 0) {
-                    ForEach(days) { day in
+                    ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
                         bar(for: day, maxAmount: maxAmount)
                             .frame(maxWidth: .infinity)
+                            .animation(Motion.bouncy.delay(0.2 + Double(index) * 0.05), value: isGrown)
                     }
                 }
                 .frame(height: 96)
@@ -104,13 +118,16 @@ struct WeekSpendingCard: View {
             .padding(18)
             .monoSurface(cornerRadius: 28)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableButtonStyle(scale: 0.97))
+        .onAppear {
+            isGrown = true
+        }
         .accessibilityLabel("Траты за неделю: \(CurrencyManager.shared.format(total))")
     }
 
     private func bar(for day: DailyAmount, maxAmount: Double) -> some View {
         let isToday = Calendar.current.isDateInToday(day.date)
-        let height = max(8, CGFloat(day.amount / maxAmount) * 70)
+        let height = isGrown ? max(8, CGFloat(day.amount / maxAmount) * 70) : 8
         let weekday = day.date.formatted(.dateTime.weekday(.abbreviated))
         let label = String(weekday.prefix(1)).uppercased() + String(weekday.dropFirst())
         return VStack(spacing: 6) {
@@ -133,7 +150,7 @@ struct CategoryTotal: Identifiable {
     var id: UUID { category.id }
 }
 
-/// Три главные категории трат за 30 дней плитками
+/// Главные категории трат за 30 дней: карусель плиток, крайние плитки уменьшаются и гаснут
 @MainActor
 struct TopCategoriesRow: View {
     let financeService: FinanceService
@@ -145,20 +162,32 @@ struct TopCategoriesRow: View {
             let current = totals[transaction.category.id]?.amount ?? 0
             totals[transaction.category.id] = CategoryTotal(category: transaction.category, amount: current + transaction.amount)
         }
-        return Array(totals.values.sorted { $0.amount > $1.amount }.prefix(3))
+        return Array(totals.values.sorted { $0.amount > $1.amount }.prefix(6))
     }
 
     var body: some View {
         let items = topCategories
         if !items.isEmpty {
-            HStack(spacing: 10) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    Button(action: onTap) {
-                        tile(item, highlighted: index == 0)
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 10) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        Button(action: onTap) {
+                            tile(item, highlighted: index == 0)
+                        }
+                        .buttonStyle(PressableButtonStyle(scale: 0.95))
+                        .scrollTransition(axis: .horizontal) { content, phase in
+                            content
+                                .scaleEffect(phase.isIdentity ? 1 : 0.88)
+                                .opacity(phase.isIdentity ? 1 : 0.45)
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
+                .scrollTargetLayout()
             }
+            .contentMargins(.horizontal, 20, for: .scrollContent)
+            .scrollTargetBehavior(.viewAligned)
+            .scrollIndicators(.hidden)
+            .padding(.horizontal, -20)
         }
     }
 
@@ -179,7 +208,8 @@ struct TopCategoriesRow: View {
                 .minimumScaleFactor(0.7)
         }
         .padding(14)
-        .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
+        .frame(width: 124, alignment: .leading)
+        .frame(minHeight: 104)
         .monoSurface(cornerRadius: 24)
     }
 }
@@ -189,6 +219,7 @@ struct TopCategoriesRow: View {
 struct DashboardCategoriesSection: View {
     let financeService: FinanceService
     let selectedPeriod: TimePeriodFilter
+    @State private var isRevealed = false
 
     struct CategorySlice: Identifiable {
         let id: String
@@ -236,6 +267,7 @@ struct DashboardCategoriesSection: View {
                 rows(items)
             }
         }
+        .animation(Motion.spring, value: selectedPeriod)
     }
 
     private func ring(_ items: [CategorySlice]) -> some View {
@@ -250,10 +282,19 @@ struct DashboardCategoriesSection: View {
         }
         .chartLegend(.hidden)
         .frame(width: 150, height: 150)
+        // Кольцо раскручивается и вырастает при показе
+        .rotationEffect(.degrees(isRevealed ? 0 : -140))
+        .scaleEffect(isRevealed ? 1 : 0.6)
+        .opacity(isRevealed ? 1 : 0)
         .overlay {
             centerLabel(for: items.first)
         }
         .frame(maxWidth: .infinity)
+        .onAppear {
+            withAnimation(Motion.spring.delay(0.1)) {
+                isRevealed = true
+            }
+        }
         .padding(.top, 20)
         .padding(.bottom, 12)
     }
@@ -265,6 +306,7 @@ struct DashboardCategoriesSection: View {
                 Text("\(Int((slice.share * 100).rounded()))%")
                     .font(Theme.number(26, weight: .bold))
                     .foregroundColor(.white)
+                    .contentTransition(.numericText(value: slice.share))
                 Text(slice.name)
                     .font(.system(size: 12))
                     .foregroundColor(Theme.textSecondary)
@@ -276,8 +318,9 @@ struct DashboardCategoriesSection: View {
 
     private func rows(_ items: [CategorySlice]) -> some View {
         VStack(spacing: 0) {
-            ForEach(items) { slice in
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, slice in
                 row(slice)
+                    .appearAnimation(delay: 0.15 + Double(index) * Motion.stagger)
             }
         }
     }
