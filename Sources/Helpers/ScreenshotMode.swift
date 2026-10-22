@@ -172,10 +172,9 @@ private struct ScreenshotSceneModifier: ViewModifier {
         DemoData.seed(financeService, forTour: true)
         selectedTab = .overview
 
-        // Запись успевает начаться до первого кадра сценария
-        await pause(5)
+        // Запись успевает начаться до первого кадра сценария; подпись видна с самого начала
         show(String(localized: "Весь учёт в одном месте"))
-        await pause(3.0)
+        await pause(8)
 
         withAnimation(Motion.spring) {
             selectedTab = .cards
@@ -231,27 +230,35 @@ private struct ScreenshotSceneModifier: ViewModifier {
     }
 }
 
-/// Подпись поверх ролика: лаймовая плашка над нижней панелью
+/// Подпись ролика: лаймовая плашка в полосе над экраном. Полоса занимает место, поэтому подпись не закрывает кнопки и списки.
+/// Вне ролика ничего не добавляет.
 private struct TourCaption: ViewModifier {
     let text: String?
 
     func body(content: Content) -> some View {
-        content.overlay(alignment: .bottom) {
-            if let text {
-                Text(text)
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    .foregroundColor(Theme.onAccent)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .background(Theme.accent)
-                    .clipShape(RoundedRectangle(cornerRadius: 22))
-                    .padding(.horizontal, 28)
-                    .padding(.bottom, 112)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .id(text)
-                    .allowsHitTesting(false)
+        if ScreenshotMode.isTour {
+            content.safeAreaInset(edge: .top, spacing: 0) {
+                ZStack {
+                    if let text {
+                        Text(text)
+                            .font(.system(size: 17, weight: .semibold, design: .rounded))
+                            .foregroundColor(Theme.onAccent)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 11)
+                            .background(Theme.accent)
+                            .clipShape(RoundedRectangle(cornerRadius: 22))
+                            .padding(.horizontal, 20)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                            .id(text)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 78)
+                .background(Theme.background)
+                .allowsHitTesting(false)
             }
+        } else {
+            content
         }
     }
 }
