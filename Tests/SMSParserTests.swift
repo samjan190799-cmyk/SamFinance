@@ -66,6 +66,22 @@ final class SMSParserTests: XCTestCase {
         XCTAssertEqual(parsed.brandName, "IDBank")
     }
 
+    func testFreeFormRussianMessages() throws {
+        let payment = try XCTUnwrap(SMSParser.parse(text: "Оплата: 2 500 руб, магазин Магнит"))
+        XCTAssertEqual(payment.amount, 2_500, accuracy: 0.001)
+        XCTAssertEqual(payment.type, .expense)
+        XCTAssertEqual(payment.categoryName, "Продукты")
+
+        let income = try XCTUnwrap(SMSParser.parse(text: "Зачисление 150 000 AMD на карту"))
+        XCTAssertEqual(income.amount, 150_000, accuracy: 0.001)
+        XCTAssertEqual(income.type, .income)
+    }
+
+    func testAmountWithNonBreakingSpace() throws {
+        let parsed = try XCTUnwrap(SMSParser.parse(text: "IDBank: Elq hashvic 5\u{00A0}000 AMD"))
+        XCTAssertEqual(parsed.amount, 5_000, accuracy: 0.001)
+    }
+
     func testOrdinaryTextWithNumbersIsNotATransaction() {
         XCTAssertNil(SMSParser.parse(text: "Hello, call me at 12345"))
         XCTAssertNil(SMSParser.parse(text: "Your verification code is 482913"))

@@ -505,9 +505,9 @@ public struct SMSParser {
     /// Извлекает числовую сумму из очищенного текста СМС
     private static func extractAmount(from text: String, allowBareNumber: Bool) -> Double? {
         let patterns = [
-            #"\b(\d{1,3}(?:[\s\u{00A0},]\d{3})*(?:[.,]\d{1,2})?)\s*(?:amd|֏|dram|драм|руб|руб.|рублей|₽|usd|\$|eur|€)\b"#,
-            #"(?:amd|֏|dram|драм|руб|руб.|рублей|₽|usd|\$|eur|€)\s*(\d{1,3}(?:[\s\u{00A0},]\d{3})*(?:[.,]\d{1,2})?)\b"#,
-            #"\b(?:vcharum|poxancum|vcharvel|tranzakcia|transakcia|оплата|списание|зачисление|покупка|расход|доход|payment|charge|spent|amount)\b[^\d]*?(\d{1,3}(?:[\s\u{00A0},]\d{3})*(?:[.,]\d{1,2})?)\b"#
+            #"\b(\d{1,3}(?:[\s\x{00A0},]\d{3})*(?:[.,]\d{1,2})?)\s*(?:amd|֏|dram|драм|руб|руб.|рублей|₽|usd|\$|eur|€)\b"#,
+            #"(?:amd|֏|dram|драм|руб|руб.|рублей|₽|usd|\$|eur|€)\s*(\d{1,3}(?:[\s\x{00A0},]\d{3})*(?:[.,]\d{1,2})?)\b"#,
+            #"\b(?:vcharum|poxancum|vcharvel|tranzakcia|transakcia|оплата|списание|зачисление|покупка|расход|доход|payment|charge|spent|amount)\b[^\d]*?(\d{1,3}(?:[\s\x{00A0},]\d{3})*(?:[.,]\d{1,2})?)\b"#
         ]
 
         for pattern in patterns {
