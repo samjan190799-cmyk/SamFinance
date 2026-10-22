@@ -109,6 +109,15 @@ final class AIChatStore {
     /// Чат только с приветствием: показываем подсказки
     var isFresh: Bool { messages.count == 1 }
 
+    #if DEBUG
+    /// Для снимков App Store: переписка начинается с первого сообщения, приветствие не обрезается под шапкой
+    func dropGreeting() {
+        if messages.count > 1, messages.first?.role == .assistant {
+            messages.removeFirst()
+        }
+    }
+    #endif
+
     func reset() {
         messages = [Self.greeting()]
         workingText = nil

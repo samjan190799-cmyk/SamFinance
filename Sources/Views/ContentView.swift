@@ -17,7 +17,7 @@ enum AppTab: Int, CaseIterable, Identifiable, Hashable {
         case .cards: return String(localized: "Карты")
         case .assistant: return String(localized: "ИИ")
         case .debts: return String(localized: "Долги")
-        case .report: return String(localized: "Отчёт")
+        case .report: return "tab_report".localized
         }
     }
 
@@ -129,6 +129,8 @@ struct ContentView: View {
                     .symbolEffect(.bounce, value: tabBounces[tab, default: 0])
                 Text(tab.title)
                     .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
             .foregroundColor(isSelected ? Theme.accent : Theme.textSecondary)
             .frame(maxWidth: .infinity, minHeight: 50)

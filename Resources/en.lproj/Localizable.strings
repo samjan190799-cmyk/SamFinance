@@ -40,6 +40,7 @@
 "reset_data" = "Reset All Data";
 "reset_footer" = "All cards, transactions, debts, and savings goals will be cleared.";
 "save" = "Save";
+"tab_report" = "Report";
 "total_balance" = "Total balance";
 "unfreeze" = "Unfreeze";
 "user_name" = "Hashiv User";

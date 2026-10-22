@@ -141,6 +141,7 @@ enum DemoData {
         if let question = ScreenshotMode.question {
             store.send(text: question)
         }
+        store.dropGreeting()
     }
 }
 #endif

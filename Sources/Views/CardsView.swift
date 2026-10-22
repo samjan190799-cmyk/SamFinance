@@ -91,7 +91,7 @@ struct CardsView: View {
     private var carousel: some View {
         let tilt = reduceMotion ? 0.0 : 16.0
         return ScrollView(.horizontal) {
-            LazyHStack(spacing: 12) {
+            LazyHStack(spacing: 8) {
                 ForEach(financeService.cards) { card in
                     FlippableCardView(card: card)
                         .containerRelativeFrame(.horizontal)
@@ -113,7 +113,7 @@ struct CardsView: View {
                         }
                         .scrollTransition(axis: .horizontal) { content, phase in
                             content
-                                .scaleEffect(phase.isIdentity ? 1 : 0.88)
+                                .scaleEffect(phase.isIdentity ? 1 : 0.92)
                                 .rotation3DEffect(.degrees(phase.value * -tilt), axis: (x: 0, y: 1, z: 0))
                                 .opacity(phase.isIdentity ? 1 : 0.5)
                         }
@@ -121,7 +121,7 @@ struct CardsView: View {
             }
             .scrollTargetLayout()
         }
-        .contentMargins(.horizontal, 28, for: .scrollContent)
+        .contentMargins(.horizontal, 44, for: .scrollContent)
         .scrollTargetBehavior(.viewAligned)
         .scrollPosition(id: $centeredCardID)
         .scrollIndicators(.hidden)
@@ -373,6 +373,7 @@ struct CardGoalRowView: View {
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(.white)
                                 .lineLimit(1)
+                                .layoutPriority(1)
 
                             Spacer(minLength: 8)
 

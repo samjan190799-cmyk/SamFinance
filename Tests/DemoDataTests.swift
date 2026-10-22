@@ -66,6 +66,15 @@ final class DemoDataTests: XCTestCase {
         XCTAssertNotEqual(messages.last?.text, LocalFinanceAssistant.helpText)
     }
 
+    func testChatSceneStartsWithTheFirstMessage() {
+        DemoData.seed(service)
+        DemoData.fillChat()
+
+        let messages = AIChatStore.shared.messages
+        XCTAssertEqual(messages.first?.role, .user)
+        XCTAssertTrue(messages.contains { $0.draft != nil })
+    }
+
     func testScreenshotModeIsOffInTests() {
         XCTAssertNil(ScreenshotMode.scene)
     }
