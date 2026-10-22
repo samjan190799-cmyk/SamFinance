@@ -90,6 +90,25 @@ enum AIProvider: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    // MARK: - Согласие на отправку данных
+
+    private var consentKey: String { "aiConsent.\(rawValue)" }
+
+    /// Пользователь разрешил отправлять этому сервису вопросы, скриншоты и сводку учёта.
+    /// Спрашивается один раз; сбрасывается, когда ключ сервиса удалён.
+    var hasConsent: Bool {
+        UserDefaults.standard.bool(forKey: consentKey)
+    }
+
+    func setConsent(_ granted: Bool) {
+        UserDefaults.standard.set(granted, forKey: consentKey)
+    }
+
+    /// Что именно уйдёт и кому: показывается перед первой отправкой
+    var consentMessage: String {
+        "Чтобы ответить, приложение отправит в \(company) (\(displayName)) ваш вопрос и скриншоты, а также сводку ваших операций, карт (только последние 4 цифры) и долгов. Банковские СМС распознаются на телефоне и не отправляются. Данные обрабатывает \(company) по условиям вашего ключа. Разрешение можно отозвать: удалите ключ в Настройках."
+    }
+
     // MARK: - Модель
 
     var defaultModel: String {

@@ -25,6 +25,20 @@ struct AIChatView: View {
         .onAppear {
             store.refreshCloudState()
         }
+        .alert(
+            "Отправить данные в \(store.pendingConsent?.provider.company ?? "облако")?",
+            isPresented: consentBinding,
+            presenting: store.pendingConsent
+        ) { _ in
+            Button("Разрешить и отправить") {
+                store.grantConsent()
+            }
+            Button("Не отправлять", role: .cancel) {
+                store.declineConsent()
+            }
+        } message: { request in
+            Text(request.provider.consentMessage)
+        }
         .sheet(isPresented: $isShowingSettings, onDismiss: {
             store.refreshCloudState()
         }) {
@@ -37,6 +51,18 @@ struct AIChatView: View {
                 await store.send(screenshots: items)
             }
         }
+    }
+
+    /// Окно согласия видно, пока в чате есть запрос без ответа; закрытие без выбора считается отказом
+    private var consentBinding: Binding<Bool> {
+        Binding(
+            get: { store.pendingConsent != nil },
+            set: { isShown in
+                if !isShown {
+                    store.declineConsent()
+                }
+            }
+        )
     }
 
     // MARK: - Шапка

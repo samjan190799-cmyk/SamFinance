@@ -62,6 +62,18 @@ struct ChatMessage: Identifiable {
     var draft: OperationDraft? = nil
 }
 
+/// Запрос к облачному ИИ, который ждёт согласия пользователя на отправку данных
+struct CloudRequest {
+    let question: String
+    let images: [Data]
+    let recognizedText: String?
+    let history: [CloudTurn]
+    let provider: AIProvider
+    let workingText: String
+    /// Что ответить, если пользователь не разрешил отправку; nil — ответить по данным на телефоне
+    let declinedReply: String?
+}
+
 /// ИИ-чат: принимает скриншоты и тексты СМС, раскладывает операции по картам и категориям,
 /// отвечает на вопросы о деньгах. Банковские СМС распознаются на телефоне; если пользователь сохранил ключ выбранного
 /// облачного ИИ (Claude, ChatGPT или Gemini), остальное (вопросы, чеки, выписки, фразы о тратах) разбирает он.
@@ -78,6 +90,8 @@ final class AIChatStore {
     private(set) var provider = AIProvider.selected
     /// Сохранён ли в настройках ключ выбранного облачного ИИ
     private(set) var isCloudEnabled = AIKeyStore.key(for: AIProvider.selected) != nil
+    /// Запрос, ожидающий ответа на вопрос «Отправить данные в облако?»
+    private(set) var pendingConsent: CloudRequest? = nil
 
     var isWorking: Bool { workingText != nil }
 
@@ -98,6 +112,7 @@ final class AIChatStore {
     func reset() {
         messages = [Self.greeting()]
         workingText = nil
+        pendingConsent = nil
     }
 
     /// Перечитывает выбранный сервис и его ключ после возврата из настроек
@@ -123,13 +138,21 @@ final class AIChatStore {
 
         refreshCloudState()
         let activeProvider = provider
-        guard let apiKey = AIKeyStore.key(for: activeProvider) else {
+        guard AIKeyStore.key(for: activeProvider) != nil else {
             reply(LocalFinanceAssistant.answer(trimmed, financeService: FinanceService.shared))
             return
         }
-        workingText = "Думаю…"
+        let request = CloudRequest(
+            question: trimmed,
+            images: [],
+            recognizedText: nil,
+            history: history,
+            provider: activeProvider,
+            workingText: "Думаю…",
+            declinedReply: nil
+        )
         Task {
-            await askCloud(trimmed, images: [], recognizedText: nil, history: history, provider: activeProvider, apiKey: apiKey)
+            await submit(request)
         }
     }
 
@@ -170,19 +193,19 @@ final class AIChatStore {
             return
         }
 
-        // Чеки, выписки и приложения банков разбирает облачный ИИ, если есть ключ
+        // Чеки, выписки и приложения банков разбирает облачный ИИ, если есть ключ и согласие
         refreshCloudState()
         let activeProvider = provider
-        if let apiKey = AIKeyStore.key(for: activeProvider) {
-            workingText = "Разбираю скриншоты…"
-            await askCloud(
-                "Разбери скриншоты: найди операции, которые нужно записать в учёт. Если операций нет, коротко скажи, что на скриншотах.",
+        if AIKeyStore.key(for: activeProvider) != nil {
+            await submit(CloudRequest(
+                question: "Разбери скриншоты: найди операции, которые нужно записать в учёт. Если операций нет, коротко скажи, что на скриншотах.",
                 images: images,
                 recognizedText: recognized,
                 history: history,
                 provider: activeProvider,
-                apiKey: apiKey
-            )
+                workingText: "Разбираю скриншоты…",
+                declinedReply: "Данные не отправлены в \(activeProvider.company). Без этого я разберу только банковские СМС: подойдут СМС с суммой и маской карты, например «GNUM 3,500.00 AMD 4318***0640»."
+            ))
             return
         }
 
@@ -202,6 +225,53 @@ final class AIChatStore {
     }
 
     // MARK: - Облачный ИИ
+
+    /// Отправляет запрос, если пользователь уже разрешил отправку данных этому сервису; иначе ждёт ответа на вопрос
+    private func submit(_ request: CloudRequest) async {
+        guard request.provider.hasConsent else {
+            pendingConsent = request
+            return
+        }
+        await run(request)
+    }
+
+    private func run(_ request: CloudRequest) async {
+        guard let apiKey = AIKeyStore.key(for: request.provider) else {
+            reply("Ключ \(request.provider.displayName) не найден. Добавьте его в Настройках → ИИ-помощник.")
+            return
+        }
+        workingText = request.workingText
+        await askCloud(
+            request.question,
+            images: request.images,
+            recognizedText: request.recognizedText,
+            history: request.history,
+            provider: request.provider,
+            apiKey: apiKey
+        )
+    }
+
+    /// Пользователь разрешил отправку: запоминаем и выполняем ожидавший запрос
+    func grantConsent() {
+        guard let request = pendingConsent else { return }
+        pendingConsent = nil
+        request.provider.setConsent(true)
+        Task {
+            await run(request)
+        }
+    }
+
+    /// Пользователь отказался: ничего не уходит в облако, на вопрос отвечаем по данным на телефоне
+    func declineConsent() {
+        guard let request = pendingConsent else { return }
+        pendingConsent = nil
+        if let declinedReply = request.declinedReply {
+            reply(declinedReply)
+        } else {
+            let local = LocalFinanceAssistant.answer(request.question, financeService: FinanceService.shared)
+            reply("Данные не отправлены в \(request.provider.company). Отвечаю по данным на телефоне.\n\n" + local)
+        }
+    }
 
     private func askCloud(_ question: String, images: [Data], recognizedText: String?, history: [CloudTurn], provider: AIProvider, apiKey: String) async {
         defer { workingText = nil }

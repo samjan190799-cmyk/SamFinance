@@ -126,7 +126,6 @@ public final class LanguageManager {
         "settings_title": [.russian: "Настройки", .english: "Settings", .armenian: "Կարգավորումներ"],
         "profile": [.russian: "Профиль", .english: "Profile", .armenian: "Անձնական էջ"],
         "user_name": [.russian: "Пользователь SamFinance", .english: "SamFinance User", .armenian: "SamFinance Օգտատեր"],
-        "tariff": [.russian: "Тариф: Premium Pro", .english: "Plan: Premium Pro", .armenian: "Սակագին՝ Premium Pro"],
         "preferences": [.russian: "Предпочтения", .english: "Preferences", .armenian: "Նախապատվություններ"],
         "app_language": [.russian: "Язык приложения", .english: "App Language", .armenian: "Հավելվածի լեզուն"],
         "main_currency": [.russian: "Основная валюта", .english: "Primary Currency", .armenian: "Հիմնական արժույթ"],
