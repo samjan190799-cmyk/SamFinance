@@ -7,6 +7,7 @@ struct CardsView: View {
     let financeService: FinanceService
     @State private var isShowingAddCardSheet = false
     @State private var selectedCardForDetails: Card? = nil
+    @State private var cardBeingEdited: Card? = nil
     @State private var selectedCardForNewGoal: Card? = nil
     /// Карта в центре карусели; nil, пока пользователь не листал (тогда текущая — первая)
     @State private var centeredCardID: UUID? = nil
@@ -43,6 +44,9 @@ struct CardsView: View {
                             onShowDetails: {
                                 selectedCardForDetails = card
                             },
+                            onEdit: {
+                                cardBeingEdited = card
+                            },
                             onAddGoal: {
                                 selectedCardForNewGoal = card
                             }
@@ -62,7 +66,10 @@ struct CardsView: View {
         .scrollIndicators(.hidden)
         .monoScreen()
         .sheet(isPresented: $isShowingAddCardSheet) {
-            AddCardView(financeService: financeService)
+            CardEditorView(financeService: financeService)
+        }
+        .sheet(item: $cardBeingEdited) { card in
+            CardEditorView(financeService: financeService, editing: card)
         }
         .sheet(item: $selectedCardForDetails) { card in
             CardDetailsSheet(card: card)
@@ -82,6 +89,12 @@ struct CardsView: View {
                     FlippableCardView(card: card)
                         .containerRelativeFrame(.horizontal)
                         .contextMenu {
+                            Button {
+                                HapticManager.shared.impact(.light)
+                                cardBeingEdited = card
+                            } label: {
+                                Label(String(localized: "Изменить"), systemImage: "pencil")
+                            }
                             Button(role: .destructive) {
                                 HapticManager.shared.trigger(.warning)
                                 withAnimation(Motion.spring) {
@@ -216,6 +229,7 @@ struct CardWithGoalsSection: View {
     let card: Card
     let financeService: FinanceService
     let onShowDetails: () -> Void
+    let onEdit: () -> Void
     let onAddGoal: () -> Void
 
     private var goals: [Goal] {
@@ -237,6 +251,10 @@ struct CardWithGoalsSection: View {
                 HapticManager.shared.impact(.light)
                 onShowDetails()
             }
+            outlineButton(title: String(localized: "Изменить")) {
+                HapticManager.shared.impact(.light)
+                onEdit()
+            }
             outlineButton(title: card.isFrozen ? "unfreeze".localized : "freeze".localized) {
                 HapticManager.shared.trigger(.success)
                 withAnimation(Motion.spring) {
@@ -251,6 +269,9 @@ struct CardWithGoalsSection: View {
             Text(title)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .padding(.horizontal, 6)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .background(Theme.surfaceRaised)
                 .clipShape(Capsule())
@@ -388,11 +409,13 @@ struct CardGoalRowView: View {
 struct CardPalette {
     let fillColors: [Color]
     let isLight: Bool
+    let pattern: CardPattern
 
     init(card: Card) {
         let colors = card.gradientColors.map { Color(hex: $0) }
         fillColors = colors.isEmpty ? [Theme.surface] : colors
         isLight = Theme.isLight(hex: card.gradientColors.first ?? card.colorHex)
+        pattern = card.pattern ?? CardPattern.none
     }
 
     var primary: Color { isLight ? .black : .white }
@@ -408,9 +431,12 @@ extension View {
             .frame(maxWidth: .infinity)
             .frame(height: 196)
             .foregroundColor(palette.primary)
-            .background(
-                LinearGradient(colors: palette.fillColors, startPoint: .topLeading, endPoint: .bottomTrailing)
-            )
+            .background {
+                ZStack {
+                    LinearGradient(colors: palette.fillColors, startPoint: .topLeading, endPoint: .bottomTrailing)
+                    CardPatternView(pattern: palette.pattern, color: palette.primary)
+                }
+            }
             .clipShape(RoundedRectangle(cornerRadius: 28))
             .overlay(RoundedRectangle(cornerRadius: 28).stroke(Theme.line, lineWidth: palette.isLight ? 0 : 1))
     }
@@ -437,10 +463,24 @@ struct CardItemView: View {
     }
 
     private var topRow: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(card.type)
-                .font(.system(size: 16, weight: .semibold))
-                .lineLimit(1)
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    if let symbol = card.symbol {
+                        Image(systemName: symbol)
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    Text(card.type)
+                        .font(.system(size: 16, weight: .semibold))
+                        .lineLimit(1)
+                }
+                if let bank = card.bankName, !bank.isEmpty {
+                    Text(bank)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(secondaryColor)
+                        .lineLimit(1)
+                }
+            }
             Spacer(minLength: 8)
             if card.isFrozen {
                 Image(systemName: "snowflake")
@@ -470,11 +510,15 @@ struct CardItemView: View {
     }
 
     private var bottomRow: some View {
-        HStack {
+        HStack(alignment: .center) {
             Text(card.holderName.uppercased())
                 .lineLimit(1)
             Spacer(minLength: 8)
             Text(card.expiryDate)
+            if let network = card.network {
+                CardNetworkMark(network: network, color: palette.primary)
+                    .padding(.leading, 6)
+            }
         }
         .font(.system(size: 12, weight: .medium))
         .tracking(0.8)
@@ -575,227 +619,6 @@ struct CardBackView: View {
         }
         .cardFace(palette)
         .opacity(card.isFrozen ? 0.5 : 1.0)
-    }
-}
-
-/// Модальный экран создания новой карты
-struct AddCardView: View {
-    @Environment(\.dismiss) private var dismiss
-    let financeService: FinanceService
-
-    @State private var cardPurpose: String = ""
-    @State private var holderName: String = ""
-    @State private var balanceString: String = ""
-    @State private var cardNumberRaw: String = ""
-    @State private var expiryDate: String = ""
-    @State private var selectedThemeIndex = 0
-
-    var defaultPurposes: [String] {
-        [
-            "card_for_gifts".localized,
-            "card_for_online".localized,
-            "card_for_travel".localized,
-            "main_card".localized
-        ]
-    }
-
-    /// Темы карты «Пульс»: лаймовая, графитовая, чёрная с контуром и светлая
-    let themes = [
-        (colorHex: "#C6F432", gradient: ["#C6F432", "#B2E01E"]),
-        (colorHex: "#2A2B30", gradient: ["#2A2B30", "#1C1D21"]),
-        (colorHex: "#000000", gradient: ["#000000", "#000000"]),
-        (colorHex: "#F4F4F5", gradient: ["#F4F4F5", "#DCDCE0"])
-    ]
-
-    /// Маска формата карточного номера: 0000 0000 0000 0000
-    private var formattedCardNumber: String {
-        let clean = cardNumberRaw.filter { $0.isNumber }
-        var result = ""
-        for (index, char) in clean.prefix(16).enumerated() {
-            if index > 0 && index % 4 == 0 {
-                result.append(" ")
-            }
-            result.append(char)
-        }
-        return result
-    }
-
-    private var parsedBalance: Double? {
-        Double(balanceString.replacingOccurrences(of: ",", with: "."))
-    }
-
-    /// Срок действия в виде ММ/ГГ; принимает «0829» и «08/29», иначе nil
-    private var normalizedExpiry: String? {
-        let digits = expiryDate.filter { $0.isNumber }
-        guard digits.count == 4, let month = Int(digits.prefix(2)), (1...12).contains(month) else { return nil }
-        return "\(digits.prefix(2))/\(digits.suffix(2))"
-    }
-
-    /// Все поля заполнены: ничего не подставляется за пользователя
-    private var isFormValid: Bool {
-        !cardPurpose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !holderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && parsedBalance != nil
-            && cardNumberRaw.filter { $0.isNumber }.count >= 13
-            && normalizedExpiry != nil
-    }
-
-    /// Как будет выглядеть карта: обновляется на лету при вводе и смене темы; пустые поля показаны заглушками
-    private var previewCard: Card {
-        let theme = themes[selectedThemeIndex]
-        let digits = cardNumberRaw.filter { $0.isNumber }
-        let trimmedHolder = holderName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedPurpose = cardPurpose.trimmingCharacters(in: .whitespacesAndNewlines)
-        return Card(
-            last4: digits.count >= 4 ? Card.lastFourDigits(of: digits) : "0000",
-            holderName: trimmedHolder.isEmpty ? "card_holder".localized : trimmedHolder,
-            balance: parsedBalance ?? 0,
-            type: trimmedPurpose.isEmpty ? "new_card".localized : trimmedPurpose,
-            colorHex: theme.colorHex,
-            gradientColors: theme.gradient,
-            isFrozen: false,
-            expiryDate: normalizedExpiry ?? String(localized: "ММ/ГГ")
-        )
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    CardItemView(card: previewCard)
-                        .animation(Motion.spring, value: selectedThemeIndex)
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                }
-
-                Section {
-                    TextField("card_purpose".localized, text: $cardPurpose)
-
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(defaultPurposes, id: \.self) { purpose in
-                                purposeChip(purpose)
-                            }
-                        }
-                    }
-                } header: {
-                    Text("card_purpose".localized)
-                }
-
-                Section {
-                    TextField("card_holder".localized, text: $holderName)
-                        .textInputAutocapitalization(.characters)
-
-                    HStack {
-                        Text(String(localized: "Баланс (\(CurrencyManager.shared.baseCurrency.symbol))"))
-                        Spacer()
-                        TextField("0", text: $balanceString)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                    }
-
-                    HStack {
-                        Text("full_card_number".localized)
-                        Spacer()
-                        TextField("0000 0000 0000 0000", text: $cardNumberRaw)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                    }
-
-                    HStack {
-                        Text("expiry_date".localized)
-                        Spacer()
-                        TextField(String(localized: "ММ/ГГ"), text: $expiryDate)
-                            .keyboardType(.numbersAndPunctuation)
-                            .multilineTextAlignment(.trailing)
-                    }
-                } header: {
-                    Text("card_requisites".localized)
-                }
-
-                Section {
-                    HStack(spacing: 16) {
-                        ForEach(0..<themes.count, id: \.self) { index in
-                            themeSwatch(index)
-                        }
-                    }
-                    .padding(.vertical, 8)
-                } header: {
-                    Text("card_color_theme".localized)
-                }
-            }
-            .monoForm()
-            .navigationTitle("new_card".localized)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("cancel".localized) {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("save".localized) {
-                        saveCard()
-                    }
-                    .disabled(!isFormValid)
-                }
-            }
-        }
-    }
-
-    private func purposeChip(_ purpose: String) -> some View {
-        let isSelected = cardPurpose == purpose
-        return Text(purpose)
-            .font(.system(size: 13))
-            .foregroundColor(isSelected ? Theme.onAccent : .white)
-            .padding(.horizontal, 12)
-            .frame(minHeight: 32)
-            .background(isSelected ? Theme.accent : Color.clear)
-            .clipShape(Capsule())
-            .overlay(Capsule().stroke(Theme.line, lineWidth: isSelected ? 0 : 1))
-            .onTapGesture {
-                HapticManager.shared.selection()
-                withAnimation(Motion.spring) {
-                    cardPurpose = purpose
-                }
-            }
-    }
-
-    private func themeSwatch(_ index: Int) -> some View {
-        let theme = themes[index]
-        let isSelected = selectedThemeIndex == index
-        return Circle()
-            .fill(LinearGradient(colors: theme.gradient.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing))
-            .frame(width: 44, height: 44)
-            .overlay(Circle().stroke(isSelected ? Theme.accent : Theme.line, lineWidth: isSelected ? 2 : 1))
-            .scaleEffect(isSelected ? 1.12 : 1)
-            .padding(3)
-            .onTapGesture {
-                HapticManager.shared.impact(.light)
-                withAnimation(Motion.bouncy) {
-                    selectedThemeIndex = index
-                }
-            }
-            .accessibilityLabel("card_color_theme".localized)
-    }
-
-    private func saveCard() {
-        guard isFormValid, let balance = parsedBalance, let expiry = normalizedExpiry else { return }
-        let theme = themes[selectedThemeIndex]
-        let number = formattedCardNumber
-        let card = Card(
-            last4: Card.lastFourDigits(of: number),
-            holderName: holderName.trimmingCharacters(in: .whitespacesAndNewlines),
-            balance: balance,
-            type: cardPurpose.trimmingCharacters(in: .whitespacesAndNewlines),
-            colorHex: theme.colorHex,
-            gradientColors: theme.gradient,
-            isFrozen: false,
-            expiryDate: expiry
-        )
-        financeService.addCard(card, number: number)
-        HapticManager.shared.trigger(.success)
-        dismiss()
     }
 }
 
