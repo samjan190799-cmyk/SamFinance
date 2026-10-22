@@ -128,3 +128,39 @@ struct CardNetworkMark: View {
         .accessibilityLabel(network.title)
     }
 }
+
+/// Ряд готовых цветовых схем: нажатие ставит оба цвета градиента
+struct PresetSwatchRow: View {
+    @Binding var gradient: [String]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(CardPreset.all) { preset in
+                    swatch(preset)
+                }
+            }
+            .padding(.vertical, 6)
+        }
+    }
+
+    private func swatch(_ preset: CardPreset) -> some View {
+        let isSelected = CardPreset.matching(gradient)?.id == preset.id
+        return Button {
+            HapticManager.shared.impact(.light)
+            withAnimation(Motion.bouncy) {
+                gradient = preset.colors
+            }
+        } label: {
+            Circle()
+                .fill(LinearGradient(colors: preset.colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: 44, height: 44)
+                .overlay(Circle().stroke(isSelected ? Theme.accent : Theme.line, lineWidth: isSelected ? 2 : 1))
+                .scaleEffect(isSelected ? 1.12 : 1)
+                .padding(3)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(preset.title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}

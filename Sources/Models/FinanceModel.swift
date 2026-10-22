@@ -165,17 +165,39 @@ public struct Debt: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-/// Накопительная цель (Копилка), привязанная к карте
+/// Движение денег по копилке: пополнение (сумма больше нуля) или снятие (меньше нуля)
+public struct GoalEntry: Codable, Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public var date: Date
+    public var amount: Double
+    public var note: String?
+
+    public init(id: UUID = UUID(), date: Date = Date(), amount: Double, note: String? = nil) {
+        self.id = id
+        self.date = date
+        self.amount = amount
+        self.note = note
+    }
+}
+
+/// Накопительная цель (Копилка): деньги остаются на карте, приложение лишь откладывает их под цель
 public struct Goal: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
-    public var cardId: UUID? // Привязка копилки к конкретной карте
+    public var cardId: UUID? // Карта, на которой лежат деньги; у общей копилки её нет
     public var title: String // Название цели (например, "На подарки")
     public var targetAmount: Double // Целевая сумма
     public var currentAmount: Double // Накоплено на данный момент
     public var colorHex: String // Цвет свечения
     public var gradientColors: [String] // Цвета градиента карточки цели
-    
-    public init(id: UUID = UUID(), cardId: UUID? = nil, title: String, targetAmount: Double, currentAmount: Double = 0.0, colorHex: String, gradientColors: [String]) {
+
+    // Подробности копилки; у старых копилок их нет
+    public var deadline: Date? // К какому дню нужно накопить
+    public var symbol: String? // Значок (SF Symbol)
+    public var createdAt: Date?
+    public var completedAt: Date? // Когда сумма впервые дошла до цели; пусто, если цель не достигнута
+    public var entries: [GoalEntry] // Журнал пополнений и снятий
+
+    public init(id: UUID = UUID(), cardId: UUID? = nil, title: String, targetAmount: Double, currentAmount: Double = 0.0, colorHex: String, gradientColors: [String], deadline: Date? = nil, symbol: String? = nil, createdAt: Date? = nil, completedAt: Date? = nil, entries: [GoalEntry] = []) {
         self.id = id
         self.cardId = cardId
         self.title = title
@@ -183,6 +205,33 @@ public struct Goal: Codable, Identifiable, Hashable, Sendable {
         self.currentAmount = currentAmount
         self.colorHex = colorHex
         self.gradientColors = gradientColors
+        self.deadline = deadline
+        self.symbol = symbol
+        self.createdAt = createdAt
+        self.completedAt = completedAt
+        self.entries = entries
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, cardId, title, targetAmount, currentAmount, colorHex, gradientColors
+        case deadline, symbol, createdAt, completedAt, entries
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        cardId = try container.decodeIfPresent(UUID.self, forKey: .cardId)
+        title = try container.decode(String.self, forKey: .title)
+        targetAmount = try container.decode(Double.self, forKey: .targetAmount)
+        currentAmount = try container.decode(Double.self, forKey: .currentAmount)
+        colorHex = try container.decode(String.self, forKey: .colorHex)
+        gradientColors = try container.decode([String].self, forKey: .gradientColors)
+        deadline = try container.decodeIfPresent(Date.self, forKey: .deadline)
+        symbol = try container.decodeIfPresent(String.self, forKey: .symbol)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
+        completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt)
+        // Файлы прежних версий журнала не знали
+        entries = try container.decodeIfPresent([GoalEntry].self, forKey: .entries) ?? []
     }
 }
 

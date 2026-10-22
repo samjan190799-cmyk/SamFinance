@@ -433,14 +433,7 @@ struct CardEditorView: View {
     @ViewBuilder
     private var styleSections: some View {
         Section {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(CardPreset.all) { preset in
-                        presetSwatch(preset)
-                    }
-                }
-                .padding(.vertical, 6)
-            }
+            PresetSwatchRow(gradient: $gradient)
 
             ColorPicker(String(localized: "Первый цвет"), selection: colorBinding(0), supportsOpacity: false)
             ColorPicker(String(localized: "Второй цвет"), selection: colorBinding(1), supportsOpacity: false)
@@ -495,26 +488,6 @@ struct CardEditorView: View {
             get: { Color(hex: gradient[index]) },
             set: { gradient[index] = $0.hexString }
         )
-    }
-
-    private func presetSwatch(_ preset: CardPreset) -> some View {
-        let isSelected = CardPreset.matching(gradient)?.id == preset.id
-        return Button {
-            HapticManager.shared.impact(.light)
-            withAnimation(Motion.bouncy) {
-                gradient = preset.colors
-            }
-        } label: {
-            Circle()
-                .fill(LinearGradient(colors: preset.colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: 44, height: 44)
-                .overlay(Circle().stroke(isSelected ? Theme.accent : Theme.line, lineWidth: isSelected ? 2 : 1))
-                .scaleEffect(isSelected ? 1.12 : 1)
-                .padding(3)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(preset.title)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func patternTile(_ option: CardPattern) -> some View {

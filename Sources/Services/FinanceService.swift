@@ -264,9 +264,40 @@ public final class FinanceService {
 
     // MARK: - API для копилок (Goals)
 
+    /// Чем закончилось пополнение или снятие
+    public enum GoalMoveOutcome: Equatable, Sendable {
+        /// Сумма неверна или копилки нет
+        case rejected
+        case done
+        /// Этим пополнением цель достигнута
+        case reachedTarget
+    }
+
     public func addGoal(_ goal: Goal) {
         guard prepareForWrite(.goals) else { return }
-        goals.append(goal)
+        var newGoal = goal
+        if newGoal.createdAt == nil {
+            newGoal.createdAt = Date()
+        }
+        Self.refreshCompletion(&newGoal)
+        goals.append(newGoal)
+        saveGoals()
+    }
+
+    /// Сохраняет правку копилки: название, цель, срок, значок, цвет и карту.
+    /// Накопленная сумма и журнал остаются прежними, их меняют только пополнение и снятие.
+    public func updateGoal(_ goal: Goal) {
+        guard prepareForWrite(.goals), let index = goals.firstIndex(where: { $0.id == goal.id }) else { return }
+        var updated = goals[index]
+        updated.title = goal.title
+        updated.targetAmount = goal.targetAmount
+        updated.deadline = goal.deadline
+        updated.symbol = goal.symbol
+        updated.colorHex = goal.colorHex
+        updated.gradientColors = goal.gradientColors
+        updated.cardId = goal.cardId
+        Self.refreshCompletion(&updated)
+        goals[index] = updated
         saveGoals()
     }
 
@@ -274,12 +305,36 @@ public final class FinanceService {
         goals.filter { $0.cardId == cardId }
     }
 
+    /// Пополняет копилку. Деньги остаются на карте, приложение лишь откладывает их под цель.
+    @discardableResult
+    public func deposit(goalID: UUID, amount: Double, note: String? = nil, date: Date = Date()) -> GoalMoveOutcome {
+        guard amount.isFinite, amount > 0 else { return .rejected }
+        return applyMove(goalID: goalID, signedAmount: amount, note: note, date: date)
+    }
+
+    /// Снимает деньги из копилки; больше, чем накоплено, снять нельзя
+    @discardableResult
+    public func withdraw(goalID: UUID, amount: Double, note: String? = nil, date: Date = Date()) -> GoalMoveOutcome {
+        guard amount.isFinite, amount > 0,
+              let goal = goals.first(where: { $0.id == goalID }),
+              amount <= goal.currentAmount + 0.0001 else { return .rejected }
+        return applyMove(goalID: goalID, signedAmount: -amount, note: note, date: date)
+    }
+
+    /// Прежнее имя пополнения: оставлено для кода, который его вызывает
     public func addFundsToGoal(id: UUID, amount: Double) {
-        guard prepareForWrite(.goals) else { return }
-        if let index = goals.firstIndex(where: { $0.id == id }) {
-            goals[index].currentAmount += amount
-            saveGoals()
-        }
+        deposit(goalID: id, amount: amount)
+    }
+
+    /// Отменяет запись журнала: сумма копилки возвращается к тому, что было до неё
+    public func removeGoalEntry(goalID: UUID, entryID: UUID) {
+        guard prepareForWrite(.goals),
+              let index = goals.firstIndex(where: { $0.id == goalID }),
+              let entry = goals[index].entries.first(where: { $0.id == entryID }) else { return }
+        goals[index].entries.removeAll { $0.id == entryID }
+        goals[index].currentAmount = max(goals[index].currentAmount - entry.amount, 0)
+        Self.refreshCompletion(&goals[index])
+        saveGoals()
     }
 
     public func deleteGoal(id: UUID) {
@@ -287,7 +342,34 @@ public final class FinanceService {
         goals.removeAll { $0.id == id }
         saveGoals()
     }
-    
+
+    /// Сколько денег карты не отложено в копилках
+    public func freeBalance(of card: Card) -> Double {
+        max(card.balance - SavingsSummary.reserved(on: card.id, in: goals), 0)
+    }
+
+    private func applyMove(goalID: UUID, signedAmount: Double, note: String?, date: Date) -> GoalMoveOutcome {
+        guard prepareForWrite(.goals), let index = goals.firstIndex(where: { $0.id == goalID }) else { return .rejected }
+        let wasCompleted = goals[index].isCompleted
+        let cleanNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        goals[index].currentAmount = max(goals[index].currentAmount + signedAmount, 0)
+        goals[index].entries.append(GoalEntry(date: date, amount: signedAmount, note: (cleanNote?.isEmpty ?? true) ? nil : cleanNote))
+        Self.refreshCompletion(&goals[index])
+        saveGoals()
+        return !wasCompleted && goals[index].isCompleted ? .reachedTarget : .done
+    }
+
+    /// Отметка «достигнута» ставится, когда сумма дошла до цели, и снимается, если сумма снова меньше
+    private static func refreshCompletion(_ goal: inout Goal) {
+        if goal.isCompleted {
+            if goal.completedAt == nil {
+                goal.completedAt = Date()
+            }
+        } else {
+            goal.completedAt = nil
+        }
+    }
+
     // MARK: - Подсчеты и вычисления
     
     /// Общий текущий баланс (сумма всех активных балансов карт)

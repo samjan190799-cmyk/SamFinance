@@ -10,6 +10,9 @@ enum LocalFinanceAssistant {
         let text = question.lowercased()
         let period = period(in: text)
 
+        if containsAny(text, Words.goals) {
+            return goalsAnswer(financeService)
+        }
         if containsAny(text, Words.balance) {
             return balanceAnswer(financeService)
         }
@@ -32,12 +35,17 @@ enum LocalFinanceAssistant {
     }
 
     static var helpText: String {
-        String(localized: "Пока я понимаю скриншоты и тексты банковских СМС и такие вопросы:\n• сколько я потратил за неделю?\n• сколько ушло на продукты за месяц?\n• какой у меня баланс?\n• кому я должен?\n• дай совет\nЧтобы я отвечал на любые вопросы и разбирал чеки и выписки, добавьте ключ Claude, ChatGPT или Gemini: кнопка с ключом вверху или Настройки → ИИ-помощник.")
+        String(localized: "Пока я понимаю скриншоты и тексты банковских СМС и такие вопросы:\n• сколько я потратил за неделю?\n• сколько ушло на продукты за месяц?\n• какой у меня баланс?\n• кому я должен?\n• дай совет\n• как мои копилки?\nЧтобы я отвечал на любые вопросы и разбирал чеки и выписки, добавьте ключ Claude, ChatGPT или Gemini: кнопка с ключом вверху или Настройки → ИИ-помощник.")
     }
 
     // MARK: - Слова из вопроса (корни слов: русский, английский, армянский)
 
     private enum Words {
+        static let goals = [
+            "копилк", "накопл", "накопил", "моя цель", "мои цели",
+            "goal", "piggy", "have i saved",
+            "նպատակ", "խնայարկղ"
+        ]
         static let balance = [
             "баланс", "сколько денег", "на картах", "на карте", "остаток",
             "balance", "how much money", "money do i have", "on my cards", "on the card",
@@ -188,6 +196,21 @@ enum LocalFinanceAssistant {
         }
         let total = items.reduce(0.0) { $0 + $1.amount }
         return String(localized: "\(label): получено \(format(total)) — поступлений: \(items.count).")
+    }
+
+    private static func goalsAnswer(_ financeService: FinanceService) -> String {
+        let goals = financeService.goals
+        guard !goals.isEmpty else {
+            return String(localized: "Копилок пока нет. Создайте первую в разделе «Обзор» → «Копилки».")
+        }
+        let summary = SavingsSummary(goals: goals)
+        let saved = format(summary.totalSaved)
+        var answer = String(localized: "Отложено \(saved). Активных копилок: \(summary.activeCount), достигнуто: \(summary.completedCount).")
+        for goal in SavingsSummary.sortedActive(goals).prefix(5) {
+            let plan = GoalPlan(goal: goal)
+            answer += "\n• \(goal.title): \(GoalText.percent(plan))% (\(format(plan.saved)) / \(format(plan.target))) — \(GoalText.statusTitle(plan.status))"
+        }
+        return answer
     }
 
     private static func balanceAnswer(_ financeService: FinanceService) -> String {
