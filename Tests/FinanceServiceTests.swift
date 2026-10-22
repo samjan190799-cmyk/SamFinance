@@ -15,7 +15,7 @@ final class FinanceServiceTests: XCTestCase {
         try await super.tearDown()
     }
 
-    private func category(_ name: String, type: TransactionType = .expense) throws -> Category {
+    private func category(_ name: String, type: TransactionType = .expense) throws -> AppCategory {
         try XCTUnwrap(service.categories.first { $0.name == name && $0.type == type })
     }
 

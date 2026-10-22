@@ -1,4 +1,8 @@
 import Foundation
+@testable import SamFinance
+
+/// `Category` из приложения; без модуля это имя конфликтует с типом Category из Objective-C
+typealias AppCategory = SamFinance.Category
 
 /// Примеры банковских СМС для тестов. Даты в прошлом, чтобы разбор не отсёк их как «из будущего».
 enum SMSSamples {

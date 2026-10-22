@@ -49,22 +49,22 @@ final class CoreLogicTests: XCTestCase {
     // MARK: - Категории
 
     func testDefaultCategoriesHaveStableUniqueIds() {
-        let first = Category.defaultCategories
-        let second = Category.defaultCategories
+        let first = AppCategory.defaultCategories
+        let second = AppCategory.defaultCategories
         XCTAssertEqual(first.map(\.id), second.map(\.id))
         XCTAssertEqual(Set(first.map(\.id)).count, first.count)
     }
 
     func testTransfersExistForBothTypes() {
-        let transfers = Category.defaultCategories.filter { $0.name == "Переводы" }
+        let transfers = AppCategory.defaultCategories.filter { $0.name == "Переводы" }
         XCTAssertEqual(Set(transfers.map(\.type)), [.expense, .income])
     }
 
     func testCategoryDisplayNameForBuiltInAndCustom() {
-        for category in Category.defaultCategories {
+        for category in AppCategory.defaultCategories {
             XCTAssertFalse(category.displayName.isEmpty)
         }
-        let custom = Category(name: "Моя категория", icon: "star", colorHex: "#FFFFFF", type: .expense)
+        let custom = AppCategory(name: "Моя категория", icon: "star", colorHex: "#FFFFFF", type: .expense)
         XCTAssertEqual(custom.displayName, "Моя категория")
     }
 

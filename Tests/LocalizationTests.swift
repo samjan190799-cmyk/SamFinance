@@ -75,7 +75,7 @@ final class LocalizationTests: XCTestCase {
     func testBuiltInCategoriesAreTranslatedInEveryLanguage() throws {
         let english = try table("en")
         let armenian = try table("hy")
-        for category in Category.defaultCategories {
+        for category in AppCategory.defaultCategories {
             XCTAssertNotNil(english[category.name], "нет английского названия категории \(category.name)")
             XCTAssertNotNil(armenian[category.name], "нет армянского названия категории \(category.name)")
         }
@@ -92,7 +92,7 @@ final class LocalizationTests: XCTestCase {
 
     func testUnknownKeyReturnsItself() {
         XCTAssertEqual(AppLanguage.english.string("нет такого ключа"), "нет такого ключа")
-        XCTAssertEqual(Category.displayName(for: "Моя категория"), "Моя категория")
+        XCTAssertEqual(AppCategory.displayName(for: "Моя категория"), "Моя категория")
     }
 
     func testLanguageSelectionIsStoredAsAppleLanguages() {
