@@ -50,7 +50,12 @@ def decoder(ffmpeg, src):
         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
 
-def encoder(ffmpeg, audio, out):
+def _scaled(bitrate, factor):
+    """'10M' -> '12.5M'"""
+    return f'{float(bitrate[:-1]) * factor:g}{bitrate[-1]}'
+
+
+def encoder(ffmpeg, audio, out, bitrate):
     cmd = [ffmpeg, '-hide_banner', '-loglevel', 'error', '-y',
            '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{overlay.WIDTH}x{overlay.HEIGHT}', '-r', str(FPS), '-i', '-']
     if audio:
@@ -58,7 +63,8 @@ def encoder(ffmpeg, audio, out):
     else:
         cmd += ['-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000']
     cmd += ['-vf', 'scale=out_color_matrix=bt709:out_range=tv:flags=lanczos,format=yuv420p,setsar=1',
-            '-c:v', 'libx264', '-profile:v', 'high', '-level', '4.0', '-b:v', '10M', '-maxrate', '12M', '-bufsize', '20M',
+            '-c:v', 'libx264', '-profile:v', 'high', '-level', '4.0', '-b:v', bitrate, '-maxrate', _scaled(bitrate, 1.25),
+            '-bufsize', _scaled(bitrate, 2.5),
             '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709',
             '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', '-ac', '2', '-shortest', '-movflags', '+faststart', str(out)]
     return subprocess.Popen(cmd, stdin=subprocess.PIPE)
@@ -72,6 +78,7 @@ def main():
     ap.add_argument('--resources', required=True)
     ap.add_argument('--out', required=True)
     ap.add_argument('--no-music', action='store_true')
+    ap.add_argument('--bitrate', default='10M', help='битрейт видео, например 10M или 2800k')
     ap.add_argument('--frames-dir', help='сохранить контрольные кадры в эту папку')
     args = ap.parse_args()
 
@@ -105,7 +112,7 @@ def main():
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     dec = decoder(args.ffmpeg, args.raw)
-    enc = encoder(args.ffmpeg, audio, args.out)
+    enc = encoder(args.ffmpeg, audio, args.out, args.bitrate)
     frame_size = overlay.WIDTH * overlay.HEIGHT * 3
 
     source = {}  # номер оставленного кадра -> картинка; держим только нужные
