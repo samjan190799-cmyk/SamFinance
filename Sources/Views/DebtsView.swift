@@ -203,7 +203,7 @@ struct DebtRowView: View {
                     Text(subtitle)
                         .font(.system(size: 13))
                         .foregroundColor(Theme.textTertiary)
-                        .lineLimit(1)
+                        .lineLimit(2)
                 }
 
                 Spacer(minLength: 8)
