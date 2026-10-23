@@ -1,8 +1,9 @@
 name: App Store Preview Video
 
 # Записывает ролик для App Store (App Preview): отладочная сборка на симуляторе iPhone Pro Max проигрывает сценарий
-# (Sources/Helpers/ScreenshotMode.swift, аргумент -ScreenshotTour), экран пишется simctl, затем ffmpeg приводит запись
-# к требованиям Apple: 886x1920, H.264, 30 кадров/с, 15-30 секунд, стерео AAC. По ролику на русском, английском и армянском.
+# (Sources/Helpers/ScreenshotMode.swift, аргумент -ScreenshotTour), экран пишется simctl. Затем Tools/AppPreview
+# собирает из записи готовый ролик: 886x1920, H.264, 30 кадров/с, до 30 секунд, стерео AAC, с анимированными подписями,
+# касаниями вкладок, полосой прогресса и музыкой. По ролику на русском, английском и армянском.
 # Результат лежит в артефакте app-preview вместе с контрольными кадрами. Запуск: вручную или правкой файлов из paths.
 on:
   workflow_dispatch:
@@ -10,6 +11,7 @@ on:
     paths:
       - '.github/workflows/app-preview.yml'
       - 'Sources/Helpers/ScreenshotMode.swift'
+      - 'Tools/AppPreview/**'
 
 permissions:
   contents: read
@@ -138,17 +140,18 @@ jobs:
             ffmpeg -y -v error -i "raw/$lang.mp4" -vf "fps=1/2,scale=166:-1,tile=10x2" -frames:v 1 "preview/rawsheet_$lang.jpg" || true
           done
 
-      - name: Encode for App Store
+      - name: Install Composer Dependencies
         run: |
-          # START — сколько секунд записи отрезать в начале; LENGTH — длина готового ролика (Apple: 15-30 с)
-          START="${PREVIEW_START:-3.5}"
-          LENGTH="${PREVIEW_LENGTH:-29}"
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet pillow numpy
+          .venv/bin/python -m unittest discover -s Tools/AppPreview
+
+      - name: Compose Preview Videos
+        run: |
+          mkdir -p preview
           for lang in ru en hy; do
             echo "== $lang"
-            if ! ffmpeg -y -v error -ss "$START" -i "raw/$lang.mp4"               -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=48000"               -t "$LENGTH"               -vf "scale=886:1920:flags=lanczos,fps=30,format=yuv420p"               -c:v libx264 -profile:v high -level 4.0 -b:v 10M -maxrate 12M -bufsize 20M               -c:a aac -b:a 256k -ar 48000 -ac 2 -shortest -movflags +faststart               "preview/hashiv_preview_$lang.mp4"; then
-              echo "::warning::Не удалось собрать ролик $lang"
-              continue
-            fi
+            .venv/bin/python Tools/AppPreview/compose.py --ffmpeg ffmpeg --raw "raw/$lang.mp4" --lang "$lang"               --resources Resources --out "preview/hashiv_preview_$lang.mp4"
             ffprobe -v error -show_entries stream=codec_type,codec_name,width,height,r_frame_rate,sample_rate,channels:format=duration,size               -of default=nw=1 "preview/hashiv_preview_$lang.mp4"
             # Контрольные кадры: по одному каждые 2 секунды
             ffmpeg -y -v error -i "preview/hashiv_preview_$lang.mp4"               -vf "fps=1/2,scale=222:-1,tile=8x2" -frames:v 1 "preview/sheet_$lang.jpg" || true

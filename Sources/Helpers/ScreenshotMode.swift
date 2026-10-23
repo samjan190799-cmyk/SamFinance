@@ -79,12 +79,12 @@ private struct ScreenshotSceneModifier: ViewModifier {
     @Binding var selectedTab: AppTab
     let financeService: FinanceService
     @State private var cover: ScreenshotScene?
-    /// Подпись поверх ролика
-    @State private var caption: String?
+    /// Номер сцены ролика (0 — метки нет); по метке монтаж находит границы сцен
+    @State private var scene = 0
 
     func body(content: Content) -> some View {
         content
-            .tourCaption(caption)
+            .tourMarker(scene)
             .task {
                 if ScreenshotMode.isTour {
                     await playTour()
@@ -92,9 +92,9 @@ private struct ScreenshotSceneModifier: ViewModifier {
                     await prepare()
                 }
             }
-            .fullScreenCover(item: $cover) { scene in
-                coverContent(scene)
-                    .tourCaption(caption)
+            .fullScreenCover(item: $cover) { cover in
+                coverContent(cover)
+                    .tourMarker(scene)
             }
     }
 
@@ -156,34 +156,35 @@ private struct ScreenshotSceneModifier: ViewModifier {
 
     // MARK: - Ролик
 
-    private func show(_ text: String) {
-        withAnimation(Motion.spring) {
-            caption = text
-        }
+    private func mark(_ number: Int) {
+        scene = number
     }
 
     private func pause(_ seconds: Double) async {
         try? await Task.sleep(for: .seconds(seconds))
     }
 
-    /// Сценарий около 27 секунд: обзор, листание карт, оформление карты, копилки, достижение цели, чат, отчёт.
+    /// Сценарий около 33 секунд: обзор, листание карт, оформление карты, копилки, достижение цели, чат, отчёт.
     /// Экраны внутри (карусель, редактор, пополнение) играют свои части сами, когда `ScreenshotMode.isTour` истинно.
+    /// Подписи в запись не попадают: каждая сцена получает номер (1-7), а готовый ролик собирает Tools/AppPreview
+    /// и рисует над номером свою анимированную подпись: «Весь учёт в одном месте», «Свои карты…», «Цвет, узор и значок…»,
+    /// «Копилки с планом накопления», «Цель достигнута!», «СМС и скриншоты сами становятся операциями», «Отчёты по дням и категориям».
     private func playTour() async {
         DemoData.seed(financeService, forTour: true)
         selectedTab = .overview
 
-        // Запись успевает начаться до первого кадра сценария; подпись видна с самого начала
-        show(String(localized: "Весь учёт в одном месте"))
+        // Запись успевает начаться до первого кадра сценария; метка видна с самого начала
+        mark(1)
         await pause(8)
 
         withAnimation(Motion.spring) {
             selectedTab = .cards
         }
-        show(String(localized: "Свои карты: листайте и настраивайте"))
+        mark(2)
         await pause(4.6)
 
         cover = .cardEditor
-        show(String(localized: "Цвет, узор и значок: оформите карту по-своему"))
+        mark(3)
         await pause(4.6)
 
         cover = nil
@@ -192,13 +193,13 @@ private struct ScreenshotSceneModifier: ViewModifier {
             selectedTab = .overview
         }
         cover = .savings
-        show(String(localized: "Копилки с планом накопления"))
+        mark(4)
         await pause(2.6)
 
         cover = nil
         await pause(0.7)
         cover = .goalMoney
-        show(String(localized: "Цель достигнута!"))
+        mark(5)
         await pause(4.2)
 
         cover = nil
@@ -209,7 +210,7 @@ private struct ScreenshotSceneModifier: ViewModifier {
         withAnimation(Motion.spring) {
             selectedTab = .assistant
         }
-        show(String(localized: "СМС и скриншоты сами становятся операциями"))
+        mark(6)
         await pause(0.8)
         store.send(text: DemoData.sampleSMS())
         await pause(1.8)
@@ -221,39 +222,31 @@ private struct ScreenshotSceneModifier: ViewModifier {
         withAnimation(Motion.spring) {
             selectedTab = .report
         }
-        show(String(localized: "Отчёты по дням и категориям"))
+        mark(7)
         await pause(2.8)
 
-        withAnimation(Motion.spring) {
-            caption = nil
-        }
+        mark(0)
     }
 }
 
-/// Подпись ролика: лаймовая плашка в полосе над экраном. Полоса занимает место, поэтому подпись не закрывает кнопки и списки.
-/// Вне ролика ничего не добавляет.
-private struct TourCaption: ViewModifier {
-    let text: String?
+/// Метка сцены ролика: тонкая серая полоска в полосе над экраном, длина полоски равна номеру сцены (24 пункта на номер).
+/// Подписи рисует монтаж (Tools/AppPreview), по метке он находит, какая сцена идёт, и закрашивает полосу.
+/// Полоса занимает место, поэтому экраны внутри выглядят так же, как с подписью. Вне ролика ничего не добавляет.
+private struct TourMarker: ViewModifier {
+    let scene: Int
 
     func body(content: Content) -> some View {
         if ScreenshotMode.isTour {
             content.safeAreaInset(edge: .top, spacing: 0) {
-                ZStack {
-                    if let text {
-                        Text(text)
-                            .font(.system(size: 17, weight: .semibold, design: .rounded))
-                            .foregroundColor(Theme.onAccent)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 11)
-                            .background(Theme.accent)
-                            .clipShape(RoundedRectangle(cornerRadius: 22))
-                            .padding(.horizontal, 20)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
-                            .id(text)
+                ZStack(alignment: .leading) {
+                    if scene > 0 {
+                        Rectangle()
+                            .fill(Color(white: 0.6))
+                            .frame(width: 24 * CGFloat(scene), height: 4)
+                            .padding(.leading, 16)
                     }
                 }
-                .frame(maxWidth: .infinity, minHeight: 78)
+                .frame(maxWidth: .infinity, minHeight: 78, maxHeight: 78, alignment: .leading)
                 .background(Theme.background)
                 .allowsHitTesting(false)
             }
@@ -264,8 +257,8 @@ private struct TourCaption: ViewModifier {
 }
 
 private extension View {
-    func tourCaption(_ text: String?) -> some View {
-        modifier(TourCaption(text: text))
+    func tourMarker(_ scene: Int) -> some View {
+        modifier(TourMarker(scene: scene))
     }
 }
 #endif
