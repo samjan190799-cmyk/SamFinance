@@ -143,9 +143,10 @@ jobs:
           # START — сколько секунд записи отрезать в начале; LENGTH — длина готового ролика (Apple: 15-30 с)
           START="${PREVIEW_START:-3.5}"
           LENGTH="${PREVIEW_LENGTH:-29}"
+          # setsar=1: без него scale оставляет неквадратный пиксель, и App Store Connect видит ширину 883,7 вместо 886
           for lang in ru en hy; do
             echo "== $lang"
-            if ! ffmpeg -y -v error -ss "$START" -i "raw/$lang.mp4"               -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=48000"               -t "$LENGTH"               -vf "scale=886:1920:flags=lanczos,fps=30,format=yuv420p"               -c:v libx264 -profile:v high -level 4.0 -b:v 10M -maxrate 12M -bufsize 20M               -c:a aac -b:a 256k -ar 48000 -ac 2 -shortest -movflags +faststart               "preview/hashiv_preview_$lang.mp4"; then
+            if ! ffmpeg -y -v error -ss "$START" -i "raw/$lang.mp4"               -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=48000"               -t "$LENGTH"               -vf "scale=886:1920:flags=lanczos,setsar=1,fps=30,format=yuv420p"               -c:v libx264 -profile:v high -level 4.0 -b:v 10M -maxrate 12M -bufsize 20M               -c:a aac -b:a 256k -ar 48000 -ac 2 -shortest -movflags +faststart               "preview/hashiv_preview_$lang.mp4"; then
               echo "::warning::Не удалось собрать ролик $lang"
               continue
             fi
