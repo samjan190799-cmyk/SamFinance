@@ -239,7 +239,6 @@ private struct TourMarker: ViewModifier {
         if ScreenshotMode.isTour {
             content.safeAreaInset(edge: .top, spacing: 0) {
                 ZStack(alignment: .leading) {
-                    Color.clear
                     if scene > 0 {
                         Rectangle()
                             .fill(Color(white: 0.6))
@@ -247,7 +246,7 @@ private struct TourMarker: ViewModifier {
                             .padding(.leading, 16)
                     }
                 }
-                .frame(maxWidth: .infinity, minHeight: 78)
+                .frame(maxWidth: .infinity, minHeight: 78, maxHeight: 78, alignment: .leading)
                 .background(Theme.background)
                 .allowsHitTesting(false)
             }
