@@ -95,6 +95,9 @@ final class AIChatStore {
 
     var isWorking: Bool { workingText != nil }
 
+    /// Текущий разбор скриншотов или запрос к облачному ИИ: его можно отменить кнопкой в чате
+    @ObservationIgnored private var workTask: Task<Void, Never>?
+
     private init() {
         messages = [Self.greeting()]
     }
@@ -123,9 +126,20 @@ final class AIChatStore {
     #endif
 
     func reset() {
+        workTask?.cancel()
+        workTask = nil
         messages = [Self.greeting()]
         workingText = nil
         pendingConsent = nil
+    }
+
+    /// Прерывает запрос, который идёт слишком долго. Ответ, который придёт позже, в чат не попадёт.
+    func cancelWork() {
+        guard isWorking else { return }
+        workTask?.cancel()
+        workTask = nil
+        workingText = nil
+        reply(String(localized: "Запрос отменён."))
     }
 
     /// Перечитывает выбранный сервис и его ключ после возврата из настроек
@@ -164,17 +178,25 @@ final class AIChatStore {
             workingText: String(localized: "Думаю…"),
             declinedReply: nil
         )
-        Task {
+        workTask = Task {
             await submit(request)
         }
     }
 
     // MARK: - Скриншоты
 
-    func send(screenshots items: [PhotosPickerItem]) async {
+    func send(screenshots items: [PhotosPickerItem]) {
         guard !items.isEmpty, !isWorking else { return }
+        // Индикатор появляется сразу, до первого await: вторую отправку в это время сделать нельзя
         workingText = String(localized: "Распознаю текст…")
-        defer { workingText = nil }
+        workTask = Task {
+            await process(screenshots: items)
+        }
+    }
+
+    private func process(screenshots items: [PhotosPickerItem]) async {
+        // После отмены индикатор уже убран, а новый запрос мог его занять: чужой не гасим
+        defer { if !Task.isCancelled { workingText = nil } }
 
         var images: [Data] = []
         for item in items {
@@ -182,6 +204,7 @@ final class AIChatStore {
                 images.append(data)
             }
         }
+        guard !Task.isCancelled else { return }
         guard !images.isEmpty else {
             reply(String(localized: "Не получилось открыть изображения. Попробуйте выбрать их ещё раз."))
             return
@@ -198,6 +221,7 @@ final class AIChatStore {
             }
         }
         let recognized = texts.joined(separator: "\n\n")
+        guard !Task.isCancelled else { return }
 
         // Сначала разбор на телефоне: банковские СМС не уходят в облако
         let found = Self.bankOperations(in: recognized)
@@ -269,7 +293,7 @@ final class AIChatStore {
         guard let request = pendingConsent else { return }
         pendingConsent = nil
         request.provider.setConsent(true)
-        Task {
+        workTask = Task {
             await run(request)
         }
     }
@@ -287,7 +311,8 @@ final class AIChatStore {
     }
 
     private func askCloud(_ question: String, images: [Data], recognizedText: String?, history: [CloudTurn], provider: AIProvider, apiKey: String) async {
-        defer { workingText = nil }
+        // После отмены индикатор уже убран, а новый запрос мог его занять: чужой не гасим
+        defer { if !Task.isCancelled { workingText = nil } }
         do {
             let answer = try await CloudFinanceAssistant.ask(
                 question,
@@ -297,6 +322,7 @@ final class AIChatStore {
                 provider: provider,
                 apiKey: apiKey
             )
+            guard !Task.isCancelled else { return }
             if answer.operations.isEmpty {
                 reply(answer.text)
             } else {

@@ -12,6 +12,8 @@ enum AIAPIError: LocalizedError {
     case cutOff
     case badResponse(AIProvider)
     case network(AIProvider)
+    /// Ответ не пришёл за отведённое время: сервис недоступен, перегружен или связь «висит»
+    case timedOut(AIProvider)
     case server(AIProvider, String)
 
     var errorDescription: String? {
@@ -36,6 +38,8 @@ enum AIAPIError: LocalizedError {
             return String(localized: "Не получилось разобрать ответ \(provider.displayName). Повторите запрос.")
         case .network(let provider):
             return String(localized: "Нет связи с сервером \(provider.displayName). Проверьте интернет.")
+        case .timedOut(let provider):
+            return String(localized: "\(provider.displayName) не ответил вовремя. Проверьте интернет и VPN и повторите. Если так каждый раз, нажмите «Проверить подключение» в Настройках → ИИ-помощник.")
         case .server(let provider, let message):
             return String(localized: "\(provider.displayName) вернул ошибку: \(message)")
         }
@@ -86,15 +90,54 @@ struct AIPrompt: Sendable {
 }
 
 enum AIHTTP {
-    /// Отправляет запрос и возвращает тело ответа 200. Перегрузку, сбой сервера или связи пробует переждать один раз.
-    static func send(_ request: URLRequest, provider: AIProvider) async throws -> Data {
+    /// Как запрос уходит в сеть; в тестах подменяется, чтобы не обращаться к настоящим серверам
+    typealias Transport = @Sendable (URLRequest) async throws -> (Data, URLResponse)
+
+    static let urlSession: Transport = { request in
+        try await URLSession.shared.data(for: request)
+    }
+
+    /// Сколько ждать ответа целиком, с повтором. Раньше ждали до 6 минут (две попытки по 180 с), и чат казался зависшим.
+    static let defaultDeadline: Duration = .seconds(120)
+
+    /// Отправляет запрос и возвращает тело ответа 200. Если ответа нет дольше `deadline`, бросает `timedOut`.
+    static func send(
+        _ request: URLRequest,
+        provider: AIProvider,
+        deadline: Duration = defaultDeadline,
+        transport: @escaping Transport = urlSession
+    ) async throws -> Data {
+        var request = request
+        // Простой соединения без данных считается обрывом на том же сроке, что и весь запрос
+        request.timeoutInterval = TimeInterval(deadline.components.seconds) + 1
+        let limited = request
+
+        return try await withThrowingTaskGroup(of: Data.self) { group in
+            group.addTask {
+                try await perform(limited, provider: provider, transport: transport)
+            }
+            group.addTask {
+                try await Task.sleep(for: deadline)
+                throw AIAPIError.timedOut(provider)
+            }
+            defer { group.cancelAll() }
+            guard let data = try await group.next() else {
+                throw AIAPIError.badResponse(provider)
+            }
+            return data
+        }
+    }
+
+    /// Перегрузку, сбой сервера или обрыв связи пробует переждать один раз. Тайм-аут не повторяется: ждать ещё дольше нет смысла.
+    private static func perform(_ request: URLRequest, provider: AIProvider, transport: Transport) async throws -> Data {
         for attempt in 0..<2 {
             let isLastAttempt = attempt == 1
             let result: (Data, URLResponse)
             do {
-                result = try await URLSession.shared.data(for: request)
+                result = try await transport(request)
             } catch {
                 try Task.checkCancellation()
+                if (error as? URLError)?.code == .timedOut { throw AIAPIError.timedOut(provider) }
                 if isLastAttempt { throw AIAPIError.network(provider) }
                 try await Task.sleep(for: .seconds(2))
                 continue

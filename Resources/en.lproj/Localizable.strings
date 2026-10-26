@@ -284,6 +284,13 @@
 "Необязательно" = "Optional";
 "Нет операций за этот период" = "No transactions for this period";
 "Нет связи с сервером %@. Проверьте интернет." = "Cannot reach the %@ server. Check your internet connection.";
+"Запрос отменён." = "Request cancelled.";
+"Отменить запрос" = "Cancel request";
+"%@ не ответил вовремя. Проверьте интернет и VPN и повторите. Если так каждый раз, нажмите «Проверить подключение» в Настройках → ИИ-помощник." = "%@ didn’t respond in time. Check your internet connection and VPN and try again. If it keeps happening, tap “Check connection” in Settings → AI assistant.";
+"Проверить подключение" = "Check connection";
+"Подключение работает: %@" = "Connection works: %@";
+"%@ не ответил за 20 секунд. Похоже, сервис недоступен из вашей сети: проверьте интернет и VPN." = "%@ didn’t respond within 20 seconds. The service seems unreachable from your network: check your internet connection and VPN.";
+"Не получилось проверить подключение." = "Couldn’t check the connection.";
 "Ничего не отмечено" = "Nothing selected";
 "Новая копилка" = "New goal";
 "Новая операция" = "New transaction";
