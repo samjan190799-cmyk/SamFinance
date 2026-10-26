@@ -48,6 +48,12 @@ public final class FinanceService {
     /// Пока хранилище в этом списке, запись в него запрещена, чтобы пустой массив не затёр непрочитанные данные.
     @ObservationIgnored private var unreadableStores: Set<Store> = []
 
+    /// Все файлы прочитаны. Пока это не так (телефон заблокирован), напоминания не пересоздаются:
+    /// пустые списки иначе удалили бы напоминания о непрочитанных долгах и копилках.
+    var isFullyLoaded: Bool {
+        unreadableStores.isEmpty
+    }
+
     public init() {
         loadData()
         // Демо-информация полностью удалена при инициализации.
@@ -256,6 +262,24 @@ public final class FinanceService {
         }
     }
 
+    /// Отмечает долг погашенным или возвращает в активные (кнопка «Погашен» в напоминании)
+    public func setDebtPaid(id: UUID, isPaid: Bool) {
+        guard prepareForWrite(.debts) else { return }
+        if let index = debts.firstIndex(where: { $0.id == id }), debts[index].isPaid != isPaid {
+            debts[index].isPaid = isPaid
+            saveDebts()
+        }
+    }
+
+    /// Меняет, когда заранее напомнить о сроке долга
+    public func setDebtReminder(id: UUID, reminder: DebtReminder) {
+        guard prepareForWrite(.debts) else { return }
+        if let index = debts.firstIndex(where: { $0.id == id }) {
+            debts[index].reminder = reminder
+            saveDebts()
+        }
+    }
+
     public func deleteDebt(id: UUID) {
         guard prepareForWrite(.debts) else { return }
         debts.removeAll { $0.id == id }
@@ -415,6 +439,7 @@ public final class FinanceService {
         loadCards()
         loadDebts()
         loadGoals()
+        ReminderService.shared.update(from: self)
     }
 
     private func loadTransactions() {
@@ -472,7 +497,6 @@ public final class FinanceService {
     private func loadDebts() {
         if let loaded = readStore([Debt].self, store: .debts, url: debtsURL, dateStrategy: .iso8601) {
             debts = loaded
-            DebtReminderService.shared.reschedule(loaded)
         }
     }
 
@@ -571,6 +595,8 @@ public final class FinanceService {
         } catch {
             print("⚠️ Не удалось сохранить транзакции: \(error.localizedDescription)")
         }
+        // Вечернее напоминание не приходит в день, когда операции уже записаны
+        ReminderService.shared.update(from: self)
     }
     
     private func saveCards() {
@@ -583,6 +609,7 @@ public final class FinanceService {
         } catch {
             print("⚠️ Не удалось сохранить карты: \(error.localizedDescription)")
         }
+        ReminderService.shared.update(from: self)
     }
     
     private func saveDebts() {
@@ -596,7 +623,7 @@ public final class FinanceService {
         } catch {
             print("⚠️ Не удалось сохранить долги: \(error.localizedDescription)")
         }
-        DebtReminderService.shared.reschedule(debts)
+        ReminderService.shared.update(from: self)
     }
     
     private func saveGoals() {
@@ -609,5 +636,6 @@ public final class FinanceService {
         } catch {
             print("⚠️ Не удалось сохранить цели: \(error.localizedDescription)")
         }
+        ReminderService.shared.update(from: self)
     }
 }
