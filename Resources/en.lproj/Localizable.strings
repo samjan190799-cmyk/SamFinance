@@ -284,6 +284,8 @@
 "Необязательно" = "Optional";
 "Нет операций за этот период" = "No transactions for this period";
 "Нет связи с сервером %@. Проверьте интернет." = "Cannot reach the %@ server. Check your internet connection.";
+"У бесплатных ключей Gemini небольшой дневной лимит: попробуйте модель gemini-3.5-flash-lite в поле «Модель» (Настройки → ИИ-помощник) или повторите завтра." = "Free Gemini keys have a small daily limit: try the gemini-3.5-flash-lite model in the “Model” field (Settings → AI assistant) or try again tomorrow.";
+"Ответ сервиса: %@" = "Service response: %@";
 "Запрос отменён." = "Request cancelled.";
 "Отменить запрос" = "Cancel request";
 "%@ не ответил вовремя. Проверьте интернет и VPN и повторите. Если так каждый раз, нажмите «Проверить подключение» в Настройках → ИИ-помощник." = "%@ didn’t respond in time. Check your internet connection and VPN and try again. If it keeps happening, tap “Check connection” in Settings → AI assistant.";

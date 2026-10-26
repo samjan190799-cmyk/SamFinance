@@ -310,8 +310,15 @@ struct SettingsView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .foregroundColor(.secondary)
+                    .keyboardType(.asciiCapable)
                     .onChange(of: modelInput) { _, value in
-                        provider.setCustomModel(value)
+                        // Пробелы и длинные тире, которые ставит клавиатура, убираются сразу: поле показывает то, что уйдёт сервису
+                        let cleaned = AIProvider.normalizedModel(value)
+                        if cleaned != value {
+                            modelInput = cleaned
+                            return
+                        }
+                        provider.setCustomModel(cleaned)
                         connectionResult = nil
                     }
             }
