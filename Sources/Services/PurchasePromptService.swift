@@ -114,7 +114,10 @@ public final class PurchasePromptService {
             intentIdentifiers: [],
             options: []
         )
-        UNUserNotificationCenter.current().setNotificationCategories([kind, expenseFirst, expenseMore, income])
+        // Набор групп заменяется целиком, поэтому группы напоминаний регистрируются здесь же
+        UNUserNotificationCenter.current().setNotificationCategories(
+            Set([kind, expenseFirst, expenseMore, income] + ReminderService.notificationCategories())
+        )
     }
 
     // MARK: - Разрешение на уведомления
@@ -282,7 +285,14 @@ final class PurchaseNotificationDelegate: NSObject, UNUserNotificationCenterDele
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let action = response.actionIdentifier
-        let context = PurchaseContext(info: response.notification.request.content.userInfo)
+        let content = response.notification.request.content
+        // Напоминания о долгах, копилках и картах обрабатывает свой сервис
+        if content.categoryIdentifier.hasPrefix(ReminderID.prefix) {
+            let target = content.userInfo[ReminderID.targetKey] as? String ?? ""
+            await ReminderService.shared.handle(actionIdentifier: action, target: target)
+            return
+        }
+        let context = PurchaseContext(info: content.userInfo)
         await PurchasePromptService.shared.handle(actionIdentifier: action, context: context)
     }
 }
