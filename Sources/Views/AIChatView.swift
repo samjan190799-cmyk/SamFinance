@@ -47,9 +47,7 @@ struct AIChatView: View {
         .onChange(of: pickerItems) { _, items in
             guard !items.isEmpty else { return }
             pickerItems = []
-            Task {
-                await store.send(screenshots: items)
-            }
+            store.send(screenshots: items)
         }
     }
 
@@ -216,9 +214,21 @@ struct AIChatView: View {
             Text(store.workingText ?? "")
                 .font(.system(size: 15))
                 .foregroundColor(Theme.textSecondary)
+            Button {
+                HapticManager.shared.impact(.light)
+                store.cancelWork()
+            } label: {
+                Text("Отмена")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Theme.accent)
+                    .padding(.horizontal, 6)
+                    .frame(minHeight: 32)
+            }
+            .accessibilityLabel(String(localized: "Отменить запрос"))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.leading, 14)
+        .padding(.trailing, 8)
+        .padding(.vertical, 6)
         .background(Theme.surface)
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .frame(maxWidth: .infinity, alignment: .leading)

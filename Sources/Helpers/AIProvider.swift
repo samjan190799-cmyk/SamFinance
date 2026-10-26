@@ -116,18 +116,25 @@ enum AIProvider: String, CaseIterable, Identifiable, Sendable {
     var customModel: String? {
         let value = UserDefaults.standard.string(forKey: modelKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let value, !value.isEmpty else { return nil }
-        return value
+        return Self.normalizedModel(value)
+    }
+
+    /// Название модели без пробелов и с обычными дефисами. Клавиатура телефона сама ставит пробелы вокруг тире
+    /// и заменяет дефис на длинное тире: «gemini - 3.6 - flash» сервис не принимает.
+    static func normalizedModel(_ raw: String) -> String {
+        let dashes: Set<Character> = ["–", "—", "−", "‐", "‑", "‒", "―"]
+        return String(raw.filter { !$0.isWhitespace }.map { dashes.contains($0) ? "-" : $0 })
     }
 
     /// Модель, на которую уходят запросы: своя из настроек или стандартная
     var model: String { customModel ?? defaultModel }
 
     func setCustomModel(_ value: String) {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
+        let cleaned = Self.normalizedModel(value)
+        if cleaned.isEmpty {
             UserDefaults.standard.removeObject(forKey: modelKey)
         } else {
-            UserDefaults.standard.set(trimmed, forKey: modelKey)
+            UserDefaults.standard.set(cleaned, forKey: modelKey)
         }
     }
 
