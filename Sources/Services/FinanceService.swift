@@ -263,19 +263,46 @@ public final class FinanceService {
         saveDebts()
     }
 
+    /// Оплата: долг и разовый платёж закрываются, а повторяющийся платёж переносит срок на следующий период и остаётся активным.
+    /// Возвращает запись после оплаты; nil, если такой записи нет.
+    @discardableResult
+    public func payDebt(id: UUID, now: Date = Date(), calendar: Calendar = .current) -> Debt? {
+        guard prepareForWrite(.debts), let index = debts.firstIndex(where: { $0.id == id }) else { return nil }
+        if let next = debts[index].nextDueDate(now: now, calendar: calendar) {
+            if debts[index].firstDueDate == nil {
+                debts[index].firstDueDate = debts[index].dueDate
+            }
+            debts[index].dueDate = next
+        } else {
+            debts[index].isPaid = true
+        }
+        debts[index].lastPaidAt = now
+        let paid = debts[index]
+        saveDebts()
+        return paid
+    }
+
+    /// Кнопка с кружком: погашенный долг возвращается в активные, остальные оплачиваются
     public func togglePayDebt(id: UUID) {
-        guard prepareForWrite(.debts) else { return }
-        if let index = debts.firstIndex(where: { $0.id == id }) {
-            debts[index].isPaid.toggle()
+        guard prepareForWrite(.debts), let index = debts.firstIndex(where: { $0.id == id }) else { return }
+        if debts[index].isPaid {
+            debts[index].isPaid = false
             saveDebts()
+        } else {
+            payDebt(id: id)
         }
     }
 
-    /// Отмечает долг погашенным или возвращает в активные (кнопка «Погашен» в напоминании)
+    /// Отмечает долг погашенным или возвращает в активные (кнопка «Погашен» в напоминании, действие ИИ).
+    /// Повторяющийся платёж при «погашен» переносит срок вперёд.
     public func setDebtPaid(id: UUID, isPaid: Bool) {
-        guard prepareForWrite(.debts) else { return }
-        if let index = debts.firstIndex(where: { $0.id == id }), debts[index].isPaid != isPaid {
-            debts[index].isPaid = isPaid
+        guard prepareForWrite(.debts), let index = debts.firstIndex(where: { $0.id == id }) else { return }
+        if isPaid {
+            if !debts[index].isPaid {
+                payDebt(id: id)
+            }
+        } else if debts[index].isPaid {
+            debts[index].isPaid = false
             saveDebts()
         }
     }
@@ -294,6 +321,9 @@ public final class FinanceService {
         guard prepareForWrite(.debts), let index = debts.firstIndex(where: { $0.id == debt.id }) else { return }
         var updated = debt
         updated.isPaid = debts[index].isPaid
+        if updated.lastPaidAt == nil {
+            updated.lastPaidAt = debts[index].lastPaidAt
+        }
         debts[index] = updated
         saveDebts()
     }

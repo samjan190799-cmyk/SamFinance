@@ -55,6 +55,8 @@ struct AIAction: Sendable, Equatable {
     var date: Date?
     var direction: DebtSide?
     var debtType: DebtType?
+    /// Вид платежа: коммуналка, интернет, подписка…; только для debtType == .bill
+    var billKind: BillKind?
     var reminder: DebtReminder?
     var repeatRule: ReminderRepeat?
     var note: String?
@@ -73,6 +75,7 @@ struct AIAction: Sendable, Equatable {
         date: Date? = nil,
         direction: DebtSide? = nil,
         debtType: DebtType? = nil,
+        billKind: BillKind? = nil,
         reminder: DebtReminder? = nil,
         repeatRule: ReminderRepeat? = nil,
         note: String? = nil,
@@ -88,6 +91,7 @@ struct AIAction: Sendable, Equatable {
         self.date = date
         self.direction = direction
         self.debtType = debtType
+        self.billKind = billKind
         self.reminder = reminder
         self.repeatRule = repeatRule
         self.note = note

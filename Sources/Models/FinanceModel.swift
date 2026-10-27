@@ -138,10 +138,65 @@ public struct Card: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-/// Тип долга: кредит организации или долг физическому лицу
-public enum DebtType: String, Codable, Sendable {
+/// Тип записи на экране долгов: кредит организации, долг человеку или регулярный платёж (коммуналка, интернет, подписка)
+public enum DebtType: String, Codable, Sendable, CaseIterable {
     case credit = "credit"
     case person = "person"
+    case bill = "bill"
+}
+
+/// Вид регулярного платежа
+public enum BillKind: String, Codable, Sendable, CaseIterable, Identifiable {
+    case utilities
+    case internet
+    case phone
+    case rent
+    case subscription
+    case insurance
+    case tax
+    case other
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .utilities: return String(localized: "Коммуналка")
+        case .internet: return String(localized: "Интернет")
+        case .phone: return String(localized: "Телефон")
+        case .rent: return String(localized: "Аренда")
+        case .subscription: return String(localized: "Подписки")
+        case .insurance: return String(localized: "Страховка")
+        case .tax: return String(localized: "Налоги")
+        case .other: return String(localized: "Другое")
+        }
+    }
+
+    /// Значок SF Symbols
+    public var icon: String {
+        switch self {
+        case .utilities: return "house.fill"
+        case .internet: return "wifi"
+        case .phone: return "phone.fill"
+        case .rent: return "key.fill"
+        case .subscription: return "play.rectangle.fill"
+        case .insurance: return "shield.fill"
+        case .tax: return "building.columns.fill"
+        case .other: return "doc.text.fill"
+        }
+    }
+}
+
+public extension ReminderRepeat {
+    /// Единица календаря для сдвига срока; у разового повтора её нет
+    var calendarComponent: Calendar.Component? {
+        switch self {
+        case .never: return nil
+        case .daily: return .day
+        case .weekly: return .weekOfYear
+        case .monthly: return .month
+        case .yearly: return .year
+        }
+    }
 }
 
 /// Когда заранее напомнить о сроке долга. В день срока и после него, пока долг не погашен, напоминание приходит всегда,
@@ -191,7 +246,13 @@ public struct Debt: Codable, Identifiable, Hashable, Sendable {
     public var type: DebtType
     public var reminder: DebtReminder? // Когда напомнить заранее; у старых долгов поля нет
 
-    public init(id: UUID = UUID(), name: String, amount: Double, dueDate: Date = Date(), isLent: Bool, isPaid: Bool = false, type: DebtType = .person, reminder: DebtReminder? = nil) {
+    // Только для платежей (type == .bill); у долгов и кредитов поля пусты
+    public var billKind: BillKind? // Коммуналка, интернет, подписка…
+    public var repeatRule: ReminderRepeat? // Как часто платить; пусто или «один раз» — платёж разовый
+    public var firstDueDate: Date? // Первый срок: от него считаются следующие, чтобы 31-е число не «уезжало» на 28-е
+    public var lastPaidAt: Date? // Когда платёж оплачивали в последний раз
+
+    public init(id: UUID = UUID(), name: String, amount: Double, dueDate: Date = Date(), isLent: Bool, isPaid: Bool = false, type: DebtType = .person, reminder: DebtReminder? = nil, billKind: BillKind? = nil, repeatRule: ReminderRepeat? = nil, firstDueDate: Date? = nil, lastPaidAt: Date? = nil) {
         self.id = id
         self.name = name
         self.amount = amount
@@ -200,6 +261,31 @@ public struct Debt: Codable, Identifiable, Hashable, Sendable {
         self.isPaid = isPaid
         self.type = type
         self.reminder = reminder
+        self.billKind = billKind
+        self.repeatRule = repeatRule
+        self.firstDueDate = firstDueDate
+        self.lastPaidAt = lastPaidAt
+    }
+
+    /// Платёж повторяется: после оплаты срок переносится на следующий период, а не закрывается
+    public var isRecurringBill: Bool {
+        type == .bill && (repeatRule ?? .never) != .never
+    }
+
+    /// Следующий срок повторяющегося платежа: первый период после текущего срока, который не раньше сегодняшнего дня.
+    /// Считается от первого срока, а не от предыдущего, чтобы платёж «31-го числа» не застревал на 28-м.
+    /// У разового платежа и у долгов следующего срока нет.
+    public func nextDueDate(now: Date = Date(), calendar: Calendar = .current) -> Date? {
+        guard isRecurringBill, let unit = repeatRule?.calendarComponent else { return nil }
+        let anchor = firstDueDate ?? dueDate
+        let today = calendar.startOfDay(for: now)
+        for step in 1..<5_000 {
+            guard let candidate = calendar.date(byAdding: unit, value: step, to: anchor) else { return nil }
+            if candidate > dueDate && candidate >= today {
+                return candidate
+            }
+        }
+        return nil
     }
 
     /// Напоминание с учётом значения по умолчанию
@@ -227,8 +313,39 @@ public enum DebtSide: String, CaseIterable, Identifiable, Hashable, Sendable {
         self = debt.isLent ? .owedToMe : .iOwe
     }
 
+    /// Платежи (коммуналка, интернет) лежат на своей вкладке и в «Я должен» не попадают
     public func contains(_ debt: Debt) -> Bool {
-        DebtSide(debt: debt) == self
+        debt.type != .bill && DebtSide(debt: debt) == self
+    }
+}
+
+/// Все вкладки экрана долгов: «Мне должны», «Я должен» и «Платежи»
+public enum DebtTab: String, CaseIterable, Identifiable, Hashable, Sendable {
+    case owedToMe
+    case iOwe
+    case bills
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .owedToMe: return DebtSide.owedToMe.title
+        case .iOwe: return DebtSide.iOwe.title
+        case .bills: return String(localized: "Платежи")
+        }
+    }
+
+    /// Вкладка, на которой лежит запись
+    public init(debt: Debt) {
+        if debt.type == .bill {
+            self = .bills
+        } else {
+            self = debt.isLent ? .owedToMe : .iOwe
+        }
+    }
+
+    public func contains(_ debt: Debt) -> Bool {
+        DebtTab(debt: debt) == self
     }
 }
 

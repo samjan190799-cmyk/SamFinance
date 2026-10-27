@@ -40,7 +40,7 @@
 <ul>
 <li><strong>Transactions:</strong> title, amount, category, date, note.</li>
 <li><strong>Cards:</strong> purpose, cardholder name, expiry date, last 4 digits, balance, bank and design. The full card number is saved only if you enter it yourself, and it lives in this device's secure iOS storage (Keychain). The app never asks for or stores the CVV code.</li>
-<li><strong>Debts and loans:</strong> name of a person or bank, amount, due date.</li>
+<li><strong>Debts, loans and payments:</strong> name of a person or bank or the name of a payment (utilities, internet, subscription), amount, due date, repeat.</li>
 <li><strong>Savings goals:</strong> name, target, deadline, log of deposits and withdrawals.</li>
 <li><strong>Reminders:</strong> text, date and time, repeat, note.</li>
 <li><strong>Settings:</strong> language, currency, chosen AI service, automation rules (remembered merchant categories, your surname used to recognize transfers to yourself).</li>
@@ -53,7 +53,7 @@
 <ul>
 <li>your question and the recent messages of the conversation;</li>
 <li>screenshots you attach (receipts, statements, bank apps) and the text recognized on them on your phone;</li>
-<li>a summary of your records: cards (purpose, last 4 digits, balance), spending and income for 30 days by category, up to 60 latest transactions (date, amount, title, category, card), debts (name, amount, due date, reminder), savings goals (name, target, amount saved, deadline), your own reminders (text, date, repeat), the current date, language and currency.</li>
+<li>a summary of your records: cards (purpose, last 4 digits, balance), spending and income for 30 days by category, up to 60 latest transactions (date, amount, title, category, card), debts and payments (name, amount, due date, repeat, reminder), savings goals (name, target, amount saved, deadline), your own reminders (text, date, repeat), the current date, language and currency.</li>
 </ul>
 <p>Not sent: full card numbers, CVV and cardholder names. Bank SMS that the app recognizes on the phone never go to the cloud. The key is used only to sign in to the chosen service.</p>
 <p>Requests go straight from your phone to the chosen service using your key. Our server is not part of this chain and we receive no copies. The service processes data under its own rules, possibly in another country: <a href="https://www.anthropic.com/legal/privacy" rel="noopener">Anthropic</a>, <a href="https://openai.com/policies/privacy-policy" rel="noopener">OpenAI</a>, <a href="https://policies.google.com/privacy" rel="noopener">Google</a>. Requests are billed to your key.</p>
@@ -102,7 +102,7 @@
 <ul>
 <li><strong>Операции:</strong> название, сумма, категория, дата, заметка.</li>
 <li><strong>Карты:</strong> назначение, имя держателя, срок действия, последние 4 цифры, баланс, банк и оформление. Полный номер карты сохраняется, только если вы сами его ввели, и лежит в защищённом хранилище iOS (Keychain) этого устройства. Код CVV приложение не запрашивает и не сохраняет.</li>
-<li><strong>Долги и кредиты:</strong> имя человека или банка, сумма, срок возврата.</li>
+<li><strong>Долги, кредиты и платежи:</strong> имя человека или банка либо название платежа (коммуналка, интернет, подписка), сумма, срок, повтор.</li>
 <li><strong>Копилки:</strong> название, цель, срок, журнал пополнений и снятий.</li>
 <li><strong>Напоминания:</strong> текст, дата и время, повтор, заметка.</li>
 <li><strong>Настройки:</strong> язык, валюта, выбранный ИИ-сервис, правила автоматизации (запомненные категории магазинов, ваша фамилия для распознавания переводов себе).</li>
@@ -115,7 +115,7 @@
 <ul>
 <li>ваш вопрос и последние сообщения диалога;</li>
 <li>скриншоты, которые вы приложили (чеки, выписки, приложения банков), и текст, распознанный на них на телефоне;</li>
-<li>сводка учёта: карты (назначение, последние 4 цифры, баланс), расходы и доходы за 30 дней по категориям, до 60 последних операций (дата, сумма, название, категория, карта), долги (имя, сумма, срок, напоминание), копилки (название, цель, накоплено, срок), ваши напоминания (текст, дата, повтор), текущая дата, язык и валюта.</li>
+<li>сводка учёта: карты (назначение, последние 4 цифры, баланс), расходы и доходы за 30 дней по категориям, до 60 последних операций (дата, сумма, название, категория, карта), долги и платежи (имя, сумма, срок, повтор, напоминание), копилки (название, цель, накоплено, срок), ваши напоминания (текст, дата, повтор), текущая дата, язык и валюта.</li>
 </ul>
 <p>Не отправляются: полные номера карт, CVV и имена держателей карт. Банковские СМС, которые приложение узнаёт на телефоне, в облако не уходят. Ключ используется только для входа в выбранный сервис.</p>
 <p>Запросы идут напрямую с телефона к выбранному сервису по вашему ключу. Наш сервер в этой цепочке не участвует, копий данных мы не получаем. Сервис обрабатывает данные по своим правилам, возможно в другой стране: <a href="https://www.anthropic.com/legal/privacy" rel="noopener">Anthropic</a>, <a href="https://openai.com/policies/privacy-policy" rel="noopener">OpenAI</a>, <a href="https://policies.google.com/privacy" rel="noopener">Google</a>. Запросы оплачиваются по тарифу вашего ключа.</p>

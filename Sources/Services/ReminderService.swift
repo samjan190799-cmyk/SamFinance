@@ -66,6 +66,8 @@ enum ReminderID {
     static let cardCategory = "reminder.card"
     static let dailyCategory = "reminder.daily"
     static let customCategory = "reminder.custom"
+    /// У платежа кнопка «Оплачен» вместо «Погашен»
+    static let billCategory = "reminder.bill"
     static let paidAction = "reminder.action.paid"
     static let snoozeAction = "reminder.action.snooze"
     static let targetKey = "reminder_target"
@@ -210,7 +212,12 @@ enum ReminderPlanner {
             soonBody = String(localized: "\(name) · \(amount) · до \(date)")
             dueBody = "\(name) · \(amount)"
 
-            if debt.type == .credit {
+            if debt.type == .bill {
+                soonTitle = String(localized: "Скоро срок платежа")
+                dueTitle = String(localized: "Сегодня срок платежа")
+                lateTitle = String(localized: "Платёж просрочен")
+                lateBody = String(localized: "\(name) · \(amount), срок был \(date)")
+            } else if debt.type == .credit {
                 soonTitle = String(localized: "Скоро платёж по кредиту")
                 dueTitle = String(localized: "Сегодня платёж по кредиту")
                 lateTitle = String(localized: "Платёж по кредиту просрочен")
@@ -242,7 +249,7 @@ enum ReminderPlanner {
                 id: "\(ReminderID.prefix)debt.\(debt.id.uuidString).\(suffix)",
                 title: title,
                 body: body,
-                category: ReminderID.debtCategory,
+                category: debt.type == .bill ? ReminderID.billCategory : ReminderID.debtCategory,
                 target: .debt(debt.id),
                 fireDate: fireDate,
                 repeating: nil
@@ -490,9 +497,11 @@ final class ReminderService {
     /// Группы с кнопками: у долга можно сразу отметить погашение или отложить напоминание на завтра
     static func notificationCategories() -> [UNNotificationCategory] {
         let paid = UNNotificationAction(identifier: ReminderID.paidAction, title: String(localized: "Погашен"), options: [.authenticationRequired])
+        let billPaid = UNNotificationAction(identifier: ReminderID.paidAction, title: String(localized: "Оплачен"), options: [.authenticationRequired])
         let snooze = UNNotificationAction(identifier: ReminderID.snoozeAction, title: String(localized: "Напомнить завтра"), options: [.authenticationRequired])
         return [
             UNNotificationCategory(identifier: ReminderID.debtCategory, actions: [paid, snooze], intentIdentifiers: [], options: []),
+            UNNotificationCategory(identifier: ReminderID.billCategory, actions: [billPaid, snooze], intentIdentifiers: [], options: []),
             UNNotificationCategory(identifier: ReminderID.goalCategory, actions: [], intentIdentifiers: [], options: []),
             UNNotificationCategory(identifier: ReminderID.cardCategory, actions: [], intentIdentifiers: [], options: []),
             UNNotificationCategory(identifier: ReminderID.dailyCategory, actions: [], intentIdentifiers: [], options: []),

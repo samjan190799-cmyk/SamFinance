@@ -108,7 +108,49 @@ enum AIActionExecutor {
 
         switch action.kind {
 
-        // MARK: Долги
+        // MARK: Долги и платежи
+        case .addDebt where action.debtType == .bill:
+            // Регулярный платёж: коммуналка, интернет, подписка. Имя необязательно, без него берётся вид платежа.
+            let kind = action.billKind ?? .other
+            let icon = kind.icon
+            let name = cleanName(action.name) ?? kind.title
+            guard let amount = baseAmount(action) else {
+                return failure(String(localized: "Добавить платёж: \(name)"), String(localized: "Не указана сумма"), icon)
+            }
+            guard let due = action.date else {
+                return failure(String(localized: "Добавить платёж: \(name)"), String(localized: "Не указан срок: напишите, до какого числа"), icon)
+            }
+            let repeatRule = action.repeatRule ?? .monthly
+            let day = calendar.startOfDay(for: due)
+            let summary: String
+            if repeatRule == .never {
+                summary = String(localized: "Добавить платёж: \(name), \(money(amount)), срок \(shortDate(day))")
+            } else {
+                summary = String(localized: "Добавить платёж: \(name), \(money(amount)), срок \(shortDate(day)), \(repeatRule.title.lowercased())")
+            }
+            let duplicate = service.debts.contains { debt in
+                debt.type == .bill
+                    && !debt.isPaid
+                    && normalized(debt.name) == normalized(name)
+                    && abs(debt.amount - amount) < 0.5
+                    && calendar.isDate(debt.dueDate, inSameDayAs: day)
+            }
+            if duplicate {
+                return failure(summary, String(localized: "Такой платёж уже есть"), icon)
+            }
+            let bill = Debt(
+                name: name,
+                amount: amount,
+                dueDate: day,
+                isLent: false,
+                type: .bill,
+                reminder: action.reminder ?? .standard,
+                billKind: kind,
+                repeatRule: repeatRule,
+                firstDueDate: day
+            )
+            return result(.addDebt(bill), summary, icon)
+
         case .addDebt:
             let icon = "person.badge.plus"
             guard let name = cleanName(action.name) else {
@@ -173,16 +215,31 @@ enum AIActionExecutor {
                 }
                 if let due = action.date {
                     updated.dueDate = calendar.startOfDay(for: due)
+                    if updated.type == .bill {
+                        // Новый срок платежа становится точкой отсчёта для следующих
+                        updated.firstDueDate = updated.dueDate
+                    }
                     changes.append(String(localized: "срок \(shortDate(updated.dueDate))"))
+                }
+                if updated.type == .bill {
+                    if let kind = action.billKind, kind != debt.billKind {
+                        updated.billKind = kind
+                        changes.append(String(localized: "вид: \(kind.title)"))
+                    }
+                    if let rule = action.repeatRule, rule != (debt.repeatRule ?? .never) {
+                        updated.repeatRule = rule
+                        changes.append(rule.title.lowercased())
+                    }
                 }
                 if let reminder = action.reminder {
                     updated.reminder = reminder
                     changes.append(String(localized: "напоминание: \(reminder.title)"))
                 }
+                let changeTitle = debt.type == .bill ? String(localized: "Изменить платёж «\(debt.name)»") : String(localized: "Изменить долг «\(debt.name)»")
                 guard !changes.isEmpty else {
-                    return failure(String(localized: "Изменить долг «\(debt.name)»"), String(localized: "Нечего менять"), icon)
+                    return failure(changeTitle, String(localized: "Нечего менять"), icon)
                 }
-                return result(.updateDebt(updated), String(localized: "Изменить долг «\(debt.name)»: \(changes.joined(separator: ", "))"), icon)
+                return result(.updateDebt(updated), changeTitle + ": " + changes.joined(separator: ", "), icon)
             }
 
         case .markDebtPaid, .markDebtUnpaid:
@@ -194,6 +251,22 @@ enum AIActionExecutor {
             case .ambiguous:
                 return failure(String(localized: "Отметить долг"), String(localized: "Подходит несколько вариантов: «\(action.target ?? "")». Уточните"), icon)
             case .found(let debt):
+                if debt.type == .bill {
+                    // Повторяющийся платёж при оплате не закрывается, а переносит срок на следующий период
+                    let next = paid ? debt.nextDueDate(now: now, calendar: calendar) : nil
+                    let summary: String
+                    if let next {
+                        summary = String(localized: "Отметить платёж «\(debt.name)» оплаченным, следующий срок: \(shortDate(next))")
+                    } else if paid {
+                        summary = String(localized: "Отметить платёж «\(debt.name)» оплаченным")
+                    } else {
+                        summary = String(localized: "Вернуть платёж «\(debt.name)» в активные")
+                    }
+                    if debt.isPaid == paid {
+                        return failure(summary, paid ? String(localized: "Платёж уже оплачен") : String(localized: "Платёж и так не оплачен"), icon)
+                    }
+                    return result(.setDebtPaid(debt.id, paid), summary, icon)
+                }
                 let summary = paid
                     ? String(localized: "Отметить долг «\(debt.name)» погашенным")
                     : String(localized: "Вернуть долг «\(debt.name)» в активные")

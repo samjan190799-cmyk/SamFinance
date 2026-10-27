@@ -19,7 +19,7 @@ Everything listed here stays on your device. We have no access to it.
 
 - **Transactions:** title, amount, category, date, note.
 - **Cards:** purpose, cardholder name, expiry date, last 4 digits, balance, bank and design. The full card number is saved only if you enter it yourself, and it lives in this device's secure iOS storage (Keychain). The app never asks for or stores the CVV code.
-- **Debts and loans:** name of a person or bank, amount, due date.
+- **Debts, loans and payments:** name of a person or bank or the name of a payment (utilities, internet, subscription), amount, due date, repeat.
 - **Savings goals:** name, target, deadline, log of deposits and withdrawals.
 - **Reminders:** text, date and time, repeat, note.
 - **Settings:** language, currency, chosen AI service, automation rules (remembered merchant categories, your surname used to recognize transfers to yourself).
@@ -35,7 +35,7 @@ Data files are protected by iOS and open only while the phone is unlocked. They 
 
 - your question and the recent messages of the conversation;
 - screenshots you attach (receipts, statements, bank apps) and the text recognized on them on your phone;
-- a summary of your records: cards (purpose, last 4 digits, balance), spending and income for 30 days by category, up to 60 latest transactions (date, amount, title, category, card), debts (name, amount, due date, reminder), savings goals (name, target, amount saved, deadline), your own reminders (text, date, repeat), the current date, language and currency.
+- a summary of your records: cards (purpose, last 4 digits, balance), spending and income for 30 days by category, up to 60 latest transactions (date, amount, title, category, card), debts and payments (name, amount, due date, repeat, reminder), savings goals (name, target, amount saved, deadline), your own reminders (text, date, repeat), the current date, language and currency.
 
 Not sent: full card numbers, CVV and cardholder names. Bank SMS that the app recognizes on the phone never go to the cloud. The key is used only to sign in to the chosen service.
 

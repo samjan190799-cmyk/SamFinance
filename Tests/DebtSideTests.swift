@@ -33,6 +33,26 @@ final class DebtSideTests: XCTestCase {
         }
     }
 
+    func testBillsLiveOnTheirOwnTabAndNotOnTheDebtSides() {
+        let bill = debt(isLent: false, type: .bill)
+        XCTAssertFalse(DebtSide.iOwe.contains(bill))
+        XCTAssertFalse(DebtSide.owedToMe.contains(bill))
+        XCTAssertEqual(DebtTab(debt: bill), .bills)
+        XCTAssertEqual(DebtTab.allCases.filter { $0.contains(bill) }, [.bills])
+    }
+
+    func testEveryDebtBelongsToExactlyOneTab() {
+        let debts = [
+            debt(isLent: true), debt(isLent: false), debt(isLent: false, type: .credit),
+            debt(isLent: false, type: .bill), debt(isLent: false, type: .bill, isPaid: true)
+        ]
+        for debt in debts {
+            XCTAssertEqual(DebtTab.allCases.filter { $0.contains(debt) }.count, 1)
+        }
+        XCTAssertEqual(DebtTab(debt: debt(isLent: true)), .owedToMe)
+        XCTAssertEqual(DebtTab(debt: debt(isLent: false, type: .credit)), .iOwe)
+    }
+
     func testTabsAreTitledAndOrderedLikeTheTotals() {
         XCTAssertEqual(DebtSide.allCases, [.owedToMe, .iOwe])
         XCTAssertEqual(DebtSide.owedToMe.title, String(localized: "Мне должны"))

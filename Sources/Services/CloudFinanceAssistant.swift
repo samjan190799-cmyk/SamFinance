@@ -30,6 +30,7 @@ private struct CloudAction: Decodable {
     let date: String?
     let direction: String?
     let debtType: String?
+    let billKind: String?
     let reminder: String?
     let repeatRule: String?
     let note: String?
@@ -178,7 +179,8 @@ enum CloudFinanceAssistant {
             "currency": nullable(enumeration(AppCurrency.allCases.map(\.rawValue))),
             "date": nullable(["type": "string", "format": "date-time"]),
             "direction": nullable(enumeration(DebtSide.allCases.map(\.rawValue))),
-            "debt_type": nullable(enumeration([DebtType.person.rawValue, DebtType.credit.rawValue])),
+            "debt_type": nullable(enumeration(DebtType.allCases.map(\.rawValue))),
+            "bill_kind": nullable(enumeration(BillKind.allCases.map(\.rawValue))),
             "reminder": nullable(enumeration(DebtReminder.allCases.map(\.rawValue))),
             "repeat_rule": nullable(enumeration(ReminderRepeat.allCases.map(\.rawValue))),
             "note": nullable(["type": "string"]),
@@ -217,9 +219,9 @@ enum CloudFinanceAssistant {
 
         Поле actions — изменения в приложении, о которых пользователь просит словами: «добавь долг…», «поставь напоминание на пятницу», «закрой долг Арама», «пополни копилку», «заморозь карту». Заполняй его только по прямой просьбе изменить данные или настройки, а не по вопросу или рассуждению. Пользователь увидит карточку со списком изменений и сам нажмёт «Применить», поэтому в reply одной-двумя фразами скажи, что предлагаешь. Если не хватает важного (срока долга, суммы, кто кому должен, даты и времени напоминания), не придумывай: спроси в reply, а actions оставь пустым. Не предлагай в одном ответе действие над тем, что создаётся в этом же ответе (например, пополнение новой копилки): это будет в следующем сообщении. Не повторяй то, что уже есть в списках ниже. Менять и удалять можно только то, что пользователь назвал. Если просьба не укладывается в виды действий, так и скажи в reply.
         Виды (kind) и нужные поля; остальные поля — null:
-        • add_debt — name (имя человека или банка), amount, currency, date (срок), direction (owedToMe — мне должны, iOwe — я должен), debt_type (person — человек, credit — кредит; кредит всегда iOwe), reminder (off, onDueDay, dayBefore, threeDaysBefore, weekBefore; если пользователь не просил, null).
-        • change_debt — target и любые из name, amount, currency, date, reminder.
-        • mark_debt_paid, mark_debt_unpaid, delete_debt — target.
+        • add_debt — name (имя человека, банка или название платежа), amount, currency, date (срок), direction (owedToMe — мне должны, iOwe — я должен; для кредита и платежа не нужен), debt_type (person — человек, credit — кредит, bill — регулярный платёж: коммуналка, интернет, телефон, аренда, подписка, страховка, налог), bill_kind (только для bill: utilities — коммуналка, internet, phone, rent, subscription, insurance, tax, other), repeat_rule (только для bill: monthly, если пользователь не сказал иначе; never — разовый платёж), reminder (off, onDueDay, dayBefore, threeDaysBefore, weekBefore; если пользователь не просил, null). У bill name можно оставить null: возьмётся название вида платежа. Платежи — это не долги: «оплати интернет» значит платёж, а не долг человеку.
+        • change_debt — target и любые из name, amount, currency, date, reminder, а для платежа ещё bill_kind и repeat_rule.
+        • mark_debt_paid, mark_debt_unpaid, delete_debt — target. Для повторяющегося платежа mark_debt_paid значит «оплатил в этот раз»: срок сам перейдёт на следующий период.
         • add_goal — name, amount (цель по сумме), currency, date (срок, если назван).
         • change_goal — target и любые из name, amount, currency, date.
         • deposit_goal, withdraw_goal — target, amount, currency.
@@ -310,8 +312,13 @@ enum CloudFinanceAssistant {
         } else {
             lines.append("Долги:")
             for debt in debts {
-                let direction = debt.isLent ? "мне должны" : "я должен"
-                let kind = debt.type == .credit ? "кредит" : "человек"
+                let direction = debt.type == .bill ? "к оплате" : (debt.isLent ? "мне должны" : "я должен")
+                let kind: String
+                switch debt.type {
+                case .credit: kind = "кредит"
+                case .person: kind = "человек"
+                case .bill: kind = "платёж: \((debt.billKind ?? .other).rawValue), повтор: \((debt.repeatRule ?? .never).rawValue)"
+                }
                 let status = debt.isPaid ? ", погашен" : ", напоминание: \(debt.effectiveReminder.rawValue)"
                 lines.append("• [d:\(AIActionExecutor.shortID(debt.id))] \(debt.name) (\(kind)) — \(direction) \(currency.format(debt.amount)), срок \(dateFormatter.string(from: debt.dueDate))\(status)")
             }
@@ -374,6 +381,7 @@ enum CloudFinanceAssistant {
             date: raw.date.flatMap { parseISO($0) },
             direction: raw.direction.flatMap { DebtSide(rawValue: $0) },
             debtType: raw.debtType.flatMap { DebtType(rawValue: $0) },
+            billKind: raw.billKind.flatMap { BillKind(rawValue: $0) },
             reminder: raw.reminder.flatMap { DebtReminder(rawValue: $0) },
             repeatRule: raw.repeatRule.flatMap { ReminderRepeat(rawValue: $0) },
             note: clean(raw.note),
