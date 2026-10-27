@@ -16,6 +16,8 @@ enum Theme {
     static let onAccent = Color(hex: "#111214")
     /// Тёмный лайм под белым текстом: системные кнопки смахивания в списках
     static let accentStrong = Color(hex: "#5E7A0F")
+    /// Необратимые действия: удаление
+    static let danger = Color(hex: "#FF6B6B")
 
     /// Цвета долей категорий: от самой крупной к самой мелкой
     static let shades: [Color] = [

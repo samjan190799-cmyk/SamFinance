@@ -65,6 +65,7 @@ enum ReminderID {
     static let goalCategory = "reminder.goal"
     static let cardCategory = "reminder.card"
     static let dailyCategory = "reminder.daily"
+    static let customCategory = "reminder.custom"
     static let paidAction = "reminder.action.paid"
     static let snoozeAction = "reminder.action.snooze"
     static let targetKey = "reminder_target"
@@ -136,6 +137,7 @@ enum ReminderPlanner {
         debts: [Debt],
         goals: [Goal],
         cards: [Card],
+        customReminders: [CustomReminder] = [],
         transactions: [Transaction],
         reviewCount: Int,
         snoozes: [UUID: Date],
@@ -144,6 +146,9 @@ enum ReminderPlanner {
         calendar: Calendar = .current
     ) -> [ReminderSpec] {
         var result: [ReminderSpec] = []
+        for reminder in customReminders {
+            result += customReminderSpecs(reminder, now: now, calendar: calendar)
+        }
         if settings.debts {
             for debt in debts {
                 result += debtSpecs(debt, snooze: snoozes[debt.id], settings: settings, now: now, calendar: calendar)
@@ -378,6 +383,59 @@ enum ReminderPlanner {
         }
     }
 
+    // MARK: - Свои напоминания
+
+    /// Ближайшие срабатывания своего напоминания. Разовое — одно, если время не прошло. Повторяющееся — несколько вперёд
+    /// (окно сдвигается при каждом открытии приложения и сохранении данных), считая от первой даты, а не от «сейчас»:
+    /// напоминание «каждый месяц, начиная с марта» не сработает в январе.
+    static func occurrences(of reminder: CustomReminder, now: Date, calendar: Calendar) -> [Date] {
+        let unit: Calendar.Component
+        let count: Int
+        switch reminder.repeatRule {
+        case .never:
+            return reminder.date > now ? [reminder.date] : []
+        case .daily:
+            unit = .day
+            count = 14
+        case .weekly:
+            unit = .weekOfYear
+            count = 8
+        case .monthly:
+            unit = .month
+            count = 6
+        case .yearly:
+            unit = .year
+            count = 2
+        }
+
+        var result: [Date] = []
+        var step = 0
+        while result.count < count && step < 5_000 {
+            guard let date = calendar.date(byAdding: unit, value: step, to: reminder.date) else { break }
+            if date > now {
+                result.append(date)
+            }
+            step += 1
+        }
+        return result
+    }
+
+    static func customReminderSpecs(_ reminder: CustomReminder, now: Date, calendar: Calendar) -> [ReminderSpec] {
+        let title = reminder.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let note = reminder.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return occurrences(of: reminder, now: now, calendar: calendar).map { date in
+            ReminderSpec(
+                id: "\(ReminderID.prefix)custom.\(reminder.id.uuidString).\(Int(date.timeIntervalSince1970))",
+                title: title.isEmpty ? String(localized: "Напоминание") : title,
+                body: note.isEmpty ? String(localized: "Напоминание") : note,
+                category: ReminderID.customCategory,
+                target: .overview,
+                fireDate: date,
+                repeating: nil
+            )
+        }
+    }
+
     // MARK: - Учёт
 
     /// Вечером на две недели вперёд; сегодня не напоминает, если операции за день уже есть
@@ -437,7 +495,8 @@ final class ReminderService {
             UNNotificationCategory(identifier: ReminderID.debtCategory, actions: [paid, snooze], intentIdentifiers: [], options: []),
             UNNotificationCategory(identifier: ReminderID.goalCategory, actions: [], intentIdentifiers: [], options: []),
             UNNotificationCategory(identifier: ReminderID.cardCategory, actions: [], intentIdentifiers: [], options: []),
-            UNNotificationCategory(identifier: ReminderID.dailyCategory, actions: [], intentIdentifiers: [], options: [])
+            UNNotificationCategory(identifier: ReminderID.dailyCategory, actions: [], intentIdentifiers: [], options: []),
+            UNNotificationCategory(identifier: ReminderID.customCategory, actions: [], intentIdentifiers: [], options: [])
         ]
     }
 
@@ -466,6 +525,7 @@ final class ReminderService {
             debts: financeService.debts,
             goals: financeService.goals,
             cards: financeService.cards,
+            customReminders: financeService.customReminders,
             transactions: financeService.transactions,
             reviewCount: financeService.reviewCount,
             snoozes: snoozes,

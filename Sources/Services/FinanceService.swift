@@ -12,6 +12,7 @@ public final class FinanceService {
     public private(set) var cards: [Card] = []
     public private(set) var debts: [Debt] = []
     public private(set) var goals: [Goal] = []
+    public private(set) var customReminders: [CustomReminder] = []
     public private(set) var categories: [Category] = Category.defaultCategories
     
     // Пути к файлам сохранения в песочнице
@@ -34,13 +35,19 @@ public final class FinanceService {
         let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
         return paths[0].appendingPathComponent("goals.json")
     }()
-    
+
+    private let remindersURL: URL = {
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        return paths[0].appendingPathComponent("reminders.json")
+    }()
+
     /// Хранилища данных на диске
     private enum Store: String {
         case transactions
         case cards
         case debts
         case goals
+        case reminders
     }
 
     /// Хранилища, файл которых существует, но не удалось прочитать или сохранить рядом резервную копию
@@ -141,10 +148,12 @@ public final class FinanceService {
         cards.removeAll()
         debts.removeAll()
         goals.removeAll()
+        customReminders.removeAll()
         saveData()
         saveCards()
         saveDebts()
         saveGoals()
+        saveReminders()
     }
     
     // MARK: - API для карт
@@ -280,10 +289,39 @@ public final class FinanceService {
         }
     }
 
+    /// Сохраняет правку долга: имя, сумму, срок, направление, тип и напоминание. Признак погашения не трогает.
+    public func updateDebt(_ debt: Debt) {
+        guard prepareForWrite(.debts), let index = debts.firstIndex(where: { $0.id == debt.id }) else { return }
+        var updated = debt
+        updated.isPaid = debts[index].isPaid
+        debts[index] = updated
+        saveDebts()
+    }
+
     public func deleteDebt(id: UUID) {
         guard prepareForWrite(.debts) else { return }
         debts.removeAll { $0.id == id }
         saveDebts()
+    }
+
+    // MARK: - API для своих напоминаний
+
+    public func addCustomReminder(_ reminder: CustomReminder) {
+        guard prepareForWrite(.reminders) else { return }
+        customReminders.append(reminder)
+        saveReminders()
+    }
+
+    public func updateCustomReminder(_ reminder: CustomReminder) {
+        guard prepareForWrite(.reminders), let index = customReminders.firstIndex(where: { $0.id == reminder.id }) else { return }
+        customReminders[index] = reminder
+        saveReminders()
+    }
+
+    public func deleteCustomReminder(id: UUID) {
+        guard prepareForWrite(.reminders) else { return }
+        customReminders.removeAll { $0.id == id }
+        saveReminders()
     }
 
     // MARK: - API для копилок (Goals)
@@ -439,6 +477,7 @@ public final class FinanceService {
         loadCards()
         loadDebts()
         loadGoals()
+        loadReminders()
         ReminderService.shared.update(from: self)
     }
 
@@ -503,6 +542,12 @@ public final class FinanceService {
     private func loadGoals() {
         if let loaded = readStore([Goal].self, store: .goals, url: goalsURL) {
             goals = loaded
+        }
+    }
+
+    private func loadReminders() {
+        if let loaded = readStore([CustomReminder].self, store: .reminders, url: remindersURL, dateStrategy: .iso8601) {
+            customReminders = loaded
         }
     }
 
@@ -579,6 +624,7 @@ public final class FinanceService {
             case .cards: loadCards()
             case .debts: loadDebts()
             case .goals: loadGoals()
+            case .reminders: loadReminders()
             }
         }
         return !unreadableStores.contains(store)
@@ -635,6 +681,20 @@ public final class FinanceService {
             try data.write(to: goalsURL, options: [.atomic, .completeFileProtection])
         } catch {
             print("⚠️ Не удалось сохранить цели: \(error.localizedDescription)")
+        }
+        ReminderService.shared.update(from: self)
+    }
+
+    private func saveReminders() {
+        guard !unreadableStores.contains(.reminders) else { return }
+        do {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            encoder.outputFormatting = .prettyPrinted
+            let data = try encoder.encode(customReminders)
+            try data.write(to: remindersURL, options: [.atomic, .completeFileProtection])
+        } catch {
+            print("⚠️ Не удалось сохранить напоминания: \(error.localizedDescription)")
         }
         ReminderService.shared.update(from: self)
     }

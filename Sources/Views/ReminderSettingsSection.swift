@@ -43,6 +43,19 @@ struct ReminderSettingsSection: View {
                 }
             }
 
+            NavigationLink {
+                CustomRemindersView(financeService: financeService)
+            } label: {
+                HStack {
+                    Label("Мои напоминания", systemImage: "bell.badge")
+                    Spacer()
+                    if !financeService.customReminders.isEmpty {
+                        Text("\(financeService.customReminders.count)")
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+
             Toggle(isOn: $debts) {
                 Label("Долги и кредиты", systemImage: "person.2")
             }

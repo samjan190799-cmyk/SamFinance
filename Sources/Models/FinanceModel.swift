@@ -232,6 +232,45 @@ public enum DebtSide: String, CaseIterable, Identifiable, Hashable, Sendable {
     }
 }
 
+/// Как часто повторяется своё напоминание
+public enum ReminderRepeat: String, Codable, Sendable, CaseIterable, Identifiable {
+    case never
+    case daily
+    case weekly
+    case monthly
+    case yearly
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .never: return String(localized: "Один раз")
+        case .daily: return String(localized: "Каждый день")
+        case .weekly: return String(localized: "Каждую неделю")
+        case .monthly: return String(localized: "Каждый месяц")
+        case .yearly: return String(localized: "Каждый год")
+        }
+    }
+}
+
+/// Своё напоминание: «оплатить интернет 5 ноября в 10:00». Создаётся вручную или по просьбе в ИИ-чате.
+public struct CustomReminder: Codable, Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public var title: String
+    /// Первое срабатывание: дата и время
+    public var date: Date
+    public var repeatRule: ReminderRepeat
+    public var note: String?
+
+    public init(id: UUID = UUID(), title: String, date: Date, repeatRule: ReminderRepeat = .never, note: String? = nil) {
+        self.id = id
+        self.title = title
+        self.date = date
+        self.repeatRule = repeatRule
+        self.note = note
+    }
+}
+
 /// Движение денег по копилке: пополнение (сумма больше нуля) или снятие (меньше нуля)
 public struct GoalEntry: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
