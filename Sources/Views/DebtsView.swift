@@ -1,16 +1,14 @@
 import SwiftUI
 
-/// Экран долгов: две суммы сверху, переключатель «Кредиты / Люди» и список с отметкой о погашении.
-/// Строку можно смахнуть вправо, чтобы отметить погашение, и влево, чтобы удалить.
+/// Экран долгов: две суммы сверху, вкладки «Мне должны» и «Я должен» и список с отметкой о погашении.
+/// Кредиты лежат на вкладке «Я должен». Строку можно смахнуть вправо, чтобы отметить погашение, и влево, чтобы удалить.
 struct DebtsView: View {
     let financeService: FinanceService
-    @State private var selectedSegment = ScreenshotMode.scene == .debts ? 1 : 0 // 0: Кредиты, 1: Люди
+    @State private var selectedSide: DebtSide = ScreenshotMode.scene == .debts ? .owedToMe : .iOwe
     @State private var isShowingAddSheet = false
 
     private var visibleDebts: [Debt] {
-        financeService.debts.filter { debt in
-            selectedSegment == 0 ? debt.type == .credit : debt.type == .person
-        }
+        financeService.debts.filter { selectedSide.contains($0) }
     }
 
     /// Сколько должны мне и сколько должен я: погашенные долги не считаются
@@ -45,10 +43,13 @@ struct DebtsView: View {
         .scrollContentBackground(.hidden)
         .scrollIndicators(.hidden)
         .environment(\.defaultMinListRowHeight, 0)
-        .animation(Motion.spring, value: selectedSegment)
+        .animation(Motion.spring, value: selectedSide)
         .monoScreen()
         .sheet(isPresented: $isShowingAddSheet) {
-            AddDebtView(financeService: financeService)
+            // Новый долг открывается на своей вкладке, чтобы он не «пропал» после сохранения
+            AddDebtView(financeService: financeService, side: selectedSide) { side in
+                selectedSide = side
+            }
         }
     }
 
@@ -70,8 +71,8 @@ struct DebtsView: View {
     // MARK: - Итоги
     private var summaryView: some View {
         HStack(spacing: 10) {
-            summaryTile(title: String(localized: "Мне должны"), amount: owedToMe, highlighted: true)
-            summaryTile(title: String(localized: "Я должен"), amount: iOwe, highlighted: false)
+            summaryTile(title: DebtSide.owedToMe.title, amount: owedToMe, highlighted: selectedSide == .owedToMe)
+            summaryTile(title: DebtSide.iOwe.title, amount: iOwe, highlighted: selectedSide == .iOwe)
         }
         .padding(.top, 20)
     }
@@ -98,9 +99,9 @@ struct DebtsView: View {
     // MARK: - Переключатель
     private var segmentView: some View {
         MonoSegmentedControl(
-            options: [0, 1],
-            title: { $0 == 0 ? "credits_tab".localized : "people_tab".localized },
-            selection: $selectedSegment
+            options: DebtSide.allCases,
+            title: { $0.title },
+            selection: $selectedSide
         )
         .padding(.top, 24)
         .padding(.bottom, 8)
@@ -115,7 +116,7 @@ struct DebtsView: View {
                 Text("Пусто")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(.white)
-                Text(selectedSegment == 0 ? String(localized: "У вас нет активных кредитов.") : String(localized: "У вас нет активных долгов людям."))
+                Text(selectedSide == .owedToMe ? String(localized: "Вам пока никто не должен.") : String(localized: "У вас нет долгов и кредитов."))
                     .font(.system(size: 14))
                     .foregroundColor(Theme.textTertiary)
                     .multilineTextAlignment(.center)
@@ -145,6 +146,9 @@ struct DebtsView: View {
                         }
                     }
                     .contextMenu {
+                        if !debt.isPaid {
+                            reminderMenu(debt)
+                        }
                         Button(role: .destructive) {
                             delete(debt)
                         } label: {
@@ -152,6 +156,31 @@ struct DebtsView: View {
                         }
                     }
             }
+        }
+    }
+
+    /// Когда заранее напомнить о сроке: выбор прямо из меню строки
+    private func reminderMenu(_ debt: Debt) -> some View {
+        Menu {
+            ForEach(DebtReminder.allCases) { option in
+                Button {
+                    HapticManager.shared.selection()
+                    financeService.setDebtReminder(id: debt.id, reminder: option)
+                    if option != .off {
+                        Task {
+                            _ = await PurchasePromptService.shared.requestAuthorization()
+                        }
+                    }
+                } label: {
+                    if option == debt.effectiveReminder {
+                        Label(option.title, systemImage: "checkmark")
+                    } else {
+                        Text(option.title)
+                    }
+                }
+            }
+        } label: {
+            Label("Напоминание", systemImage: debt.effectiveReminder == .off ? "bell.slash" : "bell")
         }
     }
 
@@ -241,7 +270,12 @@ struct DebtRowView: View {
         if debt.isPaid {
             return String(localized: "Погашено · \(date)")
         }
-        return String(localized: "\(directionText) · до \(date)")
+        let line = String(localized: "\(directionText) · до \(date)")
+        // Выключенное напоминание видно сразу: иначе можно пропустить срок, думая, что приложение напомнит
+        if debt.effectiveReminder == .off {
+            return line + " · " + String(localized: "без напоминания")
+        }
+        return line
     }
 }
 
@@ -249,12 +283,23 @@ struct DebtRowView: View {
 struct AddDebtView: View {
     @Environment(\.dismiss) private var dismiss
     let financeService: FinanceService
+    /// Сообщает, на какой вкладке оказался сохранённый долг
+    let onSave: (DebtSide) -> Void
 
     @State private var name: String = ""
     @State private var amountString: String = ""
-    @State private var isLent: Bool = false
-    @State private var selectedType: DebtType = .credit
+    @State private var isLent: Bool
+    @State private var selectedType: DebtType
     @State private var dueDate: Date = Date()
+    @State private var reminder: DebtReminder = .standard
+
+    /// Форма открывается сразу с направлением открытой вкладки: «Мне должны» — долг человека, «Я должен» — кредит
+    init(financeService: FinanceService, side: DebtSide = .iOwe, onSave: @escaping (DebtSide) -> Void = { _ in }) {
+        self.financeService = financeService
+        self.onSave = onSave
+        _isLent = State(initialValue: side == .owedToMe)
+        _selectedType = State(initialValue: side == .owedToMe ? .person : .credit)
+    }
 
     var body: some View {
         NavigationStack {
@@ -303,8 +348,17 @@ struct AddDebtView: View {
 
                 Section {
                     DatePicker("Срок возврата", selection: $dueDate, displayedComponents: .date)
+                    Picker("Напомнить", selection: $reminder) {
+                        ForEach(DebtReminder.allCases) { option in
+                            Text(option.title).tag(option)
+                        }
+                    }
                 } header: {
                     Text("Сроки")
+                } footer: {
+                    if reminder != .off {
+                        Text(reminderFooter)
+                    }
                 }
             }
             .monoForm()
@@ -326,6 +380,17 @@ struct AddDebtView: View {
         }
     }
 
+    /// Что именно придёт: для кредита — о платеже, для человека — вернуть или получить деньги
+    private var reminderFooter: String {
+        if selectedType == .credit {
+            return String(localized: "Напомним о платеже заранее, в день срока и после него, пока кредит не отмечен погашенным.")
+        }
+        if isLent {
+            return String(localized: "Напомним, когда вам должны вернуть деньги, и ещё раз, если срок пройдёт.")
+        }
+        return String(localized: "Напомним вернуть деньги заранее, в день срока и после него, пока долг не отмечен погашенным.")
+    }
+
     private var isSaveDisabled: Bool {
         name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
         Double(amountString.replacingOccurrences(of: ",", with: ".")) ?? 0 <= 0
@@ -339,12 +404,16 @@ struct AddDebtView: View {
             dueDate: dueDate,
             isLent: selectedType == .credit ? false : isLent,
             isPaid: false,
-            type: selectedType
+            type: selectedType,
+            reminder: reminder
         )
         financeService.addDebt(debt)
-        Task {
-            // Разрешение нужно для напоминаний о сроке долга
-            _ = await PurchasePromptService.shared.requestAuthorization()
+        onSave(DebtSide(debt: debt))
+        if reminder != .off {
+            Task {
+                // Разрешение нужно для напоминаний о сроке долга
+                _ = await PurchasePromptService.shared.requestAuthorization()
+            }
         }
         HapticManager.shared.trigger(.success)
         dismiss()

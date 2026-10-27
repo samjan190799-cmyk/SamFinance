@@ -416,6 +416,12 @@ struct GoalEditorView: View {
             )
             financeService.addGoal(goal)
         }
+        if endDay != nil {
+            Task {
+                // Разрешение нужно для напоминаний о сроке копилки
+                _ = await PurchasePromptService.shared.requestAuthorization()
+            }
+        }
         HapticManager.shared.trigger(.success)
         dismiss()
     }

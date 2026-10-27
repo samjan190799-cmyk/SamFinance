@@ -48,6 +48,24 @@ struct OperationDraft {
     var includedCount: Int { items.filter(\.isIncluded).count }
 }
 
+/// Одно предложенное ИИ изменение в карточке чата
+struct ActionItem: Identifiable {
+    let id = UUID()
+    let plan: PlannedAction
+    var isIncluded: Bool
+    /// Чем кончилось «Применить»; пусто, пока изменение не применялось
+    var outcome: AIApplyOutcome? = nil
+}
+
+/// Изменения в приложении, которые предложил ИИ: ждут, пока пользователь нажмёт «Применить»
+struct ActionDraft {
+    var items: [ActionItem]
+    var isApplied = false
+
+    /// Сколько отмеченных изменений можно применить
+    var includedCount: Int { items.filter { $0.isIncluded && $0.plan.canApply }.count }
+}
+
 /// Сообщение в ИИ-чате
 struct ChatMessage: Identifiable {
     enum Role {
@@ -60,6 +78,7 @@ struct ChatMessage: Identifiable {
     var text: String
     var thumbnails: [UIImage] = []
     var draft: OperationDraft? = nil
+    var actionDraft: ActionDraft? = nil
 }
 
 /// Запрос к облачному ИИ, который ждёт согласия пользователя на отправку данных
@@ -95,6 +114,9 @@ final class AIChatStore {
 
     var isWorking: Bool { workingText != nil }
 
+    /// Текущий разбор скриншотов или запрос к облачному ИИ: его можно отменить кнопкой в чате
+    @ObservationIgnored private var workTask: Task<Void, Never>?
+
     private init() {
         messages = [Self.greeting()]
     }
@@ -123,9 +145,20 @@ final class AIChatStore {
     #endif
 
     func reset() {
+        workTask?.cancel()
+        workTask = nil
         messages = [Self.greeting()]
         workingText = nil
         pendingConsent = nil
+    }
+
+    /// Прерывает запрос, который идёт слишком долго. Ответ, который придёт позже, в чат не попадёт.
+    func cancelWork() {
+        guard isWorking else { return }
+        workTask?.cancel()
+        workTask = nil
+        workingText = nil
+        reply(String(localized: "Запрос отменён."))
     }
 
     /// Перечитывает выбранный сервис и его ключ после возврата из настроек
@@ -164,17 +197,25 @@ final class AIChatStore {
             workingText: String(localized: "Думаю…"),
             declinedReply: nil
         )
-        Task {
+        workTask = Task {
             await submit(request)
         }
     }
 
     // MARK: - Скриншоты
 
-    func send(screenshots items: [PhotosPickerItem]) async {
+    func send(screenshots items: [PhotosPickerItem]) {
         guard !items.isEmpty, !isWorking else { return }
+        // Индикатор появляется сразу, до первого await: вторую отправку в это время сделать нельзя
         workingText = String(localized: "Распознаю текст…")
-        defer { workingText = nil }
+        workTask = Task {
+            await process(screenshots: items)
+        }
+    }
+
+    private func process(screenshots items: [PhotosPickerItem]) async {
+        // После отмены индикатор уже убран, а новый запрос мог его занять: чужой не гасим
+        defer { if !Task.isCancelled { workingText = nil } }
 
         var images: [Data] = []
         for item in items {
@@ -182,6 +223,7 @@ final class AIChatStore {
                 images.append(data)
             }
         }
+        guard !Task.isCancelled else { return }
         guard !images.isEmpty else {
             reply(String(localized: "Не получилось открыть изображения. Попробуйте выбрать их ещё раз."))
             return
@@ -198,6 +240,7 @@ final class AIChatStore {
             }
         }
         let recognized = texts.joined(separator: "\n\n")
+        guard !Task.isCancelled else { return }
 
         // Сначала разбор на телефоне: банковские СМС не уходят в облако
         let found = Self.bankOperations(in: recognized)
@@ -269,7 +312,7 @@ final class AIChatStore {
         guard let request = pendingConsent else { return }
         pendingConsent = nil
         request.provider.setConsent(true)
-        Task {
+        workTask = Task {
             await run(request)
         }
     }
@@ -287,7 +330,8 @@ final class AIChatStore {
     }
 
     private func askCloud(_ question: String, images: [Data], recognizedText: String?, history: [CloudTurn], provider: AIProvider, apiKey: String) async {
-        defer { workingText = nil }
+        // После отмены индикатор уже убран, а новый запрос мог его занять: чужой не гасим
+        defer { if !Task.isCancelled { workingText = nil } }
         do {
             let answer = try await CloudFinanceAssistant.ask(
                 question,
@@ -297,10 +341,11 @@ final class AIChatStore {
                 provider: provider,
                 apiKey: apiKey
             )
-            if answer.operations.isEmpty {
+            guard !Task.isCancelled else { return }
+            if answer.operations.isEmpty && answer.actions.isEmpty {
                 reply(answer.text)
             } else {
-                presentDraft(answer.operations, intro: answer.text)
+                presentAnswer(answer)
             }
         } catch is CancellationError {
             return
@@ -320,6 +365,11 @@ final class AIChatStore {
                     .map { "\($0.parsed.title) \($0.parsed.amount) \($0.parsed.currency.rawValue)" }
                     .joined(separator: "; ")
                 text += "\n[Черновик операций, \(status): \(list)]"
+            }
+            if let actionDraft = message.actionDraft {
+                let status = actionDraft.isApplied ? "применены" : "ждут подтверждения"
+                let list = actionDraft.items.map { $0.plan.summary }.joined(separator: "; ")
+                text += "\n[Предложенные изменения, \(status): \(list)]"
             }
             return CloudTurn(isUser: message.role == .user, text: text)
         }
@@ -356,7 +406,7 @@ final class AIChatStore {
         return found + " " + String(localized: "Проверьте категории и нажмите «Записать».")
     }
 
-    private func presentDraft(_ found: [ParsedSMSTransaction], intro: String) {
+    private func makeDraft(_ found: [ParsedSMSTransaction], intro: String) -> (text: String, draft: OperationDraft) {
         let financeService = FinanceService.shared
         let items = found.map { parsed in
             let duplicate = financeService.hasTransaction(externalKey: parsed.dedupKey)
@@ -368,8 +418,35 @@ final class AIChatStore {
         if duplicates > 0 {
             text += " " + String(localized: "Уже записаны: \(duplicates), их отметку я снял.")
         }
+        return (text, OperationDraft(items: items))
+    }
+
+    private func presentDraft(_ found: [ParsedSMSTransaction], intro: String) {
+        let made = makeDraft(found, intro: intro)
         HapticManager.shared.trigger(.success)
-        messages.append(ChatMessage(role: .assistant, text: text, draft: OperationDraft(items: items)))
+        messages.append(ChatMessage(role: .assistant, text: made.text, draft: made.draft))
+    }
+
+    /// Ответ облачного ИИ с операциями, изменениями приложения или тем и другим в одном сообщении
+    private func presentAnswer(_ answer: CloudReply) {
+        var text = answer.text
+        var draft: OperationDraft? = nil
+        if !answer.operations.isEmpty {
+            let made = makeDraft(answer.operations, intro: answer.text)
+            text = made.text
+            draft = made.draft
+        }
+
+        var actionDraft: ActionDraft? = nil
+        if !answer.actions.isEmpty {
+            let items = answer.actions.map { action -> ActionItem in
+                let plan = AIActionExecutor.plan(action)
+                return ActionItem(plan: plan, isIncluded: plan.canApply)
+            }
+            actionDraft = ActionDraft(items: items)
+        }
+        HapticManager.shared.trigger(.success)
+        messages.append(ChatMessage(role: .assistant, text: text, draft: draft, actionDraft: actionDraft))
     }
 
     func toggle(itemID: UUID, in messageID: UUID) {
@@ -404,6 +481,60 @@ final class AIChatStore {
         messages[index].draft?.isSaved = true
         HapticManager.shared.trigger(summary.failed > 0 ? .error : .success)
         reply(String(localized: "Готово: \(summary.text). Балансы карт обновлены."))
+    }
+
+    func toggleAction(itemID: UUID, in messageID: UUID) {
+        updateActionDraft(messageID) { draft in
+            guard let index = draft.items.firstIndex(where: { $0.id == itemID }), draft.items[index].plan.canApply else { return }
+            draft.items[index].isIncluded.toggle()
+        }
+    }
+
+    /// Применяет отмеченные изменения. Каждое проверяется заново прямо перед применением:
+    /// пока карточка висела в чате, данные могли измениться, и предыдущее изменение из той же карточки тоже влияет на следующее.
+    func applyActions(in messageID: UUID) {
+        guard let index = messages.firstIndex(where: { $0.id == messageID }),
+              var draft = messages[index].actionDraft, !draft.isApplied else { return }
+        let chosen = draft.items.indices.filter { draft.items[$0].isIncluded && draft.items[$0].plan.canApply }
+        guard !chosen.isEmpty else { return }
+
+        var applied = 0
+        var failed = 0
+        var needsNotifications = false
+        for position in chosen {
+            let fresh = AIActionExecutor.plan(draft.items[position].plan.action)
+            let outcome = AIActionExecutor.apply(fresh)
+            draft.items[position].outcome = outcome
+            if outcome == .done {
+                applied += 1
+                needsNotifications = needsNotifications || AIActionExecutor.needsNotifications(fresh)
+            } else {
+                failed += 1
+            }
+        }
+        draft.isApplied = true
+        messages[index].actionDraft = draft
+        HapticManager.shared.trigger(failed > 0 ? .error : .success)
+
+        var text = String(localized: "Готово: применено изменений — \(applied).")
+        if failed > 0 {
+            text += " " + String(localized: "Не удалось применить: \(failed).")
+        }
+        reply(text)
+
+        if needsNotifications {
+            Task {
+                // Разрешение нужно, чтобы напоминания приходили
+                _ = await PurchasePromptService.shared.requestAuthorization()
+            }
+        }
+    }
+
+    private func updateActionDraft(_ messageID: UUID, _ change: (inout ActionDraft) -> Void) {
+        guard let index = messages.firstIndex(where: { $0.id == messageID }),
+              var draft = messages[index].actionDraft, !draft.isApplied else { return }
+        change(&draft)
+        messages[index].actionDraft = draft
     }
 
     private func updateDraft(_ messageID: UUID, _ change: (inout OperationDraft) -> Void) {

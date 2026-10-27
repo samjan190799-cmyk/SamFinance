@@ -144,6 +144,42 @@ public enum DebtType: String, Codable, Sendable {
     case person = "person"
 }
 
+/// Когда заранее напомнить о сроке долга. В день срока и после него, пока долг не погашен, напоминание приходит всегда,
+/// если оно не выключено совсем.
+public enum DebtReminder: String, Codable, Sendable, CaseIterable, Identifiable {
+    case off
+    case onDueDay
+    case dayBefore
+    case threeDaysBefore
+    case weekBefore
+
+    public var id: String { rawValue }
+
+    /// У долгов, заведённых до появления выбора, напоминание за день до срока
+    public static let standard: DebtReminder = .dayBefore
+
+    /// За сколько дней до срока прислать первое напоминание; nil — напоминания выключены
+    public var daysBefore: Int? {
+        switch self {
+        case .off: return nil
+        case .onDueDay: return 0
+        case .dayBefore: return 1
+        case .threeDaysBefore: return 3
+        case .weekBefore: return 7
+        }
+    }
+
+    public var title: String {
+        switch self {
+        case .off: return String(localized: "Не напоминать")
+        case .onDueDay: return String(localized: "В день срока")
+        case .dayBefore: return String(localized: "За день")
+        case .threeDaysBefore: return String(localized: "За 3 дня")
+        case .weekBefore: return String(localized: "За неделю")
+        }
+    }
+}
+
 /// Долг (взаиморасчеты с контактами или кредиты банкам)
 public struct Debt: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
@@ -153,8 +189,9 @@ public struct Debt: Codable, Identifiable, Hashable, Sendable {
     public var isLent: Bool // true - мне должны (Lent), false - я должен (Borrowed)
     public var isPaid: Bool // Статус погашения
     public var type: DebtType
-    
-    public init(id: UUID = UUID(), name: String, amount: Double, dueDate: Date = Date(), isLent: Bool, isPaid: Bool = false, type: DebtType = .person) {
+    public var reminder: DebtReminder? // Когда напомнить заранее; у старых долгов поля нет
+
+    public init(id: UUID = UUID(), name: String, amount: Double, dueDate: Date = Date(), isLent: Bool, isPaid: Bool = false, type: DebtType = .person, reminder: DebtReminder? = nil) {
         self.id = id
         self.name = name
         self.amount = amount
@@ -162,6 +199,75 @@ public struct Debt: Codable, Identifiable, Hashable, Sendable {
         self.isLent = isLent
         self.isPaid = isPaid
         self.type = type
+        self.reminder = reminder
+    }
+
+    /// Напоминание с учётом значения по умолчанию
+    public var effectiveReminder: DebtReminder {
+        reminder ?? .standard
+    }
+}
+
+/// Две вкладки экрана долгов: что должны мне и что должен я. Кредиты всегда на стороне «Я должен».
+public enum DebtSide: String, CaseIterable, Identifiable, Hashable, Sendable {
+    case owedToMe
+    case iOwe
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .owedToMe: return String(localized: "Мне должны")
+        case .iOwe: return String(localized: "Я должен")
+        }
+    }
+
+    /// Сторона, на которой лежит долг
+    public init(debt: Debt) {
+        self = debt.isLent ? .owedToMe : .iOwe
+    }
+
+    public func contains(_ debt: Debt) -> Bool {
+        DebtSide(debt: debt) == self
+    }
+}
+
+/// Как часто повторяется своё напоминание
+public enum ReminderRepeat: String, Codable, Sendable, CaseIterable, Identifiable {
+    case never
+    case daily
+    case weekly
+    case monthly
+    case yearly
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .never: return String(localized: "Один раз")
+        case .daily: return String(localized: "Каждый день")
+        case .weekly: return String(localized: "Каждую неделю")
+        case .monthly: return String(localized: "Каждый месяц")
+        case .yearly: return String(localized: "Каждый год")
+        }
+    }
+}
+
+/// Своё напоминание: «оплатить интернет 5 ноября в 10:00». Создаётся вручную или по просьбе в ИИ-чате.
+public struct CustomReminder: Codable, Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public var title: String
+    /// Первое срабатывание: дата и время
+    public var date: Date
+    public var repeatRule: ReminderRepeat
+    public var note: String?
+
+    public init(id: UUID = UUID(), title: String, date: Date, repeatRule: ReminderRepeat = .never, note: String? = nil) {
+        self.id = id
+        self.title = title
+        self.date = date
+        self.repeatRule = repeatRule
+        self.note = note
     }
 }
 
