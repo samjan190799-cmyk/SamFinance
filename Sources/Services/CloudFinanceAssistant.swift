@@ -6,16 +6,37 @@ struct CloudTurn: Sendable {
     let text: String
 }
 
-/// Ответ облачного ИИ: текст для чата и операции для черновика
+/// Ответ облачного ИИ: текст для чата, операции для черновика и предложенные изменения в приложении
 struct CloudReply {
     let text: String
     let operations: [ParsedSMSTransaction]
+    let actions: [AIAction]
 }
 
 /// Ответ модели строго по JSON-схеме из запроса
 private struct CloudEnvelope: Decodable {
     let reply: String
     let operations: [CloudOperation]
+    /// Отсутствует в ответах, где модель не знает о действиях
+    let actions: [CloudAction]?
+}
+
+private struct CloudAction: Decodable {
+    let kind: String
+    let target: String?
+    let name: String?
+    let amount: Double?
+    let currency: String?
+    let date: String?
+    let direction: String?
+    let debtType: String?
+    let billKind: String?
+    let reminder: String?
+    let repeatRule: String?
+    let note: String?
+    let category: String?
+    let setting: String?
+    let value: String?
 }
 
 private struct CloudOperation: Decodable {
@@ -105,7 +126,7 @@ enum CloudFinanceAssistant {
         return result
     }
 
-    private static func responseSchema() -> JSON {
+    static func responseSchema() -> [String: Any] {
         let categoryNames = Array(Set(FinanceService.shared.categories.map(\.name))).sorted()
         let nullableString: JSON = ["anyOf": [["type": "string"], ["type": "null"]]]
         let fields = ["title", "merchant", "amount", "currency", "type", "category", "date", "card_last4", "balance_after", "is_transfer", "counterparty"]
@@ -133,9 +154,44 @@ enum CloudFinanceAssistant {
             "type": "object",
             "properties": [
                 "reply": ["type": "string"],
-                "operations": ["type": "array", "items": operation] as JSON
+                "operations": ["type": "array", "items": operation] as JSON,
+                "actions": ["type": "array", "items": actionSchema()] as JSON
             ] as JSON,
-            "required": ["reply", "operations"],
+            "required": ["reply", "operations", "actions"],
+            "additionalProperties": false
+        ]
+    }
+
+    /// Одно предложение изменить приложение: плоский объект, поля «не нужно» заполняются null
+    private static func actionSchema() -> JSON {
+        func nullable(_ schema: JSON) -> JSON {
+            ["anyOf": [schema, ["type": "null"]]]
+        }
+        func enumeration(_ values: [String]) -> JSON {
+            ["type": "string", "enum": values]
+        }
+
+        let properties: JSON = [
+            "kind": enumeration(AIAction.Kind.allCases.map(\.rawValue)),
+            "target": nullable(["type": "string"]),
+            "name": nullable(["type": "string"]),
+            "amount": nullable(["type": "number"]),
+            "currency": nullable(enumeration(AppCurrency.allCases.map(\.rawValue))),
+            "date": nullable(["type": "string", "format": "date-time"]),
+            "direction": nullable(enumeration(DebtSide.allCases.map(\.rawValue))),
+            "debt_type": nullable(enumeration(DebtType.allCases.map(\.rawValue))),
+            "bill_kind": nullable(enumeration(BillKind.allCases.map(\.rawValue))),
+            "reminder": nullable(enumeration(DebtReminder.allCases.map(\.rawValue))),
+            "repeat_rule": nullable(enumeration(ReminderRepeat.allCases.map(\.rawValue))),
+            "note": nullable(["type": "string"]),
+            "category": nullable(["type": "string"]),
+            "setting": nullable(enumeration(AIAction.ReminderSetting.allCases.map(\.rawValue))),
+            "value": nullable(["type": "string"])
+        ]
+        return [
+            "type": "object",
+            "properties": properties,
+            "required": properties.keys.sorted(),
             "additionalProperties": false
         ]
     }
@@ -160,6 +216,23 @@ enum CloudFinanceAssistant {
         • title — короткое название для списка: магазин, «Перевод от …», «Снятие наличных».
 
         Пользователь в основном получает СМС армянских банков (IDBank, ARCA и другие): первая строка — код операции (GNUM — покупка, E-POS GNUM — покупка в интернете, C2C — перевод, MUTQ — зачисление), затем сумма, маска карты, магазин, дата и остаток (MNACORD).
+
+        Поле actions — изменения в приложении, о которых пользователь просит словами: «добавь долг…», «поставь напоминание на пятницу», «закрой долг Арама», «пополни копилку», «заморозь карту». Заполняй его только по прямой просьбе изменить данные или настройки, а не по вопросу или рассуждению. Пользователь увидит карточку со списком изменений и сам нажмёт «Применить», поэтому в reply одной-двумя фразами скажи, что предлагаешь. Если не хватает важного (срока долга, суммы, кто кому должен, даты и времени напоминания), не придумывай: спроси в reply, а actions оставь пустым. Не предлагай в одном ответе действие над тем, что создаётся в этом же ответе (например, пополнение новой копилки): это будет в следующем сообщении. Не повторяй то, что уже есть в списках ниже. Менять и удалять можно только то, что пользователь назвал. Если просьба не укладывается в виды действий, так и скажи в reply.
+        Виды (kind) и нужные поля; остальные поля — null:
+        • add_debt — name (имя человека, банка или название платежа), amount, currency, date (срок), direction (owedToMe — мне должны, iOwe — я должен; для кредита и платежа не нужен), debt_type (person — человек, credit — кредит, bill — регулярный платёж: коммуналка, интернет, телефон, аренда, подписка, страховка, налог), bill_kind (только для bill: utilities — коммуналка, internet, phone, rent, subscription, insurance, tax, other), repeat_rule (только для bill: monthly, если пользователь не сказал иначе; never — разовый платёж), reminder (off, onDueDay, dayBefore, threeDaysBefore, weekBefore; если пользователь не просил, null). У bill name можно оставить null: возьмётся название вида платежа. Платежи — это не долги: «оплати интернет» значит платёж, а не долг человеку.
+        • change_debt — target и любые из name, amount, currency, date, reminder, а для платежа ещё bill_kind и repeat_rule.
+        • mark_debt_paid, mark_debt_unpaid, delete_debt — target. Для повторяющегося платежа mark_debt_paid значит «оплатил в этот раз»: срок сам перейдёт на следующий период.
+        • add_goal — name, amount (цель по сумме), currency, date (срок, если назван).
+        • change_goal — target и любые из name, amount, currency, date.
+        • deposit_goal, withdraw_goal — target, amount, currency.
+        • delete_goal — target.
+        • add_reminder — name (что напомнить), date (дата и время), repeat_rule (never, daily, weekly, monthly, yearly), note.
+        • change_reminder — target и любые из name, date, repeat_rule, note. delete_reminder — target.
+        • freeze_card, unfreeze_card — target (последние 4 цифры карты).
+        • delete_transaction — target. set_transaction_category — target и category (из списка категорий нужного типа).
+        • set_currency — value (AMD, RUB, USD или EUR).
+        • set_reminder_setting — setting и value: для debts, goal_deadlines, card_expiry, daily_log значение «on» или «off»; для goal_saving — «off», «weekly» или «monthly»; для reminder_time и daily_log_time — «ЧЧ:ММ».
+        target — номер из квадратных скобок в списках ниже ([d:…] долг, [g:…] копилка, [r:…] напоминание, [t:…] операция), для карты — последние 4 цифры. Номера копируй точно, не придумывай их; если номера нет, напиши название. Даты и время отсчитывай от текущего времени и пиши в ISO 8601 с часовым поясом пользователя; если у напоминания время не названо, возьми 10:00. Если валюта не названа, currency — null: сумма в валюте отображения.
 
         \(financeContext())
         """
@@ -196,7 +269,7 @@ enum CloudFinanceAssistant {
             lines.append("Карты (общий баланс \(currency.format(financeService.totalBalance))):")
             for card in financeService.cards {
                 let frozen = card.isFrozen ? ", заморожена" : ""
-                lines.append("• •••• \(card.last4) «\(card.type)» — \(currency.format(card.balance))\(frozen)")
+                lines.append("• [c:\(card.last4)] «\(card.type)» — \(currency.format(card.balance))\(frozen)")
             }
         }
 
@@ -223,7 +296,7 @@ enum CloudFinanceAssistant {
             lines.append("Последние операции (всего записано \(financeService.transactions.count)):")
             for transaction in latest {
                 let sign = transaction.type == .income ? "+" : "−"
-                var line = "• \(dateFormatter.string(from: transaction.date)) · \(sign)\(currency.format(transaction.amount)) · \(transaction.title) · \(transaction.category.name)"
+                var line = "• [t:\(AIActionExecutor.shortID(transaction.id))] \(dateFormatter.string(from: transaction.date)) · \(sign)\(currency.format(transaction.amount)) · \(transaction.title) · \(transaction.category.name)"
                 if let cardId = transaction.cardId, let card = financeService.cards.first(where: { $0.id == cardId }) {
                     line += " · карта \(card.last4)"
                 }
@@ -231,16 +304,47 @@ enum CloudFinanceAssistant {
             }
         }
 
-        let openDebts = financeService.debts.filter { !$0.isPaid }
+        // Долги: сначала открытые, затем погашенные; номер нужен, чтобы изменить или закрыть долг
+        let debts = financeService.debts.sorted { !$0.isPaid && $1.isPaid }.prefix(30)
         lines.append("")
-        if openDebts.isEmpty {
-            lines.append("Открытых долгов нет.")
+        if debts.isEmpty {
+            lines.append("Долгов нет.")
         } else {
-            lines.append("Открытые долги:")
-            for debt in openDebts {
-                let direction = debt.isLent ? "мне должны" : "я должен"
-                let kind = debt.type == .credit ? "кредит" : "человек"
-                lines.append("• \(debt.name) (\(kind)) — \(direction) \(currency.format(debt.amount)), срок \(dateFormatter.string(from: debt.dueDate))")
+            lines.append("Долги:")
+            for debt in debts {
+                let direction = debt.type == .bill ? "к оплате" : (debt.isLent ? "мне должны" : "я должен")
+                let kind: String
+                switch debt.type {
+                case .credit: kind = "кредит"
+                case .person: kind = "человек"
+                case .bill: kind = "платёж: \((debt.billKind ?? .other).rawValue), повтор: \((debt.repeatRule ?? .never).rawValue)"
+                }
+                let status = debt.isPaid ? ", погашен" : ", напоминание: \(debt.effectiveReminder.rawValue)"
+                lines.append("• [d:\(AIActionExecutor.shortID(debt.id))] \(debt.name) (\(kind)) — \(direction) \(currency.format(debt.amount)), срок \(dateFormatter.string(from: debt.dueDate))\(status)")
+            }
+        }
+
+        lines.append("")
+        if financeService.goals.isEmpty {
+            lines.append("Копилок нет.")
+        } else {
+            lines.append("Копилки:")
+            for goal in financeService.goals.prefix(20) {
+                var line = "• [g:\(AIActionExecutor.shortID(goal.id))] «\(goal.title)» — накоплено \(currency.format(goal.currentAmount)) из \(currency.format(goal.targetAmount))"
+                if let deadline = goal.deadline {
+                    line += ", срок \(dateFormatter.string(from: deadline))"
+                }
+                lines.append(line)
+            }
+        }
+
+        lines.append("")
+        if financeService.customReminders.isEmpty {
+            lines.append("Своих напоминаний нет.")
+        } else {
+            lines.append("Свои напоминания:")
+            for reminder in financeService.customReminders.prefix(20) {
+                lines.append("• [r:\(AIActionExecutor.shortID(reminder.id))] «\(reminder.title)» — \(dateFormatter.string(from: reminder.date)), повтор: \(reminder.repeatRule.rawValue)")
             }
         }
 
@@ -249,7 +353,7 @@ enum CloudFinanceAssistant {
 
     // MARK: - Разбор ответа
 
-    private static func parse(_ text: String, provider: AIProvider) throws -> CloudReply {
+    static func parse(_ text: String, provider: AIProvider) throws -> CloudReply {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         guard let data = withoutCodeFence(text).data(using: .utf8),
@@ -261,7 +365,30 @@ enum CloudFinanceAssistant {
         let operations = envelope.operations
             .compactMap { transaction(from: $0) }
             .filter { seen.insert($0.dedupKey).inserted }
-        return CloudReply(text: envelope.reply, operations: operations)
+        let actions = (envelope.actions ?? []).compactMap { action(from: $0) }
+        return CloudReply(text: envelope.reply, operations: operations, actions: actions)
+    }
+
+    /// Предложение модели в виде, который понимает исполнитель; неизвестный вид действия отбрасывается
+    private static func action(from raw: CloudAction) -> AIAction? {
+        guard let kind = AIAction.Kind(rawValue: raw.kind) else { return nil }
+        return AIAction(
+            kind: kind,
+            target: clean(raw.target),
+            name: clean(raw.name),
+            amount: raw.amount,
+            currency: raw.currency.flatMap { AppCurrency(rawValue: $0.uppercased()) },
+            date: raw.date.flatMap { parseISO($0) },
+            direction: raw.direction.flatMap { DebtSide(rawValue: $0) },
+            debtType: raw.debtType.flatMap { DebtType(rawValue: $0) },
+            billKind: raw.billKind.flatMap { BillKind(rawValue: $0) },
+            reminder: raw.reminder.flatMap { DebtReminder(rawValue: $0) },
+            repeatRule: raw.repeatRule.flatMap { ReminderRepeat(rawValue: $0) },
+            note: clean(raw.note),
+            category: clean(raw.category),
+            setting: raw.setting.flatMap { AIAction.ReminderSetting(rawValue: $0) },
+            value: clean(raw.value)
+        )
     }
 
     /// Некоторые модели оборачивают JSON в блок кода ```json … ``` даже при заданной схеме
@@ -313,23 +440,32 @@ enum CloudFinanceAssistant {
         return trimmed
     }
 
-    /// Дата из ISO 8601; дата из будущего отбрасывается, и тогда операция запишется на момент сохранения
-    private static func parseDate(_ raw: String) -> Date? {
+    /// Дата из ISO 8601 с часовым поясом, без часового пояса или только день
+    static func parseISO(_ raw: String) -> Date? {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
-        var parsed = formatter.date(from: raw)
-        if parsed == nil {
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            parsed = formatter.date(from: raw)
+        if let parsed = formatter.date(from: raw) {
+            return parsed
         }
-        if parsed == nil {
-            let local = DateFormatter()
-            local.locale = Locale(identifier: "en_US_POSIX")
-            local.timeZone = .current
-            local.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-            parsed = local.date(from: raw)
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let parsed = formatter.date(from: raw) {
+            return parsed
         }
-        guard let parsed, parsed <= Date().addingTimeInterval(24 * 60 * 60) else { return nil }
+        let local = DateFormatter()
+        local.locale = Locale(identifier: "en_US_POSIX")
+        local.timeZone = .current
+        for format in ["yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd'T'HH:mm", "yyyy-MM-dd"] {
+            local.dateFormat = format
+            if let parsed = local.date(from: raw) {
+                return parsed
+            }
+        }
+        return nil
+    }
+
+    /// Дата операции: дата из будущего отбрасывается, и тогда операция запишется на момент сохранения
+    private static func parseDate(_ raw: String) -> Date? {
+        guard let parsed = parseISO(raw), parsed <= Date().addingTimeInterval(24 * 60 * 60) else { return nil }
         return parsed
     }
 }

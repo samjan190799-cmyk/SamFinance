@@ -43,6 +43,8 @@ enum AppTab: Int, CaseIterable, Identifiable, Hashable {
 /// Главный контейнер приложения: пять разделов в нижней панели, ИИ — один из них.
 struct ContentView: View {
     @State private var financeService = FinanceService.shared
+    @State private var router = AppRouter.shared
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab: AppTab = .overview
     /// Пока открыта клавиатура, панель прячется, чтобы поле ввода чата стояло прямо над клавиатурой
     @State private var isKeyboardVisible = false
@@ -71,6 +73,19 @@ struct ContentView: View {
                 // Курсы валют обновляются сами при каждом запуске
                 CurrencyService.shared.fetchLatestRates()
             }
+            // Нажатие на напоминание открывает его раздел: долги, карты с копилками или обзор
+            .onAppear {
+                openRequestedTab()
+            }
+            .onChange(of: router.requestedTab) {
+                openRequestedTab()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                // Вечерние напоминания ставятся на две недели вперёд: при каждом возвращении в приложение окно сдвигается
+                if phase == .active {
+                    ReminderService.shared.update(from: financeService)
+                }
+            }
             .screenshotScene(selectedTab: $selectedTab, financeService: financeService)
     }
 
@@ -91,6 +106,12 @@ struct ContentView: View {
         case .report:
             ReportView(financeService: financeService)
         }
+    }
+
+    private func openRequestedTab() {
+        guard let tab = router.requestedTab else { return }
+        router.requestedTab = nil
+        switchTo(tab)
     }
 
     private func switchTo(_ tab: AppTab) {

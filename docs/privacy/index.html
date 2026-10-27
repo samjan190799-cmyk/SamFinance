@@ -40,8 +40,9 @@
 <ul>
 <li><strong>Transactions:</strong> title, amount, category, date, note.</li>
 <li><strong>Cards:</strong> purpose, cardholder name, expiry date, last 4 digits, balance, bank and design. The full card number is saved only if you enter it yourself, and it lives in this device's secure iOS storage (Keychain). The app never asks for or stores the CVV code.</li>
-<li><strong>Debts and loans:</strong> name of a person or bank, amount, due date.</li>
+<li><strong>Debts, loans and payments:</strong> name of a person or bank or the name of a payment (utilities, internet, subscription), amount, due date, repeat.</li>
 <li><strong>Savings goals:</strong> name, target, deadline, log of deposits and withdrawals.</li>
+<li><strong>Reminders:</strong> text, date and time, repeat, note.</li>
 <li><strong>Settings:</strong> language, currency, chosen AI service, automation rules (remembered merchant categories, your surname used to recognize transfers to yourself).</li>
 <li><strong>AI keys:</strong> a key you paste is kept in this device's Keychain and does not move to other devices.</li>
 </ul>
@@ -52,12 +53,13 @@
 <ul>
 <li>your question and the recent messages of the conversation;</li>
 <li>screenshots you attach (receipts, statements, bank apps) and the text recognized on them on your phone;</li>
-<li>a summary of your records: cards (purpose, last 4 digits, balance), spending and income for 30 days by category, up to 60 latest transactions (date, amount, title, category, card), open debts (name, amount, due date), the current date, language and currency.</li>
+<li>a summary of your records: cards (purpose, last 4 digits, balance), spending and income for 30 days by category, up to 60 latest transactions (date, amount, title, category, card), debts and payments (name, amount, due date, repeat, reminder), savings goals (name, target, amount saved, deadline), your own reminders (text, date, repeat), the current date, language and currency.</li>
 </ul>
-<p>Not sent: full card numbers, CVV, cardholder names and savings goals. Bank SMS that the app recognizes on the phone never go to the cloud. The key is used only to sign in to the chosen service.</p>
+<p>Not sent: full card numbers, CVV and cardholder names. Bank SMS that the app recognizes on the phone never go to the cloud. The key is used only to sign in to the chosen service.</p>
 <p>Requests go straight from your phone to the chosen service using your key. Our server is not part of this chain and we receive no copies. The service processes data under its own rules, possibly in another country: <a href="https://www.anthropic.com/legal/privacy" rel="noopener">Anthropic</a>, <a href="https://openai.com/policies/privacy-policy" rel="noopener">OpenAI</a>, <a href="https://policies.google.com/privacy" rel="noopener">Google</a>. Requests are billed to your key.</p>
+<p>If you ask the AI to change something in the app (add a debt, set a reminder), it only proposes the changes as a card in the chat. The app makes them only when you tap "Apply".</p>
 <p>You can withdraw permission at any time: delete the key in Settings → AI assistant. Without a key the app answers questions using only the data on your phone.</p>
-<p><strong>3. iOS features.</strong> You choose screenshots in the system iOS picker, and the app sees only the pictures you pick. The clipboard is read only when you tap the buttons that scan an SMS or paste from the clipboard. Export puts a CSV table on the clipboard when you tap it. Reminders about due debts and Apple Pay purchases are shown by the device itself if you allowed notifications. Shortcuts run on your phone; the app does not read messages on its own, iOS does not allow that.</p>
+<p><strong>3. iOS features.</strong> You choose screenshots in the system iOS picker, and the app sees only the pictures you pick. The clipboard is read only when you tap the buttons that scan an SMS or paste from the clipboard. Export puts a CSV table on the clipboard when you tap it. Reminders (about debts, savings goals, cards and your own) and Apple Pay purchase prompts are shown by the device itself if you allowed notifications. Shortcuts run on your phone; the app does not read messages on its own, iOS does not allow that.</p>
 <h3>What we do not do</h3>
 <ul>
 <li>we do not create accounts or collect contact details;</li>
@@ -100,8 +102,9 @@
 <ul>
 <li><strong>Операции:</strong> название, сумма, категория, дата, заметка.</li>
 <li><strong>Карты:</strong> назначение, имя держателя, срок действия, последние 4 цифры, баланс, банк и оформление. Полный номер карты сохраняется, только если вы сами его ввели, и лежит в защищённом хранилище iOS (Keychain) этого устройства. Код CVV приложение не запрашивает и не сохраняет.</li>
-<li><strong>Долги и кредиты:</strong> имя человека или банка, сумма, срок возврата.</li>
+<li><strong>Долги, кредиты и платежи:</strong> имя человека или банка либо название платежа (коммуналка, интернет, подписка), сумма, срок, повтор.</li>
 <li><strong>Копилки:</strong> название, цель, срок, журнал пополнений и снятий.</li>
+<li><strong>Напоминания:</strong> текст, дата и время, повтор, заметка.</li>
 <li><strong>Настройки:</strong> язык, валюта, выбранный ИИ-сервис, правила автоматизации (запомненные категории магазинов, ваша фамилия для распознавания переводов себе).</li>
 <li><strong>Ключи ИИ:</strong> ключ, который вы вставили, хранится в Keychain этого устройства и не переносится на другие.</li>
 </ul>
@@ -112,12 +115,13 @@
 <ul>
 <li>ваш вопрос и последние сообщения диалога;</li>
 <li>скриншоты, которые вы приложили (чеки, выписки, приложения банков), и текст, распознанный на них на телефоне;</li>
-<li>сводка учёта: карты (назначение, последние 4 цифры, баланс), расходы и доходы за 30 дней по категориям, до 60 последних операций (дата, сумма, название, категория, карта), открытые долги (имя, сумма, срок), текущая дата, язык и валюта.</li>
+<li>сводка учёта: карты (назначение, последние 4 цифры, баланс), расходы и доходы за 30 дней по категориям, до 60 последних операций (дата, сумма, название, категория, карта), долги и платежи (имя, сумма, срок, повтор, напоминание), копилки (название, цель, накоплено, срок), ваши напоминания (текст, дата, повтор), текущая дата, язык и валюта.</li>
 </ul>
-<p>Не отправляются: полные номера карт, CVV, имена держателей карт и копилки. Банковские СМС, которые приложение узнаёт на телефоне, в облако не уходят. Ключ используется только для входа в выбранный сервис.</p>
+<p>Не отправляются: полные номера карт, CVV и имена держателей карт. Банковские СМС, которые приложение узнаёт на телефоне, в облако не уходят. Ключ используется только для входа в выбранный сервис.</p>
 <p>Запросы идут напрямую с телефона к выбранному сервису по вашему ключу. Наш сервер в этой цепочке не участвует, копий данных мы не получаем. Сервис обрабатывает данные по своим правилам, возможно в другой стране: <a href="https://www.anthropic.com/legal/privacy" rel="noopener">Anthropic</a>, <a href="https://openai.com/policies/privacy-policy" rel="noopener">OpenAI</a>, <a href="https://policies.google.com/privacy" rel="noopener">Google</a>. Запросы оплачиваются по тарифу вашего ключа.</p>
+<p>Если вы просите ИИ что-то изменить в приложении (добавить долг, поставить напоминание), он только предлагает изменения карточкой в чате. Приложение вносит их, лишь когда вы нажмёте «Применить».</p>
 <p>Отозвать разрешение можно в любой момент: удалите ключ в Настройках → ИИ-помощник. Без ключа приложение отвечает на вопросы только по данным на телефоне.</p>
-<p><strong>3. Функции iOS.</strong> Скриншоты вы выбираете системным окном iOS, приложение видит только выбранные снимки. Буфер обмена читается, только когда вы нажимаете кнопки распознавания СМС или вставки из буфера. Экспорт кладёт таблицу CSV в буфер обмена по вашему нажатию. Уведомления о сроках долгов и покупках Apple Pay показывает само устройство, если вы их разрешили. Быстрые команды запускаются на вашем телефоне; сообщения приложение само не читает, iOS этого не позволяет.</p>
+<p><strong>3. Функции iOS.</strong> Скриншоты вы выбираете системным окном iOS, приложение видит только выбранные снимки. Буфер обмена читается, только когда вы нажимаете кнопки распознавания СМС или вставки из буфера. Экспорт кладёт таблицу CSV в буфер обмена по вашему нажатию. Напоминания (о долгах, копилках, картах и ваши собственные) и подсказки о покупках Apple Pay показывает само устройство, если вы разрешили уведомления. Быстрые команды запускаются на вашем телефоне; сообщения приложение само не читает, iOS этого не позволяет.</p>
 <h3>Чего мы не делаем</h3>
 <ul>
 <li>не создаём аккаунты и не собираем контактные данные;</li>
