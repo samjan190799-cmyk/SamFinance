@@ -42,7 +42,7 @@ final class DebtTypeSettingsTests: XCTestCase {
         Debt(name: "Арам", amount: 20_000, dueDate: try date(2026, 11, 5), isLent: isLent)
     }
 
-    private func bill(rule: ReminderRepeat? = .monthly, kind: BillKind = .internet) throws -> Debt {
+    private func makeBill(rule: ReminderRepeat? = .monthly, kind: BillKind = .internet) throws -> Debt {
         Debt(name: "Ucom", amount: 4_500, dueDate: try date(2026, 11, 5), isLent: false, type: .bill, billKind: kind, repeatRule: rule)
     }
 
@@ -69,9 +69,9 @@ final class DebtTypeSettingsTests: XCTestCase {
         XCTAssertEqual(DebtProfile(debt: try credit()), .credit)
         XCTAssertEqual(DebtProfile(debt: try person(isLent: true)), .owedToMe)
         XCTAssertEqual(DebtProfile(debt: try person(isLent: false)), .iOwe)
-        XCTAssertEqual(DebtProfile(debt: try bill(kind: .utilities)), .bill(.utilities))
-        XCTAssertEqual(DebtProfile(debt: try bill(rule: .never)), .oneTimeBill)
-        XCTAssertEqual(DebtProfile(debt: try bill(rule: nil)), .oneTimeBill)
+        XCTAssertEqual(DebtProfile(debt: try makeBill(kind: .utilities)), .bill(.utilities))
+        XCTAssertEqual(DebtProfile(debt: try makeBill(rule: .never)), .oneTimeBill)
+        XCTAssertEqual(DebtProfile(debt: try makeBill(rule: nil)), .oneTimeBill)
         XCTAssertTrue(DebtProfile.bill(.rent).isRecurringBill)
         XCTAssertFalse(DebtProfile.oneTimeBill.isRecurringBill)
     }
@@ -226,8 +226,8 @@ final class DebtTypeSettingsTests: XCTestCase {
         var settings = ReminderSettings()
         settings.debtTypes[.bill(.subscription)].isEnabled = false
 
-        XCTAssertTrue(try specs(try bill(kind: .subscription), settings).isEmpty)
-        XCTAssertFalse(try specs(try bill(kind: .internet), settings).isEmpty, "другие виды платежей напоминают как раньше")
+        XCTAssertTrue(try specs(try makeBill(kind: .subscription), settings).isEmpty)
+        XCTAssertFalse(try specs(try makeBill(kind: .internet), settings).isEmpty, "другие виды платежей напоминают как раньше")
         XCTAssertFalse(try specs(try person(), settings).isEmpty)
     }
 
@@ -251,8 +251,8 @@ final class DebtTypeSettingsTests: XCTestCase {
         settings.debtTypes[.oneTimeBill].late = LateReminders.off
         settings.debtTypes[.bill(.internet)].late = .nextDay
 
-        let oneTime = try specs(try bill(rule: .never), settings)
-        let repeating = try specs(try bill(rule: .monthly), settings)
+        let oneTime = try specs(try makeBill(rule: .never), settings)
+        let repeating = try specs(try makeBill(rule: .monthly), settings)
         XCTAssertEqual(oneTime.count, 2, "заранее и в день срока")
         XCTAssertEqual(repeating.count, 3, "заранее, в день срока и на следующий день")
     }

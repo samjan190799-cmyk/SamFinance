@@ -38,7 +38,7 @@ final class DebtPaymentTests: XCTestCase {
         Debt(name: "Арам", amount: amount, dueDate: try date(2026, 11, 5), isLent: true)
     }
 
-    private func bill(amount: Double = 4_500, variable: Bool? = nil, rule: ReminderRepeat? = .monthly, interval: Int? = nil) throws -> Debt {
+    private func makeBill(amount: Double = 4_500, variable: Bool? = nil, rule: ReminderRepeat? = .monthly, interval: Int? = nil) throws -> Debt {
         let due = try date(2026, 11, 5)
         return Debt(name: "Коммуналка", amount: amount, dueDate: due, isLent: false, type: .bill, billKind: .utilities, repeatRule: rule, firstDueDate: due, repeatInterval: interval, isVariableAmount: variable)
     }
@@ -195,7 +195,7 @@ final class DebtPaymentTests: XCTestCase {
     // MARK: - Платежи с меняющейся суммой
 
     func testVariableBillRemembersWhatItCostThisTime() throws {
-        var bill = try bill(variable: true)
+        var bill = try makeBill(variable: true)
         bill.applyPayment(5_200, now: try now(), calendar: calendar)
 
         XCTAssertEqual(bill.amount, 5_200, accuracy: 0.001, "в следующий раз ждём столько же")
@@ -206,25 +206,25 @@ final class DebtPaymentTests: XCTestCase {
     }
 
     func testFixedBillKeepsItsAmount() throws {
-        var bill = try bill(variable: nil)
+        var bill = try makeBill(variable: nil)
         bill.applyPayment(3_000, now: try now(), calendar: calendar)
         XCTAssertEqual(bill.amount, 4_500, accuracy: 0.001)
         XCTAssertEqual(bill.lastPaidAmount ?? 0, 3_000, accuracy: 0.001)
 
-        var other = try bill(variable: nil)
+        var other = try makeBill(variable: nil)
         other.applyPayment(now: try now(), calendar: calendar)
         XCTAssertEqual(other.lastPaidAmount ?? 0, 4_500, accuracy: 0.001)
     }
 
     func testWhichRecordsAskForTheAmountBeforePaying() throws {
-        XCTAssertTrue(try bill(variable: true).asksAmountBeforePaying)
-        XCTAssertFalse(try bill(variable: nil).asksAmountBeforePaying)
-        XCTAssertFalse(try bill(variable: true, rule: .never).asksAmountBeforePaying, "у разового платежа сумма известна")
+        XCTAssertTrue(try makeBill(variable: true).asksAmountBeforePaying)
+        XCTAssertFalse(try makeBill(variable: nil).asksAmountBeforePaying)
+        XCTAssertFalse(try makeBill(variable: true, rule: .never).asksAmountBeforePaying, "у разового платежа сумма известна")
         XCTAssertTrue(try credit().asksAmountBeforePaying)
         XCTAssertFalse(try credit(payment: nil).asksAmountBeforePaying)
         XCTAssertFalse(try person().asksAmountBeforePaying)
 
-        var paid = try bill(variable: true)
+        var paid = try makeBill(variable: true)
         paid.isPaid = true
         XCTAssertFalse(paid.asksAmountBeforePaying)
     }
@@ -232,7 +232,7 @@ final class DebtPaymentTests: XCTestCase {
     // MARK: - Период «каждые N»
 
     func testEveryThreeMonthsMovesTheDueDateByAQuarter() throws {
-        let quarterly = try bill(interval: 3)
+        let quarterly = try makeBill(interval: 3)
         XCTAssertEqual(quarterly.effectiveInterval, 3)
         XCTAssertEqual(quarterly.nextDueDate(now: try now(), calendar: calendar), try date(2027, 2, 5))
 
@@ -244,15 +244,15 @@ final class DebtPaymentTests: XCTestCase {
     }
 
     func testEveryTwoYearsAndEveryTwoWeeks() throws {
-        XCTAssertEqual(try bill(rule: .yearly, interval: 2).nextDueDate(now: try now(), calendar: calendar), try date(2028, 11, 5))
-        XCTAssertEqual(try bill(rule: .weekly, interval: 2).nextDueDate(now: try now(), calendar: calendar), try date(2026, 11, 19))
+        XCTAssertEqual(try makeBill(rule: .yearly, interval: 2).nextDueDate(now: try now(), calendar: calendar), try date(2028, 11, 5))
+        XCTAssertEqual(try makeBill(rule: .weekly, interval: 2).nextDueDate(now: try now(), calendar: calendar), try date(2026, 11, 19))
     }
 
     func testNonsenseIntervalCountsAsOne() throws {
-        XCTAssertEqual(try bill(interval: 0).effectiveInterval, 1)
-        XCTAssertEqual(try bill(interval: -4).effectiveInterval, 1)
-        XCTAssertEqual(try bill(interval: nil).effectiveInterval, 1)
-        XCTAssertEqual(try bill(interval: 1).nextDueDate(now: try now(), calendar: calendar), try date(2026, 12, 5))
+        XCTAssertEqual(try makeBill(interval: 0).effectiveInterval, 1)
+        XCTAssertEqual(try makeBill(interval: -4).effectiveInterval, 1)
+        XCTAssertEqual(try makeBill(interval: nil).effectiveInterval, 1)
+        XCTAssertEqual(try makeBill(interval: 1).nextDueDate(now: try now(), calendar: calendar), try date(2026, 12, 5))
     }
 
     func testRepeatTitleNamesThePeriod() {
