@@ -133,8 +133,11 @@ public struct DebtTypeSetting: Codable, Equatable, Sendable {
     public var repeatRule: ReminderRepeat
     public var repeatInterval: Int
     public var isVariableAmount: Bool
+    /// Карта, с которой платят по умолчанию: подставляется в новые записи этого вида. Пусто — расход не записывается.
+    public var cardId: UUID?
 
-    public init(isEnabled: Bool = true, reminder: DebtReminder = .standard, minutes: Int? = nil, late: LateReminders = .nextDayAndWeek, repeatRule: ReminderRepeat = .monthly, repeatInterval: Int = 1, isVariableAmount: Bool = false) {
+    public init(isEnabled: Bool = true, reminder: DebtReminder = .standard, minutes: Int? = nil, late: LateReminders = .nextDayAndWeek, repeatRule: ReminderRepeat = .monthly, repeatInterval: Int = 1, isVariableAmount: Bool = false, cardId: UUID? = nil) {
+        self.cardId = cardId
         self.isEnabled = isEnabled
         self.reminder = reminder
         self.minutes = minutes
@@ -170,6 +173,7 @@ public struct DebtTypeSetting: Codable, Equatable, Sendable {
         repeatRule = try container.decodeIfPresent(ReminderRepeat.self, forKey: .repeatRule) ?? .monthly
         repeatInterval = try container.decodeIfPresent(Int.self, forKey: .repeatInterval) ?? 1
         isVariableAmount = try container.decodeIfPresent(Bool.self, forKey: .isVariableAmount) ?? false
+        cardId = try container.decodeIfPresent(UUID.self, forKey: .cardId)
     }
 
     /// Какое напоминание подставить в новую запись: у выключенного вида — «не напоминать»

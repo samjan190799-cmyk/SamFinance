@@ -284,6 +284,16 @@
 "Необязательно" = "Optional";
 "Нет операций за этот период" = "No transactions for this period";
 "Нет связи с сервером %@. Проверьте интернет." = "Cannot reach the %@ server. Check your internet connection.";
+/* Оплата с карты */
+"Возврат долга" = "Debt repayment";
+"Оплата из раздела «Долги»" = "Payment from the Debts section";
+"Зачислить на карту" = "Add to card";
+"Списать с карты" = "Pay from card";
+"Оплата отметится только в долгах: операции и баланс карт не изменятся." = "The payment will only be marked in Debts: transactions and card balances will not change.";
+"Доход запишется в операции, а баланс карты увеличится." = "The income will be recorded in transactions and the card balance will go up.";
+"Расход запишется в операции, а баланс карты уменьшится." = "The expense will be recorded in transactions and the card balance will go down.";
+"доход на карту •••• %@" = "income to card •••• %@";
+"расход с карты •••• %@" = "expense from card •••• %@";
 /* Настройки по видам */
 "Внести %@ в счёт «%@», останется %@" = "Pay %@ toward “%@”, %@ will remain";
 "Добавить кредит: %@, остаток %@, платёж %@ в месяц, ближайший %@" = "Add loan: %@, balance %@, payment %@ per month, next %@";

@@ -17,17 +17,56 @@ struct DebtPaymentRequest: Identifiable {
     }
 }
 
-/// Небольшое окно с суммой: сколько вышло по платежу, сколько внесли в этом месяце по кредиту или какую часть долга вернули
+/// Выбор карты для записи оплаты. Подписи и пояснения зависят от того, уходят деньги с карты или приходят на неё.
+struct PaymentCardSection: View {
+    let cards: [Card]
+    /// Деньги приходят на карту (должник вернул долг), а не уходят с неё
+    let isIncome: Bool
+    @Binding var cardID: UUID?
+
+    private var title: String {
+        isIncome ? String(localized: "Зачислить на карту") : String(localized: "Списать с карты")
+    }
+
+    private var footer: String {
+        guard cardID != nil else {
+            return String(localized: "Оплата отметится только в долгах: операции и баланс карт не изменятся.")
+        }
+        return isIncome
+            ? String(localized: "Доход запишется в операции, а баланс карты увеличится.")
+            : String(localized: "Расход запишется в операции, а баланс карты уменьшится.")
+    }
+
+    var body: some View {
+        Section {
+            Picker(title, selection: $cardID) {
+                Text("Не записывать").tag(UUID?.none)
+                ForEach(cards) { card in
+                    Text(card.pickerTitle).tag(Optional(card.id))
+                }
+            }
+        } footer: {
+            Text(footer)
+        }
+    }
+}
+
+/// Небольшое окно с суммой: сколько вышло по платежу, сколько внесли в этом месяце по кредиту или какую часть долга вернули.
+/// Если в приложении есть карты, здесь же выбирается карта, на которую записывается оплата.
 struct DebtPaymentSheet: View {
     @Environment(\.dismiss) private var dismiss
     let financeService: FinanceService
     let request: DebtPaymentRequest
     @State private var amountString: String
+    @State private var cardID: UUID?
 
     init(financeService: FinanceService, request: DebtPaymentRequest) {
         self.financeService = financeService
         self.request = request
         _amountString = State(initialValue: Self.suggestion(for: request))
+        // Карта записи подставляется, если она ещё есть в приложении
+        let preferred = request.debt.cardId.flatMap { id in financeService.cards.contains { $0.id == id } ? id : nil }
+        _cardID = State(initialValue: preferred)
     }
 
     /// Платёж по кредиту и сумма платежа подставляются, часть долга вводится с нуля
@@ -68,6 +107,10 @@ struct DebtPaymentSheet: View {
                 } footer: {
                     Text(footer)
                 }
+
+                if !financeService.cards.isEmpty {
+                    PaymentCardSection(cards: financeService.cards, isIncome: debt.paymentType == .income, cardID: $cardID)
+                }
             }
             .monoForm()
             .navigationTitle(screenTitle)
@@ -86,7 +129,7 @@ struct DebtPaymentSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
     }
 
     private var footer: String {
@@ -106,11 +149,12 @@ struct DebtPaymentSheet: View {
 
     private func save() {
         guard let value else { return }
+        let source: PaymentSource = cardID.map { .card($0) } ?? .notRecorded
         switch request.mode {
         case .payment:
-            financeService.payDebt(id: debt.id, amount: value)
+            financeService.payDebt(id: debt.id, amount: value, source: source)
         case .part:
-            financeService.repayDebt(id: debt.id, amount: value)
+            financeService.repayDebt(id: debt.id, amount: value, source: source)
         }
         HapticManager.shared.trigger(.success)
         dismiss()

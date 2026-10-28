@@ -39,8 +39,12 @@ public struct Category: Codable, Identifiable, Hashable, Sendable {
         Category(id: stableID(10), name: "Долги", icon: "banknote.fill", colorHex: "#A2845E", type: .expense),
         Category(id: stableID(11), name: "Прочее", icon: "ellipsis.circle.fill", colorHex: "#8E8E93", type: .expense),
         Category(id: stableID(12), name: "Переводы", icon: "arrow.left.arrow.right", colorHex: "#5AC8FA", type: .expense),
-        Category(id: stableID(13), name: "Переводы", icon: "arrow.left.arrow.right", colorHex: "#5AC8FA", type: .income)
+        Category(id: stableID(13), name: "Переводы", icon: "arrow.left.arrow.right", colorHex: "#5AC8FA", type: .income),
+        debtReturn
     ]
+
+    /// Доход от возврата долга: когда должник возвращает деньги на карту, это не заработок, и в отчётах он виден отдельно
+    public static let debtReturn = Category(id: stableID(14), name: "Возврат долга", icon: "arrow.uturn.backward.circle.fill", colorHex: "#A2845E", type: .income)
 
     /// Постоянный идентификатор встроенной категории по её номеру
     private static func stableID(_ number: Int) -> UUID {
@@ -82,6 +86,12 @@ public struct Card: Codable, Identifiable, Hashable, Sendable {
         self.network = network
         self.pattern = pattern
         self.symbol = symbol
+    }
+
+    /// Подпись карты в списках выбора: «•••• 1234 · Ameriabank»
+    public var pickerTitle: String {
+        let name = bankName.flatMap { $0.isEmpty ? nil : $0 } ?? type
+        return "•••• \(last4) · \(name)"
     }
 
     /// Последние 4 цифры из номера в любом виде (с пробелами или без)
@@ -276,7 +286,12 @@ public struct Debt: Codable, Identifiable, Hashable, Sendable {
     public var interestRate: Double? // Годовая ставка в процентах
     public var paymentsLeft: Int? // Сколько платежей осталось
 
-    public init(id: UUID = UUID(), name: String, amount: Double, dueDate: Date = Date(), isLent: Bool, isPaid: Bool = false, type: DebtType = .person, reminder: DebtReminder? = nil, billKind: BillKind? = nil, repeatRule: ReminderRepeat? = nil, firstDueDate: Date? = nil, lastPaidAt: Date? = nil, note: String? = nil, repeatInterval: Int? = nil, isVariableAmount: Bool? = nil, lastPaidAmount: Double? = nil, originalAmount: Double? = nil, monthlyPayment: Double? = nil, interestRate: Double? = nil, paymentsLeft: Int? = nil) {
+    /// Карта, с которой платят (или на которую возвращают долг). При оплате по ней записывается операция и меняется баланс.
+    /// Пусто — оплата отмечается только в долгах.
+    public var cardId: UUID?
+
+    public init(id: UUID = UUID(), name: String, amount: Double, dueDate: Date = Date(), isLent: Bool, isPaid: Bool = false, type: DebtType = .person, reminder: DebtReminder? = nil, billKind: BillKind? = nil, repeatRule: ReminderRepeat? = nil, firstDueDate: Date? = nil, lastPaidAt: Date? = nil, note: String? = nil, repeatInterval: Int? = nil, isVariableAmount: Bool? = nil, lastPaidAmount: Double? = nil, originalAmount: Double? = nil, monthlyPayment: Double? = nil, interestRate: Double? = nil, paymentsLeft: Int? = nil, cardId: UUID? = nil) {
+        self.cardId = cardId
         self.id = id
         self.name = name
         self.amount = amount
@@ -360,6 +375,24 @@ public struct Debt: Codable, Identifiable, Hashable, Sendable {
     public var hasPartialPayments: Bool {
         guard let original = originalAmount else { return false }
         return original > amount + Debt.cent
+    }
+
+    /// Оплата записывается доходом, когда должник возвращает деньги вам, и расходом во всех остальных случаях
+    public var paymentType: TransactionType {
+        type == .person && isLent ? .income : .expense
+    }
+
+    /// Категория операции, которая записывается при оплате с карты
+    public var paymentCategoryName: String {
+        if paymentType == .income {
+            return Category.debtReturn.name
+        }
+        guard type == .bill else { return "Долги" }
+        switch billKind ?? .other {
+        case .utilities, .rent, .internet, .phone: return "Жилье"
+        case .subscription: return "Развлечения"
+        case .insurance, .tax, .other: return "Прочее"
+        }
     }
 
     /// Меньше этого остатка не бывает: так гасятся хвосты вроде 0,004 после пересчёта процентов
@@ -619,8 +652,10 @@ public struct Transaction: Codable, Identifiable, Hashable, Sendable {
     public var externalKey: String? // Ключ СМС для защиты от дублей
     public var needsReview: Bool? // Категория подобрана наугад: стоит проверить
     public var balanceDelta: Double? // На сколько операция изменила баланс карты (чтобы откатить при удалении)
+    public var debtId: UUID? // Долг или платёж, оплатой которого создана операция
 
-    public init(id: UUID = UUID(), title: String, amount: Double, type: TransactionType, category: Category, date: Date = Date(), notes: String? = nil, brandName: String? = nil, brandIcon: String? = nil, brandColorHex: String? = nil, cardId: UUID? = nil, externalKey: String? = nil, needsReview: Bool? = nil, balanceDelta: Double? = nil) {
+    public init(id: UUID = UUID(), title: String, amount: Double, type: TransactionType, category: Category, date: Date = Date(), notes: String? = nil, brandName: String? = nil, brandIcon: String? = nil, brandColorHex: String? = nil, cardId: UUID? = nil, externalKey: String? = nil, needsReview: Bool? = nil, balanceDelta: Double? = nil, debtId: UUID? = nil) {
+        self.debtId = debtId
         self.id = id
         self.title = title
         self.amount = amount

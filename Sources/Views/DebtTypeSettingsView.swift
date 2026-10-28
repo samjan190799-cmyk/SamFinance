@@ -50,7 +50,7 @@ struct DebtTypeSettingsView: View {
 
     private func link(to profile: DebtProfile) -> some View {
         NavigationLink {
-            DebtTypeSettingDetail(profile: profile, settings: $settings)
+            DebtTypeSettingDetail(profile: profile, settings: $settings, cards: financeService.cards)
         } label: {
             HStack {
                 Label(profile.title, systemImage: profile.icon)
@@ -78,6 +78,8 @@ struct DebtTypeSettingsView: View {
 struct DebtTypeSettingDetail: View {
     let profile: DebtProfile
     @Binding var settings: DebtTypeSettings
+    /// Карты приложения: из них выбирается карта оплаты по умолчанию
+    var cards: [Card] = []
 
     private var setting: Binding<DebtTypeSetting> {
         Binding(
@@ -107,6 +109,14 @@ struct DebtTypeSettingDetail: View {
                 let components = Calendar.current.dateComponents([.hour, .minute], from: date)
                 setting.wrappedValue.minutes = (components.hour ?? 0) * 60 + (components.minute ?? 0)
             }
+        )
+    }
+
+    /// Карта оплаты вида; удалённая карта показывается как «Не записывать»
+    private var cardBinding: Binding<UUID?> {
+        Binding(
+            get: { setting.wrappedValue.cardId.flatMap { id in cards.contains { $0.id == id } ? id : nil } },
+            set: { setting.wrappedValue.cardId = $0 }
         )
     }
 
@@ -148,6 +158,10 @@ struct DebtTypeSettingDetail: View {
                 } footer: {
                     Text("Без своего времени напоминания приходят в общее время из настроек напоминаний. В день срока напоминание приходит всегда.")
                 }
+            }
+
+            if !cards.isEmpty {
+                PaymentCardSection(cards: cards, isIncome: profile == .owedToMe, cardID: cardBinding)
             }
 
             if profile.isRecurringBill {

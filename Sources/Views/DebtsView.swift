@@ -501,6 +501,8 @@ struct AddDebtView: View {
     @State private var monthlyPaymentString: String
     @State private var interestRateString: String
     @State private var paymentsLeftString: String
+    /// Карта, на которую записывается оплата; пусто — только отметка в долгах
+    @State private var cardID: UUID?
     /// Условия (напоминание, период, сумма) уже меняли руками: смена вида больше их не перезаписывает
     @State private var termsEdited = false
 
@@ -528,6 +530,7 @@ struct AddDebtView: View {
             _monthlyPaymentString = State(initialValue: editing.monthlyPayment.map { GoalQuickAmounts.plain($0) } ?? "")
             _interestRateString = State(initialValue: editing.interestRate.map { GoalQuickAmounts.plain($0) } ?? "")
             _paymentsLeftString = State(initialValue: editing.paymentsLeft.map { String($0) } ?? "")
+            _cardID = State(initialValue: Self.knownCard(editing.cardId, in: financeService))
         } else {
             let type: DebtType
             let profile: DebtProfile
@@ -557,7 +560,14 @@ struct AddDebtView: View {
             _monthlyPaymentString = State(initialValue: "")
             _interestRateString = State(initialValue: "")
             _paymentsLeftString = State(initialValue: "")
+            _cardID = State(initialValue: Self.knownCard(setting.cardId, in: financeService))
         }
+    }
+
+    /// Карта, которая ещё есть в приложении: удалённая карта из записи или из настроек вида не подставляется
+    private static func knownCard(_ id: UUID?, in financeService: FinanceService) -> UUID? {
+        guard let id, financeService.cards.contains(where: { $0.id == id }) else { return nil }
+        return id
     }
 
     private var parsedAmount: Double {
@@ -613,6 +623,7 @@ struct AddDebtView: View {
             isVariableAmount = setting.isVariableAmount
         }
         reminder = typeSettings[currentProfile].defaultReminder
+        cardID = Self.knownCard(typeSettings[currentProfile].cardId, in: financeService)
     }
 
     var body: some View {
@@ -730,6 +741,10 @@ struct AddDebtView: View {
                     if reminder != .off {
                         Text(reminderFooter)
                     }
+                }
+
+                if !financeService.cards.isEmpty {
+                    PaymentCardSection(cards: financeService.cards, isIncome: selectedType == .person && isLent, cardID: edited($cardID))
                 }
 
                 Section {
@@ -856,6 +871,7 @@ struct AddDebtView: View {
         debt.monthlyPayment = isCredit ? parsedMonthlyPayment : nil
         debt.interestRate = isCredit ? parsedInterestRate : nil
         debt.paymentsLeft = isCredit && hasPaymentPlan ? parsedPaymentsLeft : nil
+        debt.cardId = Self.knownCard(cardID, in: financeService)
 
         if editing == nil {
             financeService.addDebt(debt)

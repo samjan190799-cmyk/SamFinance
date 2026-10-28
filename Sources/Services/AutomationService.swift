@@ -160,6 +160,14 @@ public final class AutomationService {
             return .skippedTransfer
         }
 
+        // Эту оплату уже записали из раздела «Долги»: второй раз не считаем, а остаток карты берём из СМС
+        if let card, financeService.hasDebtPayment(cardID: card.id, amount: amount, type: parsed.type, near: date) {
+            if let balance {
+                financeService.syncCardBalance(id: card.id, balance: balance, asOf: date)
+            }
+            return .duplicate
+        }
+
         // Выученная категория сильнее догадки парсера
         let merchant = parsed.brandName ?? parsed.title
         let learned = learnedCategory(forMerchant: merchant, type: parsed.type)

@@ -1,6 +1,15 @@
 import Foundation
 import Observation
 
+/// С какой карты оплачен долг или платёж
+public enum PaymentSource: Equatable, Sendable {
+    /// С карты, указанной у самой записи; если её нет, расход не записывается
+    case debtDefault
+    case card(UUID)
+    /// Оплата отмечена только в долгах, расход и баланс карты не трогаются
+    case notRecorded
+}
+
 /// Менеджер данных финансов. Управляет картами, транзакциями, долгами и копилками.
 /// Данные сохраняются локально в JSON-файлы. Демо-данные удалены для чистого старта.
 @Observable
@@ -248,6 +257,14 @@ public final class FinanceService {
         saveCards()
         CardSecretsStore.deleteNumber(for: id)
 
+        // Долги и платежи, которые оплачивались этой картой, дальше оплачиваются без записи расхода
+        if debts.contains(where: { $0.cardId == id }), prepareForWrite(.debts) {
+            for index in debts.indices where debts[index].cardId == id {
+                debts[index].cardId = nil
+            }
+            saveDebts()
+        }
+
         // Копилки удалённой карты без неё нигде не показываются, поэтому уходят вместе с ней
         if goals.contains(where: { $0.cardId == id }), prepareForWrite(.goals) {
             goals.removeAll { $0.cardId == id }
@@ -266,26 +283,91 @@ public final class FinanceService {
     /// Оплата: долг и разовый платёж закрываются, повторяющийся платёж переносит срок на следующий период и остаётся активным,
     /// а у кредита с графиком уменьшается остаток. Сумма меньше остатка вносит долг частично. Без суммы вносится всё,
     /// что положено (подробнее — в `Debt.applyPayment`).
+    /// Если у записи (или в `source`) есть карта, оплата записывается расходом и меняет баланс карты.
     /// Возвращает запись после оплаты; nil, если такой записи нет.
     @discardableResult
-    public func payDebt(id: UUID, amount: Double? = nil, now: Date = Date(), calendar: Calendar = .current) -> Debt? {
+    public func payDebt(id: UUID, amount: Double? = nil, source: PaymentSource = .debtDefault, now: Date = Date(), calendar: Calendar = .current) -> Debt? {
         guard prepareForWrite(.debts), let index = debts.firstIndex(where: { $0.id == id }) else { return nil }
+        let before = debts[index]
         debts[index].applyPayment(amount, now: now, calendar: calendar)
         let paid = debts[index]
         saveDebts()
+        if paid != before {
+            recordPayment(of: paid, source: source, now: now)
+        }
         return paid
     }
 
     /// Взнос в счёт долга без смены срока: остаток уменьшается, а при полном погашении запись закрывается.
     /// Нужен для досрочного взноса по кредиту с графиком и для оплаты по частям.
     @discardableResult
-    public func repayDebt(id: UUID, amount: Double, now: Date = Date()) -> Debt? {
-        guard prepareForWrite(.debts), let index = debts.firstIndex(where: { $0.id == id }), amount > 0 else { return nil }
+    public func repayDebt(id: UUID, amount: Double, source: PaymentSource = .debtDefault, now: Date = Date()) -> Debt? {
+        guard prepareForWrite(.debts), let index = debts.firstIndex(where: { $0.id == id }), amount > 0, !debts[index].isPaid else { return nil }
         debts[index].applyRepayment(amount)
         debts[index].lastPaidAt = now
         let repaid = debts[index]
         saveDebts()
+        recordPayment(of: repaid, source: source, now: now)
         return repaid
+    }
+
+    /// Записывает оплату на карту: расход (при возврате долга вам — доход), изменение баланса и ссылку на долг.
+    /// Сумма берётся из последней оплаты. Если такая же операция уже пришла из СМС, второй раз она не записывается.
+    @discardableResult
+    private func recordPayment(of debt: Debt, source: PaymentSource, now: Date) -> Transaction? {
+        let cardID: UUID
+        switch source {
+        case .notRecorded:
+            return nil
+        case .card(let id):
+            cardID = id
+        case .debtDefault:
+            guard let id = debt.cardId else { return nil }
+            cardID = id
+        }
+        guard let amount = debt.lastPaidAmount, amount > 0, cards.contains(where: { $0.id == cardID }) else { return nil }
+
+        let type = debt.paymentType
+        // Банковское СМС об этой же оплате уже записано: второй раз не считаем
+        let alreadyFromSMS = transactions.contains {
+            $0.externalKey != nil && $0.debtId == nil && Self.isSamePayment($0, cardID: cardID, amount: amount, type: type, near: now)
+        }
+        if alreadyFromSMS { return nil }
+
+        let paymentCategory = category(named: debt.paymentCategoryName, type: type)
+        let transaction = Transaction(
+            title: debt.name,
+            amount: amount,
+            type: type,
+            category: paymentCategory,
+            date: now,
+            notes: String(localized: "Оплата из раздела «Долги»"),
+            brandName: debt.name,
+            brandIcon: paymentCategory.icon,
+            brandColorHex: paymentCategory.colorHex,
+            cardId: cardID,
+            debtId: debt.id
+        )
+        guard addTransaction(transaction) else { return nil }
+
+        let delta = type == .income ? amount : -amount
+        if let applied = applyToCardBalance(id: cardID, delta: delta, asOf: now) {
+            setBalanceDelta(transactionID: transaction.id, delta: applied)
+        }
+        return transaction
+    }
+
+    /// Операция совпадает с оплатой: та же карта, тип и сумма в пределах двух суток
+    private static func isSamePayment(_ transaction: Transaction, cardID: UUID, amount: Double, type: TransactionType, near date: Date) -> Bool {
+        transaction.cardId == cardID
+            && transaction.type == type
+            && abs(transaction.amount - amount) < 0.5
+            && abs(transaction.date.timeIntervalSince(date)) < 2 * 86_400
+    }
+
+    /// Такая оплата уже записана из раздела «Долги»: банковское СМС о ней второй раз не считается
+    public func hasDebtPayment(cardID: UUID, amount: Double, type: TransactionType, near date: Date) -> Bool {
+        transactions.contains { $0.debtId != nil && Self.isSamePayment($0, cardID: cardID, amount: amount, type: type, near: date) }
     }
 
     /// Кнопка с кружком: погашенный долг возвращается в активные, остальные оплачиваются

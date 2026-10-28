@@ -67,7 +67,7 @@ public final class PurchasePromptService {
     }
 
     private var incomeCategories: [Category] {
-        Category.defaultCategories.filter { $0.type == .income }
+        Category.defaultCategories.filter { $0.type == .income && $0.id != Category.debtReturn.id }
     }
 
     // MARK: - Регистрация кнопок

@@ -81,6 +81,20 @@ enum AIActionExecutor {
         return CurrencyService.shared.convert(amount: value, from: currency, to: CurrencyManager.shared.baseCurrency)
     }
 
+    /// Карта, которая ещё есть в приложении
+    private static func knownCardID(_ id: UUID?, service: FinanceService) -> UUID? {
+        guard let id, service.cards.contains(where: { $0.id == id }) else { return nil }
+        return id
+    }
+
+    /// Приписка к карточке оплаты: на какую карту запишется расход или доход, чтобы деньги не двигались незаметно
+    private static func cardNote(for debt: Debt, service: FinanceService) -> String? {
+        guard let id = debt.cardId, let card = service.cards.first(where: { $0.id == id }) else { return nil }
+        return debt.paymentType == .income
+            ? String(localized: "доход на карту •••• \(card.last4)")
+            : String(localized: "расход с карты •••• \(card.last4)")
+    }
+
     /// Ставка в процентах годовых: от 0 до 1000
     private static func validRate(_ rate: Double?) -> Double? {
         guard let rate, rate.isFinite, rate >= 0, rate <= 1_000 else { return nil }
@@ -173,7 +187,8 @@ enum AIActionExecutor {
                 firstDueDate: day,
                 note: cleanName(action.note),
                 repeatInterval: interval > 1 ? interval : nil,
-                isVariableAmount: isVariable ? true : nil
+                isVariableAmount: isVariable ? true : nil,
+                cardId: knownCardID(reminderSetting.cardId, service: service)
             )
             return result(.addDebt(bill), summary, icon)
 
@@ -234,7 +249,8 @@ enum AIActionExecutor {
                 note: cleanName(action.note),
                 monthlyPayment: monthlyPayment,
                 interestRate: interestRate,
-                paymentsLeft: paymentsLeft
+                paymentsLeft: paymentsLeft,
+                cardId: knownCardID(DebtTypeSettings.load()[profile].cardId, service: service)
             )
             return result(.addDebt(debt), summary, icon)
 
@@ -346,6 +362,12 @@ enum AIActionExecutor {
                     payment = value
                 }
 
+                // Если у записи есть карта, в карточке видно, на какую карту запишется расход
+                func withCard(_ summary: String) -> String {
+                    guard paid, !debt.isPaid, let note = cardNote(for: debt, service: service) else { return summary }
+                    return summary + " (" + note + ")"
+                }
+
                 if paid && !debt.isPaid && (payment != nil || debt.hasPaymentPlan) {
                     if debt.isRecurring {
                         // Срок переходит на следующий период, а у кредита уменьшается остаток
@@ -353,11 +375,11 @@ enum AIActionExecutor {
                         let next = debt.nextDueDate(now: now, calendar: calendar)
                         let summary = next.map { String(localized: "Оплатить «\(debt.name)»: \(money(value)), следующий срок: \(shortDate($0))") }
                             ?? String(localized: "Оплатить «\(debt.name)»: \(money(value))")
-                        return result(.payDebt(debt.id, payment), summary, icon)
+                        return result(.payDebt(debt.id, payment), withCard(summary), icon)
                     }
                     if let value = payment, value < debt.amount - Debt.cent {
                         let rest = debt.amount - value
-                        return result(.payDebt(debt.id, value), String(localized: "Внести \(money(value)) в счёт «\(debt.name)», останется \(money(rest))"), icon)
+                        return result(.payDebt(debt.id, value), withCard(String(localized: "Внести \(money(value)) в счёт «\(debt.name)», останется \(money(rest))")), icon)
                     }
                 }
 
@@ -375,7 +397,7 @@ enum AIActionExecutor {
                     if debt.isPaid == paid {
                         return failure(summary, paid ? String(localized: "Платёж уже оплачен") : String(localized: "Платёж и так не оплачен"), icon)
                     }
-                    return result(.setDebtPaid(debt.id, paid), summary, icon)
+                    return result(.setDebtPaid(debt.id, paid), withCard(summary), icon)
                 }
                 let summary = paid
                     ? String(localized: "Отметить долг «\(debt.name)» погашенным")
@@ -383,7 +405,7 @@ enum AIActionExecutor {
                 if debt.isPaid == paid {
                     return failure(summary, paid ? String(localized: "Долг уже погашен") : String(localized: "Долг и так не погашен"), icon)
                 }
-                return result(.setDebtPaid(debt.id, paid), summary, icon)
+                return result(.setDebtPaid(debt.id, paid), withCard(summary), icon)
             }
 
         case .deleteDebt:
