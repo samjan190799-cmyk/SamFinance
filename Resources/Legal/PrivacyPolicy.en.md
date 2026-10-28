@@ -19,8 +19,9 @@ Everything listed here stays on your device. We have no access to it.
 
 - **Transactions:** title, amount, category, date, note.
 - **Cards:** purpose, cardholder name, expiry date, last 4 digits, balance, bank and design. The full card number is saved only if you enter it yourself, and it lives in this device's secure iOS storage (Keychain). The app never asks for or stores the CVV code.
-- **Debts and loans:** name of a person or bank, amount, due date.
+- **Debts, loans and payments:** name of a person or bank or the name of a payment (utilities, internet, subscription), amount, due date, repeat, loan terms (monthly payment, rate, payments left), how much has been paid so far, your note.
 - **Savings goals:** name, target, deadline, log of deposits and withdrawals.
+- **Reminders:** text, date and time, repeat, note.
 - **Settings:** language, currency, chosen AI service, automation rules (remembered merchant categories, your surname used to recognize transfers to yourself).
 - **AI keys:** a key you paste is kept in this device's Keychain and does not move to other devices.
 
@@ -34,15 +35,17 @@ Data files are protected by iOS and open only while the phone is unlocked. They 
 
 - your question and the recent messages of the conversation;
 - screenshots you attach (receipts, statements, bank apps) and the text recognized on them on your phone;
-- a summary of your records: cards (purpose, last 4 digits, balance), spending and income for 30 days by category, up to 60 latest transactions (date, amount, title, category, card), open debts (name, amount, due date), the current date, language and currency.
+- a summary of your records: cards (purpose, last 4 digits, balance), spending and income for 30 days by category, up to 60 latest transactions (date, amount, title, category, card), debts and payments (name, amount, due date, repeat, reminder, loan terms: monthly payment, rate, payments left; notes on debts are not sent), savings goals (name, target, amount saved, deadline), your own reminders (text, date, repeat), the current date, language and currency.
 
-Not sent: full card numbers, CVV, cardholder names and savings goals. Bank SMS that the app recognizes on the phone never go to the cloud. The key is used only to sign in to the chosen service.
+Not sent: full card numbers, CVV and cardholder names. Bank SMS that the app recognizes on the phone never go to the cloud. The key is used only to sign in to the chosen service.
 
 Requests go straight from your phone to the chosen service using your key. Our server is not part of this chain and we receive no copies. The service processes data under its own rules, possibly in another country: [Anthropic](https://www.anthropic.com/legal/privacy), [OpenAI](https://openai.com/policies/privacy-policy), [Google](https://policies.google.com/privacy). Requests are billed to your key.
 
+If you ask the AI to change something in the app (add a debt, set a reminder), it only proposes the changes as a card in the chat. The app makes them only when you tap "Apply".
+
 You can withdraw permission at any time: delete the key in Settings → AI assistant. Without a key the app answers questions using only the data on your phone.
 
-**3. iOS features.** You choose screenshots in the system iOS picker, and the app sees only the pictures you pick. The clipboard is read only when you tap the buttons that scan an SMS or paste from the clipboard. Export puts a CSV table on the clipboard when you tap it. Reminders about due debts and Apple Pay purchases are shown by the device itself if you allowed notifications. Shortcuts run on your phone; the app does not read messages on its own, iOS does not allow that.
+**3. iOS features.** You choose screenshots in the system iOS picker, and the app sees only the pictures you pick. The clipboard is read only when you tap the buttons that scan an SMS or paste from the clipboard. Export puts a CSV table on the clipboard when you tap it. Reminders (about debts, savings goals, cards and your own) and Apple Pay purchase prompts are shown by the device itself if you allowed notifications. Shortcuts run on your phone; the app does not read messages on its own, iOS does not allow that.
 
 ## What we do not do
 

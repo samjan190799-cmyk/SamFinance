@@ -24,7 +24,7 @@ Recognition runs on the device. The same works with screenshots of such SMS (the
 3. "AI" tab without a key: a local assistant answers questions from the data on the phone, for example "what is my balance?", "how are my goals?", "how much did I spend this week?" (it understands Russian, English and Armenian).
 
 OPTIONAL CLOUD AI
-In Settings > AI assistant the user may paste their OWN API key of Claude (Anthropic), ChatGPT (OpenAI) or Gemini (Google). We provide no keys and sell no AI access, so this part cannot be tried without a personal key and is off by default. Before the first request the app shows a consent dialog that says exactly what is sent and to whom (question, screenshots, a summary of transactions, cards with the last 4 digits only, and debts). Deleting the key withdraws the consent. Full card numbers, CVV and cardholder names are never sent.
+In Settings > AI assistant the user may paste their OWN API key of Claude (Anthropic), ChatGPT (OpenAI) or Gemini (Google). We provide no keys and sell no AI access, so this part cannot be tried without a personal key and is off by default. Before the first request the app shows a consent dialog that says exactly what is sent and to whom (question, screenshots, a summary of transactions, cards with the last 4 digits only, debts, savings goals and reminders). The AI can also propose changes (for example add a debt or set a reminder); nothing is changed until the user taps "Apply" on the card in the chat. Deleting the key withdraws the consent. Full card numbers, CVV and cardholder names are never sent.
 
 PERMISSIONS AND NETWORK
 - Notifications only (optional): reminders for debt due dates and prompts after Apple Pay purchases.

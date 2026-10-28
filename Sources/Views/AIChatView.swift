@@ -47,9 +47,7 @@ struct AIChatView: View {
         .onChange(of: pickerItems) { _, items in
             guard !items.isEmpty else { return }
             pickerItems = []
-            Task {
-                await store.send(screenshots: items)
-            }
+            store.send(screenshots: items)
         }
     }
 
@@ -167,9 +165,12 @@ struct AIChatView: View {
                 if let draft = message.draft {
                     DraftCard(store: store, messageID: message.id, draft: draft, financeService: financeService)
                 }
+                if let actionDraft = message.actionDraft {
+                    ActionDraftCard(store: store, messageID: message.id, draft: actionDraft)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.trailing, message.draft == nil ? 48 : 0)
+            .padding(.trailing, message.draft == nil && message.actionDraft == nil ? 48 : 0)
         }
     }
 
@@ -216,9 +217,21 @@ struct AIChatView: View {
             Text(store.workingText ?? "")
                 .font(.system(size: 15))
                 .foregroundColor(Theme.textSecondary)
+            Button {
+                HapticManager.shared.impact(.light)
+                store.cancelWork()
+            } label: {
+                Text("Отмена")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Theme.accent)
+                    .padding(.horizontal, 6)
+                    .frame(minHeight: 32)
+            }
+            .accessibilityLabel(String(localized: "Отменить запрос"))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.leading, 14)
+        .padding(.trailing, 8)
+        .padding(.vertical, 6)
         .background(Theme.surface)
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -233,9 +246,11 @@ struct AIChatView: View {
             String(localized: "Кому я должен?"),
             String(localized: "Дай совет")
         ]
-        // Фразы о тратах превращает в операции только облачный ИИ
+        // Фразы о тратах и просьбы что-то изменить в приложении понимает только облачный ИИ
         if store.isCloudEnabled {
             questions.insert(String(localized: "Вчера потратил 3 000 на такси"), at: 0)
+            questions.insert(String(localized: "Добавь долг: Арам должен мне 20 000 до конца месяца"), at: 1)
+            questions.insert(String(localized: "Напомни в пятницу в 10:00 оплатить интернет"), at: 2)
         }
         return VStack(alignment: .leading, spacing: 8) {
             PhotosPicker(selection: $pickerItems, maxSelectionCount: 10, matching: .images) {
@@ -450,5 +465,88 @@ private struct DraftCard: View {
             parts.append(String(localized: "уже записана"))
         }
         return parts.joined(separator: " · ")
+    }
+}
+
+/// Карточка изменений, которые предложил ИИ: каждое можно снять, удаление выделено красным, нельзя применить только то, что не нашлось
+@MainActor
+private struct ActionDraftCard: View {
+    let store: AIChatStore
+    let messageID: UUID
+    let draft: ActionDraft
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(draft.items) { item in
+                row(item)
+                if item.id != draft.items.last?.id {
+                    MonoDivider()
+                }
+            }
+
+            if draft.isApplied {
+                Label("Применено", systemImage: "checkmark")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Theme.accent)
+                    .symbolEffect(.bounce, value: draft.isApplied)
+                    .frame(maxWidth: .infinity, minHeight: 54)
+                    .transition(.scale(scale: 0.8).combined(with: .opacity))
+            } else {
+                let count = draft.includedCount
+                PrimaryButton(title: count > 0 ? String(localized: "Применить (\(count))") : String(localized: "Ничего не отмечено"), isEnabled: count > 0) {
+                    store.applyActions(in: messageID)
+                }
+                .padding(.top, 12)
+            }
+        }
+        .padding(14)
+        .monoSurface(cornerRadius: 24)
+        .animation(Motion.spring, value: draft.isApplied)
+    }
+
+    private func row(_ item: ActionItem) -> some View {
+        let plan = item.plan
+        let tint = plan.isDestructive ? Theme.danger : Theme.accent
+        return HStack(alignment: .center, spacing: 12) {
+            Button {
+                HapticManager.shared.selection()
+                store.toggleAction(itemID: item.id, in: messageID)
+            } label: {
+                Image(systemName: item.isIncluded ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 22))
+                    .foregroundColor(item.isIncluded ? tint : Theme.textSecondary)
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: 44, height: 44)
+            }
+            .disabled(draft.isApplied || !plan.canApply)
+            .accessibilityLabel(item.isIncluded ? String(localized: "Не применять") : String(localized: "Применить"))
+
+            Image(systemName: plan.icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(plan.canApply ? tint : Theme.textSecondary)
+                .frame(width: 22)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(plan.summary)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(plan.canApply ? .white : Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let problem = plan.problem {
+                    Text(problem)
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if case .failed(let reason)? = item.outcome {
+                    Text(reason)
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.danger)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .opacity(item.isIncluded || draft.isApplied ? 1 : 0.5)
+        .padding(.vertical, 4)
     }
 }

@@ -18,6 +18,8 @@ struct SettingsView: View {
     @State private var apiKeyInput = ""
     @State private var apiKeyError: String? = nil
     @State private var modelInput = AIProvider.selected.customModel ?? ""
+    @State private var isCheckingConnection = false
+    @State private var connectionResult: AIConnectionCheck.Outcome? = nil
 
     /// Выбранный облачный ИИ
     private var provider: AIProvider { AIProvider(rawValue: providerRaw) ?? .claude }
@@ -138,6 +140,9 @@ struct SettingsView: View {
                     Text("В Быстрых командах: Автоматизация → Сообщение → отправитель (IDBank, ARCA…) → «Выполнять сразу» → действие «Распознать СМС транзакцию», в поле «Текст СМС» подставьте «Содержимое сообщения». Операция, карта и её баланс обновятся сами. Фамилию укажите латиницей, как в СМС: переводы себе не считаются доходом и расходом.")
                 }
 
+                // Напоминания о сроках долгов, копилок и карт
+                ReminderSettingsSection(financeService: financeService)
+
                 // Подсказки покупок Apple Pay
                 Section {
                     Button {
@@ -243,16 +248,35 @@ struct SettingsView: View {
                 apiKeyInput = ""
                 apiKeyError = nil
                 modelInput = provider.customModel ?? ""
+                connectionResult = nil
             }
 
             if hasAPIKey {
                 Label("Ключ \(provider.displayName) сохранён", systemImage: "checkmark.seal.fill")
                     .foregroundColor(Theme.accent)
+                Button {
+                    checkConnection()
+                } label: {
+                    HStack {
+                        Label("Проверить подключение", systemImage: "antenna.radiowaves.left.and.right")
+                        Spacer()
+                        if isCheckingConnection {
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(isCheckingConnection)
+                if let connectionResult {
+                    Text(connectionResult.text)
+                        .font(.caption)
+                        .foregroundColor(connectionResult.isWorking ? Theme.accent : .secondary)
+                }
                 Button(role: .destructive) {
                     HapticManager.shared.trigger(.warning)
                     AIKeyStore.deleteKey(for: provider)
                     provider.setConsent(false)
                     hasAPIKey = false
+                    connectionResult = nil
                 } label: {
                     Label("Удалить ключ", systemImage: "trash")
                 }
@@ -289,8 +313,16 @@ struct SettingsView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .foregroundColor(.secondary)
+                    .keyboardType(.asciiCapable)
                     .onChange(of: modelInput) { _, value in
-                        provider.setCustomModel(value)
+                        // Пробелы и длинные тире, которые ставит клавиатура, убираются сразу: поле показывает то, что уйдёт сервису
+                        let cleaned = AIProvider.normalizedModel(value)
+                        if cleaned != value {
+                            modelInput = cleaned
+                            return
+                        }
+                        provider.setCustomModel(cleaned)
+                        connectionResult = nil
                     }
             }
         } header: {
@@ -301,7 +333,7 @@ struct SettingsView: View {
     }
 
     private var aiFooter: String {
-        var text = String(localized: "Ключ каждого сервиса хранится в Keychain только на этом телефоне. С ключом ИИ-чат отвечает на любые вопросы, разбирает чеки, выписки и скриншоты моделью \(provider.model): вопрос, скриншоты и сводка ваших операций, карт (последние 4 цифры) и долгов отправляются в \(provider.company), оплата по тарифу ключа.")
+        var text = String(localized: "Ключ каждого сервиса хранится в Keychain только на этом телефоне. С ключом ИИ-чат отвечает на любые вопросы, разбирает чеки, выписки и скриншоты моделью \(provider.model): вопрос, скриншоты и сводка ваших операций, карт (последние 4 цифры), долгов, копилок и напоминаний отправляются в \(provider.company), оплата по тарифу ключа.")
         if provider == .openAI {
             text += " " + String(localized: "Нужен ключ API с platform.openai.com: подписка ChatGPT для него не подходит.")
         }
@@ -309,6 +341,23 @@ struct SettingsView: View {
         text += " " + String(localized: "Банковские СМС по-прежнему распознаются на телефоне и в облако не уходят. Без ключа всё считается только на телефоне.")
         text += " " + String(localized: "Поле «Модель» можно оставить пустым: тогда используется \(provider.defaultModel).")
         return text
+    }
+
+    /// Бесплатный запрос сведений о модели: показывает, достижим ли сервис, принят ли ключ и доступна ли модель
+    private func checkConnection() {
+        guard !isCheckingConnection, let key = AIKeyStore.key(for: provider) else { return }
+        let checked = provider
+        isCheckingConnection = true
+        connectionResult = nil
+        Task {
+            let outcome = await AIConnectionCheck.run(provider: checked, apiKey: key)
+            HapticManager.shared.trigger(outcome.isWorking ? .success : .error)
+            // Пока шла проверка, мог смениться сервис: чужой результат не показываем
+            if checked == provider {
+                connectionResult = outcome
+            }
+            isCheckingConnection = false
+        }
     }
 
     private func saveAPIKey() {
