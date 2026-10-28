@@ -71,9 +71,25 @@ enum AIActionExecutor {
 
     /// Сумма в базовой валюте приложения. Если валюта не названа, это валюта, в которой пользователь видит суммы.
     private static func baseAmount(_ action: AIAction) -> Double? {
-        guard let amount = action.amount, amount.isFinite, amount > 0, amount < 1_000_000_000 else { return nil }
+        baseValue(action.amount, action)
+    }
+
+    /// Любая сумма действия (платёж по кредиту, взнос) в базовой валюте: валюта у них общая с `amount`
+    private static func baseValue(_ value: Double?, _ action: AIAction) -> Double? {
+        guard let value, value.isFinite, value > 0, value < 1_000_000_000 else { return nil }
         let currency = action.currency ?? CurrencyManager.shared.currentCurrency
-        return CurrencyService.shared.convert(amount: amount, from: currency, to: CurrencyManager.shared.baseCurrency)
+        return CurrencyService.shared.convert(amount: value, from: currency, to: CurrencyManager.shared.baseCurrency)
+    }
+
+    /// Ставка в процентах годовых: от 0 до 1000
+    private static func validRate(_ rate: Double?) -> Double? {
+        guard let rate, rate.isFinite, rate >= 0, rate <= 1_000 else { return nil }
+        return rate
+    }
+
+    /// «14%» или «14.50%» для карточки
+    private static func percentText(_ rate: Double) -> String {
+        GoalQuickAmounts.plain(rate) + "%"
     }
 
     private static func parseMinutes(_ value: String?) -> Int? {
@@ -120,13 +136,20 @@ enum AIActionExecutor {
             guard let due = action.date else {
                 return failure(String(localized: "Добавить платёж: \(name)"), String(localized: "Не указан срок: напишите, до какого числа"), icon)
             }
-            let repeatRule = action.repeatRule ?? .monthly
+            // Всё, о чём пользователь не сказал, берётся из настроек этого вида платежей
+            let typeSettings = DebtTypeSettings.load()
+            let kindSetting = typeSettings[.bill(kind)]
+            let repeatRule = action.repeatRule ?? kindSetting.repeatRule
+            let isRecurring = repeatRule != .never
+            let interval = isRecurring ? max(1, action.interval ?? (repeatRule == kindSetting.repeatRule ? kindSetting.repeatInterval : 1)) : 1
+            let isVariable = isRecurring && (action.variableAmount ?? kindSetting.isVariableAmount)
+            let reminderSetting = isRecurring ? kindSetting : typeSettings[.oneTimeBill]
             let day = calendar.startOfDay(for: due)
             let summary: String
             if repeatRule == .never {
                 summary = String(localized: "Добавить платёж: \(name), \(money(amount)), срок \(shortDate(day))")
             } else {
-                summary = String(localized: "Добавить платёж: \(name), \(money(amount)), срок \(shortDate(day)), \(repeatRule.title.lowercased())")
+                summary = String(localized: "Добавить платёж: \(name), \(money(amount)), срок \(shortDate(day)), \(repeatRule.title(every: interval).lowercased())")
             }
             let duplicate = service.debts.contains { debt in
                 debt.type == .bill
@@ -144,10 +167,13 @@ enum AIActionExecutor {
                 dueDate: day,
                 isLent: false,
                 type: .bill,
-                reminder: action.reminder ?? .standard,
+                reminder: action.reminder ?? reminderSetting.defaultReminder,
                 billKind: kind,
                 repeatRule: repeatRule,
-                firstDueDate: day
+                firstDueDate: day,
+                note: cleanName(action.note),
+                repeatInterval: interval > 1 ? interval : nil,
+                isVariableAmount: isVariable ? true : nil
             )
             return result(.addDebt(bill), summary, icon)
 
@@ -178,8 +204,16 @@ enum AIActionExecutor {
                     && abs(debt.amount - amount) < 0.5
                     && calendar.isDate(debt.dueDate, inSameDayAs: day)
             }
+            // График кредита: платёж в месяц, ставка и сколько платежей осталось
+            let monthlyPayment = type == .credit ? baseValue(action.monthlyPayment, action) : nil
+            let interestRate = type == .credit ? validRate(action.interestRate).flatMap { $0 > 0 ? $0 : nil } : nil
+            let paymentsLeft = monthlyPayment != nil ? action.paymentsLeft.flatMap { $0 >= 0 ? $0 : nil } : nil
+            let profile: DebtProfile = type == .credit ? .credit : (isLent ? .owedToMe : .iOwe)
+
             let summary: String
-            if type == .credit {
+            if type == .credit, let monthlyPayment {
+                summary = String(localized: "Добавить кредит: \(name), остаток \(money(amount)), платёж \(money(monthlyPayment)) в месяц, ближайший \(shortDate(day))")
+            } else if type == .credit {
                 summary = String(localized: "Добавить кредит: \(name), \(money(amount)), срок \(shortDate(day))")
             } else if isLent {
                 summary = String(localized: "Добавить долг: \(name) должен вам \(money(amount)), срок \(shortDate(day))")
@@ -189,7 +223,19 @@ enum AIActionExecutor {
             if duplicate {
                 return failure(summary, String(localized: "Такой долг уже есть"), icon)
             }
-            let debt = Debt(name: name, amount: amount, dueDate: day, isLent: isLent, type: type, reminder: action.reminder ?? .standard)
+            let debt = Debt(
+                name: name,
+                amount: amount,
+                dueDate: day,
+                isLent: isLent,
+                type: type,
+                reminder: action.reminder ?? DebtTypeSettings.load()[profile].defaultReminder,
+                firstDueDate: monthlyPayment != nil ? day : nil,
+                note: cleanName(action.note),
+                monthlyPayment: monthlyPayment,
+                interestRate: interestRate,
+                paymentsLeft: paymentsLeft
+            )
             return result(.addDebt(debt), summary, icon)
 
         case .changeDebt:
@@ -215,10 +261,6 @@ enum AIActionExecutor {
                 }
                 if let due = action.date {
                     updated.dueDate = calendar.startOfDay(for: due)
-                    if updated.type == .bill {
-                        // Новый срок платежа становится точкой отсчёта для следующих
-                        updated.firstDueDate = updated.dueDate
-                    }
                     changes.append(String(localized: "срок \(shortDate(updated.dueDate))"))
                 }
                 if updated.type == .bill {
@@ -226,9 +268,53 @@ enum AIActionExecutor {
                         updated.billKind = kind
                         changes.append(String(localized: "вид: \(kind.title)"))
                     }
+                    var repeatChanged = false
                     if let rule = action.repeatRule, rule != (debt.repeatRule ?? .never) {
                         updated.repeatRule = rule
-                        changes.append(rule.title.lowercased())
+                        repeatChanged = true
+                    }
+                    if let interval = action.interval, max(1, interval) != debt.effectiveInterval {
+                        updated.repeatInterval = interval > 1 ? interval : nil
+                        repeatChanged = true
+                    }
+                    if repeatChanged {
+                        if updated.repeatRule == .never {
+                            updated.repeatInterval = nil
+                            updated.isVariableAmount = nil
+                        }
+                        changes.append(updated.effectiveRepeat.title(every: updated.effectiveInterval).lowercased())
+                    }
+                    if let variable = action.variableAmount, variable != (debt.isVariableAmount ?? false), updated.isRecurringBill {
+                        updated.isVariableAmount = variable ? true : nil
+                        changes.append(variable ? String(localized: "сумма меняется") : String(localized: "сумма постоянная"))
+                    }
+                }
+                if updated.type == .credit {
+                    if action.monthlyPayment != nil {
+                        guard let payment = baseValue(action.monthlyPayment, action) else {
+                            return failure(String(localized: "Изменить долг «\(debt.name)»"), String(localized: "Неверная сумма"), icon)
+                        }
+                        updated.monthlyPayment = payment
+                        changes.append(String(localized: "платёж \(money(payment))"))
+                    }
+                    if let rate = validRate(action.interestRate) {
+                        updated.interestRate = rate > 0 ? rate : nil
+                        let percent = percentText(rate)
+                        changes.append(String(localized: "ставка \(percent)"))
+                    }
+                    if let left = action.paymentsLeft, left >= 0 {
+                        updated.paymentsLeft = left
+                        changes.append(String(localized: "осталось платежей: \(left)"))
+                    }
+                }
+                if let note = action.note {
+                    updated.note = cleanName(note)
+                    changes.append(String(localized: "заметка"))
+                }
+                // Новый срок платежа или кредита с графиком становится точкой отсчёта для следующих
+                if updated.type == .bill || updated.hasPaymentPlan {
+                    if action.date != nil || updated.firstDueDate == nil {
+                        updated.firstDueDate = updated.dueDate
                     }
                 }
                 if let reminder = action.reminder {
@@ -251,6 +337,30 @@ enum AIActionExecutor {
             case .ambiguous:
                 return failure(String(localized: "Отметить долг"), String(localized: "Подходит несколько вариантов: «\(action.target ?? "")». Уточните"), icon)
             case .found(let debt):
+                // Сумма оплаты: сколько вышло по платежу, платёж по кредиту или часть долга
+                var payment: Double? = nil
+                if paid && action.amount != nil {
+                    guard let value = baseAmount(action) else {
+                        return failure(String(localized: "Отметить долг «\(debt.name)»"), String(localized: "Неверная сумма"), icon)
+                    }
+                    payment = value
+                }
+
+                if paid && !debt.isPaid && (payment != nil || debt.hasPaymentPlan) {
+                    if debt.isRecurring {
+                        // Срок переходит на следующий период, а у кредита уменьшается остаток
+                        let value = payment ?? debt.monthlyPayment ?? debt.amount
+                        let next = debt.nextDueDate(now: now, calendar: calendar)
+                        let summary = next.map { String(localized: "Оплатить «\(debt.name)»: \(money(value)), следующий срок: \(shortDate($0))") }
+                            ?? String(localized: "Оплатить «\(debt.name)»: \(money(value))")
+                        return result(.payDebt(debt.id, payment), summary, icon)
+                    }
+                    if let value = payment, value < debt.amount - Debt.cent {
+                        let rest = debt.amount - value
+                        return result(.payDebt(debt.id, value), String(localized: "Внести \(money(value)) в счёт «\(debt.name)», останется \(money(rest))"), icon)
+                    }
+                }
+
                 if debt.type == .bill {
                     // Повторяющийся платёж при оплате не закрывается, а переносит срок на следующий период
                     let next = paid ? debt.nextDueDate(now: now, calendar: calendar) : nil
@@ -567,6 +677,11 @@ enum AIActionExecutor {
             service.updateDebt(debt)
         case .setDebtPaid(let id, let paid):
             service.setDebtPaid(id: id, isPaid: paid)
+        case .payDebt(let id, let amount):
+            guard service.debts.contains(where: { $0.id == id && !$0.isPaid }) else {
+                return .failed(String(localized: "Долг уже погашен"))
+            }
+            service.payDebt(id: id, amount: amount)
         case .deleteDebt(let id):
             service.deleteDebt(id: id)
 

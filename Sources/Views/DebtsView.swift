@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Экран долгов: две суммы сверху, вкладки «Мне должны», «Я должен» и «Платежи» и список с отметкой об оплате.
 /// Кредиты лежат на вкладке «Я должен», коммуналка, интернет и подписки — на вкладке «Платежи».
@@ -7,7 +8,11 @@ struct DebtsView: View {
     let financeService: FinanceService
     @State private var selectedTab: DebtTab = ScreenshotMode.scene == .debts ? .owedToMe : .iOwe
     @State private var isShowingAddSheet = false
+    @State private var isShowingTypeSettings = false
     @State private var editingDebt: Debt? = nil
+    @State private var paymentRequest: DebtPaymentRequest? = nil
+    /// Настройки видов записей: по ним строки показывают, придёт ли напоминание
+    @State private var typeSettings = DebtTypeSettings.load()
 
     private var visibleDebts: [Debt] {
         let debts = financeService.debts.filter { selectedTab.contains($0) }
@@ -81,15 +86,29 @@ struct DebtsView: View {
                 selectedTab = tab
             }
         }
+        .sheet(item: $paymentRequest) { request in
+            DebtPaymentSheet(financeService: financeService, request: request)
+        }
+        .sheet(isPresented: $isShowingTypeSettings, onDismiss: {
+            typeSettings = DebtTypeSettings.load()
+        }) {
+            NavigationStack {
+                DebtTypeSettingsView(financeService: financeService, showsDoneButton: true)
+            }
+        }
     }
 
     // MARK: - Шапка
     private var headerView: some View {
-        HStack {
+        HStack(spacing: 10) {
             Text("debts_title".localized)
                 .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
             Spacer()
+            MonoCircleButton(systemName: "slider.horizontal.3", label: String(localized: "Настройки по видам")) {
+                HapticManager.shared.impact(.light)
+                isShowingTypeSettings = true
+            }
             MonoCircleButton(systemName: "plus", label: "add_debt".localized, filled: true) {
                 HapticManager.shared.impact(.light)
                 isShowingAddSheet = true
@@ -173,9 +192,11 @@ struct DebtsView: View {
             .monoListRow()
         } else {
             ForEach(Array(debts.enumerated()), id: \.element.id) { index, debt in
-                DebtRowView(debt: debt, financeService: financeService) {
+                DebtRowView(debt: debt, typeSettings: typeSettings, onEdit: {
                     editingDebt = debt
-                }
+                }, onTogglePaid: {
+                    togglePaid(debt)
+                })
                 .appearAnimation(delay: 0.12 + Double(index) * Motion.stagger)
                 .monoListRow()
                 .swipeActions(edge: .leading, allowsFullSwipe: true) {
@@ -199,6 +220,13 @@ struct DebtsView: View {
                     } label: {
                         Label("Изменить", systemImage: "pencil")
                     }
+                    if !debt.isPaid && !debt.isRecurringBill {
+                        Button {
+                            paymentRequest = DebtPaymentRequest(debt: debt, mode: .part)
+                        } label: {
+                            Label(debt.type == .credit ? String(localized: "Внести досрочно") : String(localized: "Внести часть"), systemImage: "plus.circle")
+                        }
+                    }
                     if !debt.isPaid {
                         reminderMenu(debt)
                     }
@@ -221,7 +249,8 @@ struct DebtsView: View {
 
     /// Когда заранее напомнить о сроке: выбор прямо из меню строки
     private func reminderMenu(_ debt: Debt) -> some View {
-        Menu {
+        let current = debt.effectiveReminder(using: typeSettings)
+        return Menu {
             ForEach(DebtReminder.allCases) { option in
                 Button {
                     HapticManager.shared.selection()
@@ -232,7 +261,7 @@ struct DebtsView: View {
                         }
                     }
                 } label: {
-                    if option == debt.effectiveReminder {
+                    if option == current {
                         Label(option.title, systemImage: "checkmark")
                     } else {
                         Text(option.title)
@@ -240,11 +269,16 @@ struct DebtsView: View {
                 }
             }
         } label: {
-            Label("Напоминание", systemImage: debt.effectiveReminder == .off ? "bell.slash" : "bell")
+            Label("Напоминание", systemImage: current == .off ? "bell.slash" : "bell")
         }
     }
 
+    /// Платёж с переменной суммой и платёж по кредиту сначала спрашивают сумму, остальное отмечается сразу
     private func togglePaid(_ debt: Debt) {
+        if debt.asksAmountBeforePaying {
+            paymentRequest = DebtPaymentRequest(debt: debt, mode: .payment)
+            return
+        }
         HapticManager.shared.trigger(.success)
         withAnimation(Motion.spring) {
             financeService.togglePayDebt(id: debt.id)
@@ -262,9 +296,12 @@ struct DebtsView: View {
 /// Строка долга или платежа: значок, имя, срок и сумма со знаком
 struct DebtRowView: View {
     let debt: Debt
-    let financeService: FinanceService
+    /// Настройки видов записей: по ним видно, придёт ли напоминание
+    var typeSettings = DebtTypeSettings()
     /// Нажатие на строку открывает правку
     var onEdit: () -> Void = {}
+    /// Кнопка с кружком: оплата или возврат в активные
+    var onTogglePaid: () -> Void = {}
 
     private var directionText: String {
         if debt.type == .credit {
@@ -300,21 +337,22 @@ struct DebtRowView: View {
                         .font(.system(size: 13))
                         .foregroundColor(isOverdue ? Theme.danger : Theme.textTertiary)
                         .lineLimit(2)
+                    if let note = debt.note, !note.isEmpty {
+                        Text(note)
+                            .font(.system(size: 12))
+                            .foregroundColor(Theme.textTertiary)
+                            .lineLimit(1)
+                    }
                 }
 
                 Spacer(minLength: 8)
 
-                Text("\(debt.isLent ? "+" : "−")\(CurrencyManager.shared.format(debt.amount))")
+                Text("\(debt.isLent ? "+" : "−")\(amountPrefix)\(CurrencyManager.shared.format(debt.amount))")
                     .font(Theme.number(16))
                     .foregroundColor(amountColor)
                     .strikethrough(debt.isPaid)
 
-                Button {
-                    HapticManager.shared.trigger(.success)
-                    withAnimation(Motion.spring) {
-                        financeService.togglePayDebt(id: debt.id)
-                    }
-                } label: {
+                Button(action: onTogglePaid) {
                     Image(systemName: debt.isPaid ? "checkmark.circle.fill" : "circle")
                         .font(.system(size: 22))
                         .foregroundColor(debt.isPaid ? Theme.accent : Theme.textTertiary)
@@ -355,6 +393,20 @@ struct DebtRowView: View {
         return debt.type == .bill ? String(localized: "Оплатить") : String(localized: "Отметить погашенным")
     }
 
+    /// Сумма платежа с меняющейся суммой приблизительная: настоящая станет известна при оплате
+    private var amountPrefix: String {
+        debt.isRecurringBill && debt.isVariableAmount == true && !debt.isPaid ? "≈ " : ""
+    }
+
+    /// Придёт ли напоминание: вид записи может быть выключен целиком, а у самой записи оно может быть выключено
+    private var remindsAboutDebt: Bool {
+        typeSettings.setting(for: debt).isEnabled && debt.effectiveReminder(using: typeSettings) != .off
+    }
+
+    private func money(_ value: Double) -> String {
+        CurrencyManager.shared.format(value)
+    }
+
     private var subtitle: String {
         let date = debt.dueDate.formatted(.dateTime.day().month(.abbreviated))
         if debt.type == .bill {
@@ -363,15 +415,37 @@ struct DebtRowView: View {
         if debt.isPaid {
             return String(localized: "Погашено · \(date)")
         }
-        var line = String(localized: "\(directionText) · до \(date)")
+        var parts = [directionText, String(localized: "до \(date)")]
         if isOverdue {
-            line += " · " + String(localized: "просрочено")
+            parts.append(String(localized: "просрочено"))
+        }
+        if debt.type == .credit {
+            parts += creditDetails
+        }
+        if debt.hasPartialPayments, let original = debt.originalAmount {
+            parts.append(String(localized: "из \(money(original))"))
         }
         // Выключенное напоминание видно сразу: иначе можно пропустить срок, думая, что приложение напомнит
-        if debt.effectiveReminder == .off {
-            return line + " · " + String(localized: "без напоминания")
+        if !remindsAboutDebt {
+            parts.append(String(localized: "без напоминания"))
         }
-        return line
+        return parts.joined(separator: " · ")
+    }
+
+    /// «платёж 12 000 · ставка 14% · осталось платежей: 18» у кредита с графиком
+    private var creditDetails: [String] {
+        var parts: [String] = []
+        if let payment = debt.monthlyPayment, payment > 0 {
+            parts.append(String(localized: "платёж \(money(payment))"))
+        }
+        if let rate = debt.interestRate, rate > 0 {
+            let percent = GoalQuickAmounts.plain(rate) + "%"
+            parts.append(String(localized: "ставка \(percent)"))
+        }
+        if let left = debt.paymentsLeft {
+            parts.append(String(localized: "осталось платежей: \(left)"))
+        }
+        return parts
     }
 
     /// «Интернет · до 5 нояб. · каждый месяц · оплачено 5 окт.»
@@ -384,13 +458,19 @@ struct DebtRowView: View {
         if isOverdue {
             parts.append(String(localized: "просрочено"))
         }
-        if debt.isRecurringBill, let rule = debt.repeatRule {
-            parts.append(rule.title.lowercased())
+        if debt.isRecurringBill {
+            parts.append(debt.effectiveRepeat.title(every: debt.effectiveInterval).lowercased())
+        }
+        if debt.hasPartialPayments, let original = debt.originalAmount {
+            parts.append(String(localized: "из \(money(original))"))
         }
         if debt.isRecurringBill, let paidAt = debt.lastPaidAt {
             parts.append(String(localized: "оплачено \(paidAt.formatted(.dateTime.day().month(.abbreviated)))"))
+            if debt.isVariableAmount == true, let paid = debt.lastPaidAmount {
+                parts.append(money(paid))
+            }
         }
-        if debt.effectiveReminder == .off {
+        if !remindsAboutDebt {
             parts.append(String(localized: "без напоминания"))
         }
         return parts.joined(separator: " · ")
@@ -404,6 +484,8 @@ struct AddDebtView: View {
     let editing: Debt?
     /// Сообщает, на какой вкладке оказалась сохранённая запись
     let onSave: (DebtTab) -> Void
+    /// Настройки видов записей: по ним заполняется новая запись
+    private let typeSettings: DebtTypeSettings
 
     @State private var name: String
     @State private var amountString: String
@@ -413,13 +495,23 @@ struct AddDebtView: View {
     @State private var reminder: DebtReminder
     @State private var billKind: BillKind
     @State private var repeatRule: ReminderRepeat
+    @State private var repeatInterval: Int
+    @State private var isVariableAmount: Bool
+    @State private var note: String
+    @State private var monthlyPaymentString: String
+    @State private var interestRateString: String
+    @State private var paymentsLeftString: String
+    /// Условия (напоминание, период, сумма) уже меняли руками: смена вида больше их не перезаписывает
+    @State private var termsEdited = false
 
     /// Форма открывается сразу с типом открытой вкладки: «Мне должны» — долг человека, «Я должен» — кредит,
-    /// «Платежи» — платёж с повтором каждый месяц
+    /// «Платежи» — платёж с повтором каждый месяц. Новая запись берёт условия из настроек своего вида.
     init(financeService: FinanceService, tab: DebtTab = .iOwe, editing: Debt? = nil, onSave: @escaping (DebtTab) -> Void = { _ in }) {
         self.financeService = financeService
         self.editing = editing
         self.onSave = onSave
+        let settings = DebtTypeSettings.load()
+        typeSettings = settings
 
         if let editing {
             _name = State(initialValue: editing.name)
@@ -427,22 +519,44 @@ struct AddDebtView: View {
             _isLent = State(initialValue: editing.isLent)
             _selectedType = State(initialValue: editing.type)
             _dueDate = State(initialValue: editing.dueDate)
-            _reminder = State(initialValue: editing.effectiveReminder)
+            _reminder = State(initialValue: editing.effectiveReminder(using: settings))
             _billKind = State(initialValue: editing.billKind ?? .utilities)
             _repeatRule = State(initialValue: editing.repeatRule ?? .never)
+            _repeatInterval = State(initialValue: max(1, editing.repeatInterval ?? 1))
+            _isVariableAmount = State(initialValue: editing.isVariableAmount ?? false)
+            _note = State(initialValue: editing.note ?? "")
+            _monthlyPaymentString = State(initialValue: editing.monthlyPayment.map { GoalQuickAmounts.plain($0) } ?? "")
+            _interestRateString = State(initialValue: editing.interestRate.map { GoalQuickAmounts.plain($0) } ?? "")
+            _paymentsLeftString = State(initialValue: editing.paymentsLeft.map { String($0) } ?? "")
         } else {
+            let type: DebtType
+            let profile: DebtProfile
+            switch tab {
+            case .owedToMe:
+                type = .person
+                profile = .owedToMe
+            case .iOwe:
+                type = .credit
+                profile = .credit
+            case .bills:
+                type = .bill
+                profile = .bill(.utilities)
+            }
+            let setting = settings[profile]
             _name = State(initialValue: "")
             _amountString = State(initialValue: "")
             _isLent = State(initialValue: tab == .owedToMe)
-            switch tab {
-            case .owedToMe: _selectedType = State(initialValue: .person)
-            case .iOwe: _selectedType = State(initialValue: .credit)
-            case .bills: _selectedType = State(initialValue: .bill)
-            }
+            _selectedType = State(initialValue: type)
             _dueDate = State(initialValue: Date())
-            _reminder = State(initialValue: .standard)
+            _reminder = State(initialValue: setting.defaultReminder)
             _billKind = State(initialValue: .utilities)
-            _repeatRule = State(initialValue: .monthly)
+            _repeatRule = State(initialValue: type == .bill ? setting.repeatRule : .monthly)
+            _repeatInterval = State(initialValue: type == .bill ? setting.repeatInterval : 1)
+            _isVariableAmount = State(initialValue: type == .bill && setting.isVariableAmount)
+            _note = State(initialValue: "")
+            _monthlyPaymentString = State(initialValue: "")
+            _interestRateString = State(initialValue: "")
+            _paymentsLeftString = State(initialValue: "")
         }
     }
 
@@ -450,11 +564,55 @@ struct AddDebtView: View {
         Double(amountString.replacingOccurrences(of: ",", with: ".")) ?? 0
     }
 
+    private var parsedMonthlyPayment: Double? {
+        guard let value = GoalQuickAmounts.parse(monthlyPaymentString), value > 0 else { return nil }
+        return value
+    }
+
+    private var parsedInterestRate: Double? {
+        guard let value = GoalQuickAmounts.parse(interestRateString), value > 0 else { return nil }
+        return min(value, 1_000)
+    }
+
+    private var parsedPaymentsLeft: Int? {
+        guard let value = Int(paymentsLeftString.trimmingCharacters(in: .whitespaces)), value >= 0 else { return nil }
+        return value
+    }
+
+    private var isBill: Bool { selectedType == .bill }
+    private var isCredit: Bool { selectedType == .credit }
+    /// Платёж повторяется: у него есть период и можно отметить, что сумма меняется
+    private var isRecurringBill: Bool { isBill && repeatRule != .never }
+    /// Кредит с графиком: срок переходит на следующий месяц, остаток уменьшается
+    private var hasPaymentPlan: Bool { isCredit && parsedMonthlyPayment != nil }
+
+    /// Вид, по настройкам которого заполняется новая запись
+    private var currentProfile: DebtProfile {
+        switch selectedType {
+        case .credit: return .credit
+        case .person: return isLent ? .owedToMe : .iOwe
+        case .bill: return repeatRule == .never ? .oneTimeBill : .bill(billKind)
+        }
+    }
+
     private var navigationTitleText: String {
         if editing != nil {
-            return selectedType == .bill ? String(localized: "Изменить платёж") : String(localized: "Изменить долг")
+            return isBill ? String(localized: "Изменить платёж") : String(localized: "Изменить долг")
         }
-        return selectedType == .bill ? String(localized: "Новый платёж") : String(localized: "Новый долг")
+        return isBill ? String(localized: "Новый платёж") : String(localized: "Новый долг")
+    }
+
+    /// Смена вида подставляет в новую запись условия этого вида, пока условия не меняли руками.
+    /// `includingRepeat` — подставить ещё и период платежа: так бывает при выборе вида платежа, а не при смене «один раз»/«повтор».
+    private func applyDefaults(includingRepeat: Bool) {
+        guard editing == nil, !termsEdited else { return }
+        if includingRepeat, isBill {
+            let setting = typeSettings[.bill(billKind)]
+            repeatRule = setting.repeatRule
+            repeatInterval = setting.repeatInterval
+            isVariableAmount = setting.isVariableAmount
+        }
+        reminder = typeSettings[currentProfile].defaultReminder
     }
 
     var body: some View {
@@ -473,30 +631,42 @@ struct AddDebtView: View {
                             if newValue != .person {
                                 isLent = false // Кредит и платёж — всегда «Я должен»
                             }
+                            applyDefaults(includingRepeat: true)
                         }
                     } header: {
                         Text("Категория")
                     }
                 }
 
-                if selectedType == .bill {
+                if isBill {
                     Section {
                         Picker("Вид платежа", selection: $billKind) {
                             ForEach(BillKind.allCases) { kind in
                                 Label(kind.title, systemImage: kind.icon).tag(kind)
                             }
                         }
+                        .onChange(of: billKind) { _, _ in
+                            applyDefaults(includingRepeat: true)
+                        }
 
                         TextField("Название (необязательно)", text: $name)
                             .textInputAutocapitalization(.sentences)
 
                         amountRow
+
+                        if isRecurringBill {
+                            Toggle("Сумма меняется", isOn: edited($isVariableAmount))
+                        }
                     } header: {
                         Text("Информация о платеже")
+                    } footer: {
+                        if isRecurringBill && isVariableAmount {
+                            Text("При оплате спросим, сколько вышло, и запомним сумму для следующего раза.")
+                        }
                     }
                 } else {
                     Section {
-                        TextField(selectedType == .credit ? String(localized: "Название банка / кредитора") : String(localized: "Имя человека"), text: $name)
+                        TextField(isCredit ? String(localized: "Название банка / кредитора") : String(localized: "Имя человека"), text: $name)
                             .textInputAutocapitalization(.words)
 
                         amountRow
@@ -512,21 +682,44 @@ struct AddDebtView: View {
                             Text("Я должен").tag(false)
                         }
                         .pickerStyle(.segmented)
+                        .onChange(of: isLent) { _, _ in
+                            applyDefaults(includingRepeat: false)
+                        }
                     } header: {
                         Text("Направление")
                     }
                 }
 
+                if isCredit {
+                    Section {
+                        numberRow(String(localized: "Платёж в месяц (\(CurrencyManager.shared.baseCurrency.symbol))"), text: $monthlyPaymentString, keyboard: .decimalPad)
+                        numberRow(String(localized: "Ставка, % годовых"), text: $interestRateString, keyboard: .decimalPad)
+                        numberRow(String(localized: "Осталось платежей"), text: $paymentsLeftString, keyboard: .numberPad)
+                    } header: {
+                        Text("График платежей")
+                    } footer: {
+                        Text("Необязательно. Если указать платёж в месяц, срок будет сам переходить на следующий месяц, а остаток долга уменьшаться с каждым платежом.")
+                    }
+                }
+
                 Section {
-                    DatePicker(selectedType == .bill ? String(localized: "Срок оплаты") : String(localized: "Срок возврата"), selection: $dueDate, displayedComponents: .date)
-                    if selectedType == .bill {
+                    DatePicker(dueDateTitle, selection: $dueDate, displayedComponents: .date)
+                    if isBill {
                         Picker("Повтор", selection: $repeatRule) {
                             ForEach(ReminderRepeat.allCases) { option in
                                 Text(option.title).tag(option)
                             }
                         }
+                        .onChange(of: repeatRule) { _, _ in
+                            applyDefaults(includingRepeat: false)
+                        }
+                        if isRecurringBill {
+                            Stepper(value: edited($repeatInterval), in: 1...36) {
+                                Text(repeatRule.title(every: repeatInterval))
+                            }
+                        }
                     }
-                    Picker("Напомнить", selection: $reminder) {
+                    Picker("Напомнить", selection: edited($reminder)) {
                         ForEach(DebtReminder.allCases) { option in
                             Text(option.title).tag(option)
                         }
@@ -537,6 +730,13 @@ struct AddDebtView: View {
                     if reminder != .off {
                         Text(reminderFooter)
                     }
+                }
+
+                Section {
+                    TextField("Заметка (необязательно)", text: $note, axis: .vertical)
+                        .lineLimit(1...4)
+                } header: {
+                    Text("Заметка")
                 }
             }
             .monoForm()
@@ -558,9 +758,31 @@ struct AddDebtView: View {
         }
     }
 
+    /// Привязка, которая запоминает, что условие поменяли руками
+    private func edited<Value>(_ binding: Binding<Value>) -> Binding<Value> {
+        Binding(
+            get: { binding.wrappedValue },
+            set: { newValue in
+                binding.wrappedValue = newValue
+                termsEdited = true
+            }
+        )
+    }
+
+    private var dueDateTitle: String {
+        if isBill {
+            return String(localized: "Срок оплаты")
+        }
+        return hasPaymentPlan ? String(localized: "Ближайший платёж") : String(localized: "Срок возврата")
+    }
+
     private var amountRow: some View {
         HStack {
-            Text("Сумма (\(CurrencyManager.shared.baseCurrency.symbol))")
+            if isCredit {
+                Text("Остаток долга (\(CurrencyManager.shared.baseCurrency.symbol))")
+            } else {
+                Text("Сумма (\(CurrencyManager.shared.baseCurrency.symbol))")
+            }
             Spacer()
             TextField("0", text: $amountString)
                 .keyboardType(.decimalPad)
@@ -568,15 +790,25 @@ struct AddDebtView: View {
         }
     }
 
+    private func numberRow(_ title: String, text: Binding<String>, keyboard: UIKeyboardType) -> some View {
+        HStack {
+            Text(verbatim: title)
+            Spacer()
+            TextField("0", text: text)
+                .keyboardType(keyboard)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+
     /// Что именно придёт: для кредита и платежа — об оплате, для человека — вернуть или получить деньги
     private var reminderFooter: String {
-        if selectedType == .bill {
+        if isBill {
             if repeatRule == .never {
                 return String(localized: "Напомним об оплате заранее, в день срока и после него, пока платёж не оплачен.")
             }
             return String(localized: "Напомним об оплате заранее, в день срока и после него. Когда вы отметите платёж оплаченным, срок сам перейдёт на следующий период.")
         }
-        if selectedType == .credit {
+        if isCredit {
             return String(localized: "Напомним о платеже заранее, в день срока и после него, пока кредит не отмечен погашенным.")
         }
         if isLent {
@@ -587,38 +819,44 @@ struct AddDebtView: View {
 
     private var isSaveDisabled: Bool {
         // У платежа имя необязательно: без него берётся вид платежа («Интернет»)
-        let needsName = selectedType != .bill
+        let needsName = !isBill
         let nameMissing = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return (needsName && nameMissing) || parsedAmount <= 0
     }
 
     private func saveDebt() {
         guard parsedAmount > 0 else { return }
-        let isBill = selectedType == .bill
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Срок платежа и кредита с графиком считается по дням, от первого срока считаются следующие
+        let followsSchedule = isBill || hasPaymentPlan
         let day = Calendar.current.startOfDay(for: dueDate)
 
-        // Первый срок платежа остаётся прежним, пока дату не поменяли: от него считаются следующие сроки
+        // Первый срок остаётся прежним, пока дату не поменяли: от него считаются следующие сроки
         var firstDue: Date? = nil
-        if isBill {
+        if followsSchedule {
             let unchanged = editing.map { Calendar.current.isDate($0.dueDate, inSameDayAs: day) } ?? false
             firstDue = (unchanged ? editing?.firstDueDate : nil) ?? day
         }
 
-        let debt = Debt(
-            id: editing?.id ?? UUID(),
-            name: isBill && cleanName.isEmpty ? billKind.title : cleanName,
-            amount: parsedAmount,
-            dueDate: isBill ? day : dueDate,
-            isLent: selectedType == .person ? isLent : false,
-            isPaid: false,
-            type: selectedType,
-            reminder: reminder,
-            billKind: isBill ? billKind : nil,
-            repeatRule: isBill ? repeatRule : nil,
-            firstDueDate: firstDue,
-            lastPaidAt: editing?.lastPaidAt
-        )
+        // У правки остаются поля, которых в форме нет: когда и сколько оплачивали, сколько уже внесено
+        var debt = editing ?? Debt(name: cleanName, amount: parsedAmount, dueDate: dueDate, isLent: false)
+        debt.name = isBill && cleanName.isEmpty ? billKind.title : cleanName
+        debt.amount = parsedAmount
+        debt.dueDate = followsSchedule ? day : dueDate
+        debt.isLent = selectedType == .person ? isLent : false
+        debt.type = selectedType
+        debt.reminder = reminder
+        debt.billKind = isBill ? billKind : nil
+        debt.repeatRule = isBill ? repeatRule : nil
+        debt.firstDueDate = firstDue
+        debt.note = cleanNote.isEmpty ? nil : cleanNote
+        debt.repeatInterval = isRecurringBill && repeatInterval > 1 ? repeatInterval : nil
+        debt.isVariableAmount = isRecurringBill && isVariableAmount ? true : nil
+        debt.monthlyPayment = isCredit ? parsedMonthlyPayment : nil
+        debt.interestRate = isCredit ? parsedInterestRate : nil
+        debt.paymentsLeft = isCredit && hasPaymentPlan ? parsedPaymentsLeft : nil
+
         if editing == nil {
             financeService.addDebt(debt)
         } else {

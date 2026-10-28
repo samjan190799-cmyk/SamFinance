@@ -43,9 +43,12 @@ struct ReminderSettings: Equatable, Sendable {
     var minutes = 600
     /// 21:00
     var dailyLogMinutes = 1260
+    /// Свои настройки для кредитов, долгов людям, разовых и регулярных платежей
+    var debtTypes = DebtTypeSettings()
 
     static func load(from defaults: UserDefaults = .standard) -> ReminderSettings {
         var settings = ReminderSettings()
+        settings.debtTypes = DebtTypeSettings.load(from: defaults)
         settings.debts = defaults.object(forKey: ReminderKeys.debts) as? Bool ?? settings.debts
         settings.goalDeadlines = defaults.object(forKey: ReminderKeys.goalDeadlines) as? Bool ?? settings.goalDeadlines
         settings.goalSaving = defaults.string(forKey: ReminderKeys.goalSaving).flatMap { GoalSavingReminder(rawValue: $0) } ?? settings.goalSaving
@@ -206,7 +209,8 @@ enum ReminderPlanner {
 
         @MainActor
         init(debt: Debt) {
-            let amount = CurrencyManager.shared.format(debt.amount)
+            // По кредиту с графиком напоминают о платеже, а не обо всём остатке долга
+            let amount = CurrencyManager.shared.format(debt.hasPaymentPlan ? (debt.monthlyPayment ?? debt.amount) : debt.amount)
             let date = ReminderPlanner.shortDate(debt.dueDate)
             let name = debt.name
             soonBody = String(localized: "\(name) · \(amount) · до \(date)")
@@ -236,10 +240,13 @@ enum ReminderPlanner {
         }
     }
 
-    /// Заранее (по выбору у долга), в день срока, на следующий день и через неделю, пока долг не погашен
+    /// Заранее (по выбору у долга или у его вида), в день срока и после него по настройке вида, пока долг не погашен.
+    /// Время, срок «заранее» и напоминания после срока берутся из настроек вида записи (`DebtTypeSettings`).
     static func debtSpecs(_ debt: Debt, snooze: Date?, settings: ReminderSettings, now: Date, calendar: Calendar) -> [ReminderSpec] {
-        guard !debt.isPaid, let daysBefore = debt.effectiveReminder.daysBefore else { return [] }
+        let typeSetting = settings.debtTypes.setting(for: debt)
+        guard !debt.isPaid, typeSetting.isEnabled, let daysBefore = (debt.reminder ?? typeSetting.reminder).daysBefore else { return [] }
         let dueDay = calendar.startOfDay(for: debt.dueDate)
+        let minutes = typeSetting.minutes ?? settings.minutes
         let texts = DebtTexts(debt: debt)
         var result: [ReminderSpec] = []
 
@@ -249,7 +256,8 @@ enum ReminderPlanner {
                 id: "\(ReminderID.prefix)debt.\(debt.id.uuidString).\(suffix)",
                 title: title,
                 body: body,
-                category: debt.type == .bill ? ReminderID.billCategory : ReminderID.debtCategory,
+                // Платёж и кредит с графиком отмечаются кнопкой «Оплачен», остальные долги — «Погашен»
+                category: debt.type == .bill || debt.isRecurring ? ReminderID.billCategory : ReminderID.debtCategory,
                 target: .debt(debt.id),
                 fireDate: fireDate,
                 repeating: nil
@@ -257,15 +265,16 @@ enum ReminderPlanner {
         }
 
         func day(_ offset: Int) -> Date? {
-            calendar.date(byAdding: .day, value: offset, to: dueDay).flatMap { moment($0, minutes: settings.minutes, calendar: calendar) }
+            calendar.date(byAdding: .day, value: offset, to: dueDay).flatMap { moment($0, minutes: minutes, calendar: calendar) }
         }
 
         if daysBefore > 0 {
             add("before", fireDate: day(-daysBefore), title: texts.soonTitle, body: texts.soonBody)
         }
         add("due", fireDate: day(0), title: texts.dueTitle, body: texts.dueBody)
-        add("late1", fireDate: day(1), title: texts.lateTitle, body: texts.lateBody)
-        add("late7", fireDate: day(7), title: texts.lateTitle, body: texts.lateBody)
+        for offset in typeSetting.late.offsets {
+            add("late\(offset)", fireDate: day(offset), title: texts.lateTitle, body: texts.lateBody)
+        }
 
         // «Напомнить завтра» из уведомления
         if let snooze {
@@ -568,8 +577,9 @@ final class ReminderService {
             if case .debt(let id) = target {
                 let calendar = Calendar.current
                 let settings = ReminderSettings.load()
+                let minutes = financeService.debts.first { $0.id == id }.map { settings.debtTypes.minutes(for: $0, general: settings.minutes) } ?? settings.minutes
                 if let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date())),
-                   let fireDate = ReminderPlanner.moment(tomorrow, minutes: settings.minutes, calendar: calendar) {
+                   let fireDate = ReminderPlanner.moment(tomorrow, minutes: minutes, calendar: calendar) {
                     var snoozes = Self.loadSnoozes()
                     snoozes[id] = fireDate
                     Self.saveSnoozes(snoozes)

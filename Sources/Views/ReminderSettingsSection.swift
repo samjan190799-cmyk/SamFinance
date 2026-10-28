@@ -59,6 +59,11 @@ struct ReminderSettingsSection: View {
             Toggle(isOn: $debts) {
                 Label("Долги и кредиты", systemImage: "person.2")
             }
+            NavigationLink {
+                DebtTypeSettingsView(financeService: financeService)
+            } label: {
+                Label("Настройки по видам", systemImage: "slider.horizontal.3")
+            }
             Toggle(isOn: $goalDeadlines) {
                 Label("Сроки копилок", systemImage: "flag")
             }
@@ -86,7 +91,7 @@ struct ReminderSettingsSection: View {
         } header: {
             Text("Напоминания")
         } footer: {
-            Text("О долге напомним заранее (срок выбирается у каждого долга), в день срока, на следующий день и через неделю, пока долг не отмечен погашенным. В уведомлении о долге есть кнопки «Погашен» и «Напомнить завтра».")
+            Text("О долге напомним заранее, в день срока и после него, пока долг не отмечен погашенным. Время и частоту можно настроить для каждого вида записей: кредитов, долгов, разовых и регулярных платежей. В уведомлении есть кнопки «Погашен» (у платежа «Оплачен») и «Напомнить завтра».")
         }
         .task {
             isDenied = await ReminderService.isAuthorizationDenied()

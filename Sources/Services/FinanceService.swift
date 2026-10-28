@@ -263,23 +263,29 @@ public final class FinanceService {
         saveDebts()
     }
 
-    /// Оплата: долг и разовый платёж закрываются, а повторяющийся платёж переносит срок на следующий период и остаётся активным.
+    /// Оплата: долг и разовый платёж закрываются, повторяющийся платёж переносит срок на следующий период и остаётся активным,
+    /// а у кредита с графиком уменьшается остаток. Сумма меньше остатка вносит долг частично. Без суммы вносится всё,
+    /// что положено (подробнее — в `Debt.applyPayment`).
     /// Возвращает запись после оплаты; nil, если такой записи нет.
     @discardableResult
-    public func payDebt(id: UUID, now: Date = Date(), calendar: Calendar = .current) -> Debt? {
+    public func payDebt(id: UUID, amount: Double? = nil, now: Date = Date(), calendar: Calendar = .current) -> Debt? {
         guard prepareForWrite(.debts), let index = debts.firstIndex(where: { $0.id == id }) else { return nil }
-        if let next = debts[index].nextDueDate(now: now, calendar: calendar) {
-            if debts[index].firstDueDate == nil {
-                debts[index].firstDueDate = debts[index].dueDate
-            }
-            debts[index].dueDate = next
-        } else {
-            debts[index].isPaid = true
-        }
-        debts[index].lastPaidAt = now
+        debts[index].applyPayment(amount, now: now, calendar: calendar)
         let paid = debts[index]
         saveDebts()
         return paid
+    }
+
+    /// Взнос в счёт долга без смены срока: остаток уменьшается, а при полном погашении запись закрывается.
+    /// Нужен для досрочного взноса по кредиту с графиком и для оплаты по частям.
+    @discardableResult
+    public func repayDebt(id: UUID, amount: Double, now: Date = Date()) -> Debt? {
+        guard prepareForWrite(.debts), let index = debts.firstIndex(where: { $0.id == id }), amount > 0 else { return nil }
+        debts[index].applyRepayment(amount)
+        debts[index].lastPaidAt = now
+        let repaid = debts[index]
+        saveDebts()
+        return repaid
     }
 
     /// Кнопка с кружком: погашенный долг возвращается в активные, остальные оплачиваются
@@ -323,6 +329,13 @@ public final class FinanceService {
         updated.isPaid = debts[index].isPaid
         if updated.lastPaidAt == nil {
             updated.lastPaidAt = debts[index].lastPaidAt
+        }
+        if updated.lastPaidAmount == nil {
+            updated.lastPaidAmount = debts[index].lastPaidAmount
+        }
+        // Сумму подняли выше прежней: прошлые взносы больше не показывают прогресс
+        if let original = updated.originalAmount, updated.amount >= original {
+            updated.originalAmount = nil
         }
         debts[index] = updated
         saveDebts()

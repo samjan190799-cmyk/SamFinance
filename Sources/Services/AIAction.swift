@@ -65,6 +65,16 @@ struct AIAction: Sendable, Equatable {
     var setting: ReminderSetting?
     /// Значение настройки или валюта: «on», «off», «weekly», «10:00», «USD»
     var value: String?
+    /// «Каждые N периодов» у платежа: 3 при repeatRule == .monthly — раз в квартал
+    var interval: Int?
+    /// Сумма платежа каждый раз другая (коммуналка)
+    var variableAmount: Bool?
+    /// Ежемесячный платёж по кредиту; в валюте `currency`, как и `amount`
+    var monthlyPayment: Double?
+    /// Годовая ставка кредита в процентах
+    var interestRate: Double?
+    /// Сколько платежей по кредиту осталось
+    var paymentsLeft: Int?
 
     init(
         kind: Kind,
@@ -81,8 +91,18 @@ struct AIAction: Sendable, Equatable {
         note: String? = nil,
         category: String? = nil,
         setting: ReminderSetting? = nil,
-        value: String? = nil
+        value: String? = nil,
+        interval: Int? = nil,
+        variableAmount: Bool? = nil,
+        monthlyPayment: Double? = nil,
+        interestRate: Double? = nil,
+        paymentsLeft: Int? = nil
     ) {
+        self.interval = interval
+        self.variableAmount = variableAmount
+        self.monthlyPayment = monthlyPayment
+        self.interestRate = interestRate
+        self.paymentsLeft = paymentsLeft
         self.kind = kind
         self.target = target
         self.name = name
@@ -106,6 +126,8 @@ enum AIOperation: Equatable, Sendable {
     case addDebt(Debt)
     case updateDebt(Debt)
     case setDebtPaid(UUID, Bool)
+    /// Оплата с суммой: сколько вышло по платежу, платёж по кредиту или часть долга
+    case payDebt(UUID, Double?)
     case deleteDebt(UUID)
     case addGoal(Goal)
     case updateGoal(Goal)

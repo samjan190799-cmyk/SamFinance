@@ -197,6 +197,18 @@ public extension ReminderRepeat {
         case .yearly: return .year
         }
     }
+
+    /// «Каждый месяц»; если период не один — «Каждые 3 мес.»
+    func title(every interval: Int) -> String {
+        guard interval > 1 else { return title }
+        switch self {
+        case .never: return title
+        case .daily: return String(localized: "Каждые \(interval) дн.")
+        case .weekly: return String(localized: "Каждые \(interval) нед.")
+        case .monthly: return String(localized: "Каждые \(interval) мес.")
+        case .yearly: return String(localized: "Каждые \(interval) г.")
+        }
+    }
 }
 
 /// Когда заранее напомнить о сроке долга. В день срока и после него, пока долг не погашен, напоминание приходит всегда,
@@ -252,7 +264,19 @@ public struct Debt: Codable, Identifiable, Hashable, Sendable {
     public var firstDueDate: Date? // Первый срок: от него считаются следующие, чтобы 31-е число не «уезжало» на 28-е
     public var lastPaidAt: Date? // Когда платёж оплачивали в последний раз
 
-    public init(id: UUID = UUID(), name: String, amount: Double, dueDate: Date = Date(), isLent: Bool, isPaid: Bool = false, type: DebtType = .person, reminder: DebtReminder? = nil, billKind: BillKind? = nil, repeatRule: ReminderRepeat? = nil, firstDueDate: Date? = nil, lastPaidAt: Date? = nil) {
+    // Дополнительные условия; у записей, заведённых раньше, их нет
+    public var note: String? // Заметка: номер договора, лицевой счёт, ссылка для оплаты
+    public var repeatInterval: Int? // «Каждые N периодов»: 3 при повторе «каждый месяц» — раз в квартал; пусто и 1 — каждый период
+    public var isVariableAmount: Bool? // Сумма каждый раз другая (коммуналка): при оплате спрашиваем, сколько вышло
+    public var lastPaidAmount: Double? // Сколько внесли в последний раз
+    public var originalAmount: Double? // Сумма до первого взноса: от неё считается, сколько уже выплачено
+
+    // Только для кредитов с графиком платежей
+    public var monthlyPayment: Double? // Ежемесячный платёж
+    public var interestRate: Double? // Годовая ставка в процентах
+    public var paymentsLeft: Int? // Сколько платежей осталось
+
+    public init(id: UUID = UUID(), name: String, amount: Double, dueDate: Date = Date(), isLent: Bool, isPaid: Bool = false, type: DebtType = .person, reminder: DebtReminder? = nil, billKind: BillKind? = nil, repeatRule: ReminderRepeat? = nil, firstDueDate: Date? = nil, lastPaidAt: Date? = nil, note: String? = nil, repeatInterval: Int? = nil, isVariableAmount: Bool? = nil, lastPaidAmount: Double? = nil, originalAmount: Double? = nil, monthlyPayment: Double? = nil, interestRate: Double? = nil, paymentsLeft: Int? = nil) {
         self.id = id
         self.name = name
         self.amount = amount
@@ -265,6 +289,14 @@ public struct Debt: Codable, Identifiable, Hashable, Sendable {
         self.repeatRule = repeatRule
         self.firstDueDate = firstDueDate
         self.lastPaidAt = lastPaidAt
+        self.note = note
+        self.repeatInterval = repeatInterval
+        self.isVariableAmount = isVariableAmount
+        self.lastPaidAmount = lastPaidAmount
+        self.originalAmount = originalAmount
+        self.monthlyPayment = monthlyPayment
+        self.interestRate = interestRate
+        self.paymentsLeft = paymentsLeft
     }
 
     /// Платёж повторяется: после оплаты срок переносится на следующий период, а не закрывается
@@ -272,15 +304,36 @@ public struct Debt: Codable, Identifiable, Hashable, Sendable {
         type == .bill && (repeatRule ?? .never) != .never
     }
 
-    /// Следующий срок повторяющегося платежа: первый период после текущего срока, который не раньше сегодняшнего дня.
-    /// Считается от первого срока, а не от предыдущего, чтобы платёж «31-го числа» не застревал на 28-м.
+    /// Кредит с графиком: ежемесячный платёж, от которого уменьшается остаток
+    public var hasPaymentPlan: Bool {
+        type == .credit && (monthlyPayment ?? 0) > 0
+    }
+
+    /// После оплаты срок переносится на следующий период, а запись остаётся активной
+    public var isRecurring: Bool {
+        isRecurringBill || hasPaymentPlan
+    }
+
+    /// Как часто наступает срок: у кредита с графиком раз в месяц, у платежа по его повтору, у остальных записей никогда
+    public var effectiveRepeat: ReminderRepeat {
+        if hasPaymentPlan { return .monthly }
+        return type == .bill ? (repeatRule ?? .never) : .never
+    }
+
+    /// Через сколько периодов наступает следующий срок: 3 при повторе «каждый месяц» — раз в квартал
+    public var effectiveInterval: Int {
+        hasPaymentPlan ? 1 : max(1, repeatInterval ?? 1)
+    }
+
+    /// Следующий срок повторяющегося платежа или кредита с графиком: первый период после текущего срока, который не раньше
+    /// сегодняшнего дня. Считается от первого срока, а не от предыдущего, чтобы платёж «31-го числа» не застревал на 28-м.
     /// У разового платежа и у долгов следующего срока нет.
     public func nextDueDate(now: Date = Date(), calendar: Calendar = .current) -> Date? {
-        guard isRecurringBill, let unit = repeatRule?.calendarComponent else { return nil }
+        guard isRecurring, let unit = effectiveRepeat.calendarComponent else { return nil }
         let anchor = firstDueDate ?? dueDate
         let today = calendar.startOfDay(for: now)
         for step in 1..<5_000 {
-            guard let candidate = calendar.date(byAdding: unit, value: step, to: anchor) else { return nil }
+            guard let candidate = calendar.date(byAdding: unit, value: step * effectiveInterval, to: anchor) else { return nil }
             if candidate > dueDate && candidate >= today {
                 return candidate
             }
@@ -291,6 +344,94 @@ public struct Debt: Codable, Identifiable, Hashable, Sendable {
     /// Напоминание с учётом значения по умолчанию
     public var effectiveReminder: DebtReminder {
         reminder ?? .standard
+    }
+
+    /// Напоминание с учётом настроек этого вида записей: своё у записи важнее, иначе берётся значение вида
+    public func effectiveReminder(using settings: DebtTypeSettings) -> DebtReminder {
+        reminder ?? settings.setting(for: self).reminder
+    }
+
+    /// Перед оплатой нужно спросить сумму: у платежа она каждый раз другая, а платёж по кредиту можно внести другим
+    public var asksAmountBeforePaying: Bool {
+        !isPaid && ((isRecurringBill && isVariableAmount == true) || hasPaymentPlan)
+    }
+
+    /// Внесено частями: остаток меньше суммы до первого взноса
+    public var hasPartialPayments: Bool {
+        guard let original = originalAmount else { return false }
+        return original > amount + Debt.cent
+    }
+
+    /// Меньше этого остатка не бывает: так гасятся хвосты вроде 0,004 после пересчёта процентов
+    static let cent = 0.005
+
+    // MARK: - Оплата
+
+    /// Учитывает оплату. Без суммы вносится всё, что положено: остаток долга, ежемесячный платёж кредита, сумма платежа.
+    /// - кредит с графиком: остаток уменьшается на платёж за вычетом процентов, срок переходит на следующий месяц;
+    /// - повторяющийся платёж: срок переходит на следующий период, а запись остаётся активной;
+    /// - остальное: взнос уменьшает остаток, а когда остатка нет, запись закрывается.
+    /// Сумма не больше нуля ничего не меняет.
+    public mutating func applyPayment(_ payment: Double? = nil, now: Date = Date(), calendar: Calendar = .current) {
+        if let payment, !(payment > 0) { return }
+        lastPaidAt = now
+
+        if hasPaymentPlan {
+            applyPlanPayment(payment ?? monthlyPayment ?? amount, now: now, calendar: calendar)
+        } else if isRecurringBill {
+            let paid = payment ?? amount
+            lastPaidAmount = paid
+            if isVariableAmount == true, payment != nil {
+                amount = paid // в следующий раз ждём столько же, сколько вышло сейчас
+            }
+            advanceDueDate(now: now, calendar: calendar)
+        } else {
+            applyRepayment(payment ?? amount)
+        }
+    }
+
+    /// Взнос в счёт долга без смены срока: остаток уменьшается, а при полном погашении запись закрывается
+    public mutating func applyRepayment(_ payment: Double) {
+        guard payment > 0 else { return }
+        let applied = min(payment, amount)
+        lastPaidAmount = applied
+        if amount - applied > Debt.cent {
+            if originalAmount == nil {
+                originalAmount = amount
+            }
+            amount -= applied
+        } else {
+            isPaid = true
+        }
+    }
+
+    private mutating func applyPlanPayment(_ payment: Double, now: Date, calendar: Calendar) {
+        let interest = amount * max(0, interestRate ?? 0) / 100 / 12
+        let principal = min(max(payment - interest, 0), amount)
+        lastPaidAmount = payment
+        if let left = paymentsLeft {
+            paymentsLeft = max(0, left - 1)
+        }
+        if amount - principal <= Debt.cent || paymentsLeft == 0 {
+            isPaid = true
+            return
+        }
+        if originalAmount == nil {
+            originalAmount = amount
+        }
+        amount -= principal
+        advanceDueDate(now: now, calendar: calendar)
+    }
+
+    private mutating func advanceDueDate(now: Date, calendar: Calendar) {
+        guard let next = nextDueDate(now: now, calendar: calendar) else {
+            isPaid = true
+            return
+        }
+        if firstDueDate == nil {
+            firstDueDate = dueDate
+        }
+        dueDate = next
     }
 }
 

@@ -37,6 +37,12 @@ private struct CloudAction: Decodable {
     let category: String?
     let setting: String?
     let value: String?
+    /// Целые числа читаются как дробные: ответ с «2.5» не должен ломать весь разбор
+    let interval: Double?
+    let variableAmount: Bool?
+    let monthlyPayment: Double?
+    let interestRate: Double?
+    let paymentsLeft: Double?
 }
 
 private struct CloudOperation: Decodable {
@@ -186,7 +192,12 @@ enum CloudFinanceAssistant {
             "note": nullable(["type": "string"]),
             "category": nullable(["type": "string"]),
             "setting": nullable(enumeration(AIAction.ReminderSetting.allCases.map(\.rawValue))),
-            "value": nullable(["type": "string"])
+            "value": nullable(["type": "string"]),
+            "interval": nullable(["type": "integer"]),
+            "variable_amount": nullable(["type": "boolean"]),
+            "monthly_payment": nullable(["type": "number"]),
+            "interest_rate": nullable(["type": "number"]),
+            "payments_left": nullable(["type": "integer"])
         ]
         return [
             "type": "object",
@@ -219,9 +230,9 @@ enum CloudFinanceAssistant {
 
         Поле actions — изменения в приложении, о которых пользователь просит словами: «добавь долг…», «поставь напоминание на пятницу», «закрой долг Арама», «пополни копилку», «заморозь карту». Заполняй его только по прямой просьбе изменить данные или настройки, а не по вопросу или рассуждению. Пользователь увидит карточку со списком изменений и сам нажмёт «Применить», поэтому в reply одной-двумя фразами скажи, что предлагаешь. Если не хватает важного (срока долга, суммы, кто кому должен, даты и времени напоминания), не придумывай: спроси в reply, а actions оставь пустым. Не предлагай в одном ответе действие над тем, что создаётся в этом же ответе (например, пополнение новой копилки): это будет в следующем сообщении. Не повторяй то, что уже есть в списках ниже. Менять и удалять можно только то, что пользователь назвал. Если просьба не укладывается в виды действий, так и скажи в reply.
         Виды (kind) и нужные поля; остальные поля — null:
-        • add_debt — name (имя человека, банка или название платежа), amount, currency, date (срок), direction (owedToMe — мне должны, iOwe — я должен; для кредита и платежа не нужен), debt_type (person — человек, credit — кредит, bill — регулярный платёж: коммуналка, интернет, телефон, аренда, подписка, страховка, налог), bill_kind (только для bill: utilities — коммуналка, internet, phone, rent, subscription, insurance, tax, other), repeat_rule (только для bill: monthly, если пользователь не сказал иначе; never — разовый платёж), reminder (off, onDueDay, dayBefore, threeDaysBefore, weekBefore; если пользователь не просил, null). У bill name можно оставить null: возьмётся название вида платежа. Платежи — это не долги: «оплати интернет» значит платёж, а не долг человеку.
-        • change_debt — target и любые из name, amount, currency, date, reminder, а для платежа ещё bill_kind и repeat_rule.
-        • mark_debt_paid, mark_debt_unpaid, delete_debt — target. Для повторяющегося платежа mark_debt_paid значит «оплатил в этот раз»: срок сам перейдёт на следующий период.
+        • add_debt — name (имя человека, банка или название платежа), amount, currency, date (срок), direction (owedToMe — мне должны, iOwe — я должен; для кредита и платежа не нужен), debt_type (person — человек, credit — кредит, bill — регулярный платёж: коммуналка, интернет, телефон, аренда, подписка, страховка, налог), bill_kind (только для bill: utilities — коммуналка, internet, phone, rent, subscription, insurance, tax, other), repeat_rule (только для bill: monthly, если пользователь не сказал иначе; never — разовый платёж), reminder (off, onDueDay, dayBefore, threeDaysBefore, weekBefore; если пользователь не просил, null). У bill name можно оставить null: возьмётся название вида платежа. Платежи — это не долги: «оплати интернет» значит платёж, а не долг человеку. Дополнительно: note — заметка; для bill — interval (каждые N периодов: 3 при repeat_rule monthly значит раз в квартал) и variable_amount (true, если сумма каждый раз другая, как у коммуналки); для кредита — monthly_payment (платёж в месяц, в валюте currency), interest_rate (годовая ставка в процентах) и payments_left (сколько платежей осталось), а date тогда — ближайший платёж. Чего пользователь не назвал, оставляй null: подставятся его настройки для этого вида записей.
+        • change_debt — target и любые из name, amount, currency, date, reminder, note, а для платежа ещё bill_kind, repeat_rule, interval, variable_amount, а для кредита monthly_payment, interest_rate, payments_left.
+        • mark_debt_paid, mark_debt_unpaid, delete_debt — target. Для повторяющегося платежа mark_debt_paid значит «оплатил в этот раз»: срок сам перейдёт на следующий период. В mark_debt_paid можно указать amount (и currency): сколько вышло по платежу, сколько внесли по кредиту в этом месяце или какую часть долга вернули — остаток уменьшится. Без amount долг или платёж закрывается целиком.
         • add_goal — name, amount (цель по сумме), currency, date (срок, если назван).
         • change_goal — target и любые из name, amount, currency, date.
         • deposit_goal, withdraw_goal — target, amount, currency.
@@ -311,15 +322,36 @@ enum CloudFinanceAssistant {
             lines.append("Долгов нет.")
         } else {
             lines.append("Долги:")
+            let typeSettings = DebtTypeSettings.load()
             for debt in debts {
                 let direction = debt.type == .bill ? "к оплате" : (debt.isLent ? "мне должны" : "я должен")
-                let kind: String
+                var kind: String
                 switch debt.type {
-                case .credit: kind = "кредит"
+                case .credit:
+                    kind = "кредит"
+                    if let payment = debt.monthlyPayment {
+                        kind += ", платёж в месяц \(currency.format(payment))"
+                    }
+                    if let rate = debt.interestRate {
+                        kind += ", ставка \(GoalQuickAmounts.plain(rate))%"
+                    }
+                    if let left = debt.paymentsLeft {
+                        kind += ", осталось платежей \(left)"
+                    }
                 case .person: kind = "человек"
-                case .bill: kind = "платёж: \((debt.billKind ?? .other).rawValue), повтор: \((debt.repeatRule ?? .never).rawValue)"
+                case .bill:
+                    kind = "платёж: \((debt.billKind ?? .other).rawValue), повтор: \(debt.effectiveRepeat.rawValue)"
+                    if debt.effectiveInterval > 1 {
+                        kind += ", каждые \(debt.effectiveInterval)"
+                    }
+                    if debt.isVariableAmount == true {
+                        kind += ", сумма меняется"
+                    }
                 }
-                let status = debt.isPaid ? ", погашен" : ", напоминание: \(debt.effectiveReminder.rawValue)"
+                if debt.hasPartialPayments, let original = debt.originalAmount {
+                    kind += ", было \(currency.format(original))"
+                }
+                let status = debt.isPaid ? ", погашен" : ", напоминание: \(debt.effectiveReminder(using: typeSettings).rawValue)"
                 lines.append("• [d:\(AIActionExecutor.shortID(debt.id))] \(debt.name) (\(kind)) — \(direction) \(currency.format(debt.amount)), срок \(dateFormatter.string(from: debt.dueDate))\(status)")
             }
         }
@@ -387,8 +419,19 @@ enum CloudFinanceAssistant {
             note: clean(raw.note),
             category: clean(raw.category),
             setting: raw.setting.flatMap { AIAction.ReminderSetting(rawValue: $0) },
-            value: clean(raw.value)
+            value: clean(raw.value),
+            interval: wholeNumber(raw.interval),
+            variableAmount: raw.variableAmount,
+            monthlyPayment: raw.monthlyPayment,
+            interestRate: raw.interestRate,
+            paymentsLeft: wholeNumber(raw.paymentsLeft)
         )
+    }
+
+    /// Целое число из ответа модели; нечисло и слишком большие значения отбрасываются
+    private static func wholeNumber(_ value: Double?) -> Int? {
+        guard let value, value.isFinite, abs(value) < 100_000 else { return nil }
+        return Int(value.rounded())
     }
 
     /// Некоторые модели оборачивают JSON в блок кода ```json … ``` даже при заданной схеме
