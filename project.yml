@@ -36,7 +36,8 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGNING_REQUIRED: "NO"
         CODE_SIGNING_ALLOWED: "NO"
-        MARKETING_VERSION: "1.0.0"
+        # Версия 1.0 уже утверждена в App Store Connect и закрыта для новых сборок (ошибка «Invalid Pre-Release Train»)
+        MARKETING_VERSION: "1.1.0"
         CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
   SamFinanceTests:
