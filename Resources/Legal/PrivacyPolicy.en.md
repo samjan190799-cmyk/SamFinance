@@ -35,7 +35,8 @@ Data files are protected by iOS and open only while the phone is unlocked. They 
 
 - your question and the recent messages of the conversation;
 - screenshots you attach (receipts, statements, bank apps) and the text recognized on them on your phone;
-- a summary of your records: cards (purpose, last 4 digits, balance), spending and income for 30 days by category, up to 60 latest transactions (date, amount, title, category, card), debts and payments (name, amount, due date, repeat, reminder, loan terms: monthly payment, rate, payments left; notes on debts are not sent), savings goals (name, target, amount saved, deadline), your own reminders (text, date, repeat), the current date, language and currency.
+- a summary of your records: cards (purpose, last 4 digits, balance), spending and income for 30 days by category, up to 60 latest transactions (date, amount, title, category, card), debts and payments (name, amount, due date, repeat, reminder, loan terms: monthly payment, rate, payments left; notes on debts are not sent), savings goals (name, target, amount saved, deadline), your own reminders (text, date, repeat), the current date, language and currency;
+- results of calculations over your history: if a question needs a period or filter that is not in the summary (for example, "how much did I spend in September"), the app works out the answer on the phone and sends only the results: totals and number of transactions, breakdowns by category, merchant, month, week, day or card, and up to 25 transactions per query (date, amount, title, category, card).
 
 Not sent: full card numbers, CVV and cardholder names. Bank SMS that the app recognizes on the phone never go to the cloud. The key is used only to sign in to the chosen service.
 

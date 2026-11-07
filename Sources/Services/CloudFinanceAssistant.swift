@@ -11,6 +11,8 @@ struct CloudReply {
     let text: String
     let operations: [ParsedSMSTransaction]
     let actions: [AIAction]
+    /// Запросы к данным на телефоне. Если они есть, текст ответа — заглушка до результатов, и показывать его не нужно
+    var queries: [DataQuery] = []
 }
 
 /// Ответ модели строго по JSON-схеме из запроса
@@ -19,6 +21,23 @@ private struct CloudEnvelope: Decodable {
     let operations: [CloudOperation]
     /// Отсутствует в ответах, где модель не знает о действиях
     let actions: [CloudAction]?
+    /// Отсутствует в ответах, где модель не знает о запросах к данным
+    let queries: [CloudQuery]?
+}
+
+/// Запрос модели к данным пользователя. Пустая строка, none и 0 означают «не задано»: так схема обходится без null.
+private struct CloudQuery: Decodable {
+    let kind: String
+    let type: String?
+    let dateFrom: String?
+    let dateTo: String?
+    let category: String?
+    let merchant: String?
+    let cardLast4: String?
+    let groupBy: String?
+    let sort: String?
+    /// Целые числа читаются как дробные: ответ с «5.0» не должен ломать весь разбор
+    let limit: Double?
 }
 
 private struct CloudAction: Decodable {
@@ -84,8 +103,32 @@ enum CloudFinanceAssistant {
             }
         }
 
-        let prompt = makePrompt(question: question, images: prepared, recognizedText: recognizedText, history: history)
+        var prompt = makePrompt(question: question, images: prepared, recognizedText: recognizedText, history: history)
         let schema = responseSchema()
+
+        // Модель может попросить данные, которых нет в подсказке (другой период, фильтр). Приложение их считает
+        // и присылает следующим сообщением; так повторяется не больше `maxQueryRounds` раз, дальше нужен ответ.
+        var rounds = 0
+        while true {
+            let reply = try await send(prompt, schema: schema, provider: provider, apiKey: apiKey)
+            guard !reply.queries.isEmpty else { return reply }
+
+            // Заглушка «Считаю…» вместо ответа пользователю не показывается
+            guard rounds < maxQueryRounds else {
+                return CloudReply(
+                    text: String(localized: "Не получилось посчитать это за несколько запросов. Уточните период или условие."),
+                    operations: [],
+                    actions: []
+                )
+            }
+            rounds += 1
+            try Task.checkCancellation()
+            prompt = followUp(after: prompt, reply: reply, results: results(for: reply.queries), isLast: rounds == maxQueryRounds)
+        }
+    }
+
+    /// Один обмен с выбранным сервисом: запрос по общей схеме и разбор ответа
+    private static func send(_ prompt: AIPrompt, schema: [String: Any], provider: AIProvider, apiKey: String) async throws -> CloudReply {
         let text: String
         switch provider {
         case .claude:
@@ -96,6 +139,67 @@ enum CloudFinanceAssistant {
             text = try await GeminiAPI.send(body: GeminiAPI.requestBody(prompt, schema: schema), apiKey: apiKey)
         }
         return try parse(text, provider: provider)
+    }
+
+    // MARK: - Запросы к данным
+
+    /// Сколько раз модель может попросить данные после первого ответа
+    private static let maxQueryRounds = 2
+    /// Сколько запросов выполняется за один раз; лишние отбрасываются
+    private static let maxQueriesPerRound = 4
+    /// Длинный ответ режется: он уходит в облако и не должен раздувать запрос
+    private static let maxResultsLength = 6000
+
+    /// Дата в тексте для модели: день, месяц, год
+    private static func dayFormatter() -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.dateFormat = "dd.MM.yyyy"
+        return formatter
+    }
+
+    /// Выполняет запросы модели по данным на телефоне и собирает результаты в один текст
+    private static func results(for queries: [DataQuery]) -> String {
+        let financeService = FinanceService.shared
+        let currency = CurrencyManager.shared
+        let formatter = dayFormatter()
+
+        var blocks: [String] = []
+        for (index, query) in queries.prefix(maxQueriesPerRound).enumerated() {
+            let result = DataQueryEngine.run(query, transactions: financeService.transactions, cards: financeService.cards)
+            blocks.append(DataQueryEngine.render(
+                result,
+                number: index + 1,
+                money: { currency.format($0) },
+                date: { formatter.string(from: $0) }
+            ))
+        }
+        return String(blocks.joined(separator: "\n\n").prefix(maxResultsLength))
+    }
+
+    /// Продолжение переписки с результатами запросов: вопрос, затем то, что запросила модель, затем данные
+    static func followUp(after prompt: AIPrompt, reply: CloudReply, results: String, isLast: Bool) -> AIPrompt {
+        let formatter = dayFormatter()
+        let question = [prompt.leadingText, prompt.text].compactMap { $0 }.joined(separator: "\n\n")
+        let requested = reply.queries
+            .map { query in DataQueryEngine.describe(query, date: { formatter.string(from: $0) }) }
+            .joined(separator: "; ")
+
+        var turns = prompt.turns
+        turns.append(CloudTurn(isUser: true, text: question))
+        turns.append(CloudTurn(isUser: false, text: "Запросил данные: \(requested)"))
+
+        let ending = isLast
+            ? "Новых запросов больше нет: queries — пустой массив."
+            : "Если данных всё ещё не хватает, можно запросить ещё, иначе queries — пустой массив."
+        let text = """
+        Результаты запросов к данным на телефоне (суммы в валюте отображения):
+        \(results)
+
+        Ответь пользователю на его вопрос по этим данным, коротко и без Markdown. Операции и действия заполняй, только если пользователь просил что-то записать или изменить. \(ending)
+        """
+        // Скриншоты уже разобраны на первом шаге, повторно они не нужны
+        return AIPrompt(system: prompt.system, turns: turns, leadingText: nil, images: [], text: text)
     }
 
     // MARK: - Запрос
@@ -161,9 +265,36 @@ enum CloudFinanceAssistant {
             "properties": [
                 "reply": ["type": "string"],
                 "operations": ["type": "array", "items": operation] as JSON,
-                "actions": ["type": "array", "items": actionSchema()] as JSON
+                "actions": ["type": "array", "items": actionSchema()] as JSON,
+                "queries": ["type": "array", "items": querySchema()] as JSON
             ] as JSON,
-            "required": ["reply", "operations", "actions"],
+            "required": ["reply", "operations", "actions", "queries"],
+            "additionalProperties": false
+        ]
+    }
+
+    /// Один запрос к данным на телефоне: плоский объект без null. Пустая строка, none и 0 означают «не задано».
+    private static func querySchema() -> JSON {
+        func enumeration(_ values: [String]) -> JSON {
+            ["type": "string", "enum": values]
+        }
+
+        let properties: JSON = [
+            "kind": enumeration(DataQuery.Kind.allCases.map(\.rawValue)),
+            "type": enumeration(TransactionType.allCases.map(\.rawValue)),
+            "date_from": ["type": "string"] as JSON,
+            "date_to": ["type": "string"] as JSON,
+            "category": ["type": "string"] as JSON,
+            "merchant": ["type": "string"] as JSON,
+            "card_last4": ["type": "string"] as JSON,
+            "group_by": enumeration(["none"] + DataQuery.GroupBy.allCases.map(\.rawValue)),
+            "sort": enumeration(DataQuery.Sort.allCases.map(\.rawValue)),
+            "limit": ["type": "integer"] as JSON
+        ]
+        return [
+            "type": "object",
+            "properties": properties,
+            "required": properties.keys.sorted(),
             "additionalProperties": false
         ]
     }
@@ -244,6 +375,13 @@ enum CloudFinanceAssistant {
         • set_currency — value (AMD, RUB, USD или EUR).
         • set_reminder_setting — setting и value: для debts, goal_deadlines, card_expiry, daily_log значение «on» или «off»; для goal_saving — «off», «weekly» или «monthly»; для reminder_time и daily_log_time — «ЧЧ:ММ».
         target — номер из квадратных скобок в списках ниже ([d:…] долг, [g:…] копилка, [r:…] напоминание, [t:…] операция), для карты — последние 4 цифры. Номера копируй точно, не придумывай их; если номера нет, напиши название. Даты и время отсчитывай от текущего времени и пиши в ISO 8601 с часовым поясом пользователя; если у напоминания время не названо, возьми 10:00. Если валюта не названа, currency — null: сумма в валюте отображения.
+
+        Поле queries — запросы к данным на телефоне. В списках ниже только последние 30 дней, 60 операций и итоги по ним. Если для ответа нужен другой период, фильтр (категория, магазин, карта) или точный итог («сколько я потратил в сентябре», «на кофе за полгода», «самая крупная покупка в этом году», «сравни октябрь и ноябрь»), не считай по памяти и не угадывай: верни queries (не больше 4), reply оставь коротким («Считаю…»), а operations и actions пустыми. Приложение выполнит запросы и пришлёт результаты следующим сообщением, после чего ответь по ним. Если данных в списках достаточно, queries — пустой массив.
+        Виды (kind):
+        • sum — итог: сумма, число операций, среднее и самая крупная операция.
+        • breakdown — разбивка по group_by (category, merchant, month, week, day, card): сумма и число операций по каждой группе. limit — сколько групп (0 — по умолчанию: 10, а для month, week и day все).
+        • list — список операций. sort: newest (сначала новые) или largest (сначала крупные); limit — до 25 (0 — 10).
+        Условия: type — expense (траты) или income (доходы); date_from и date_to — даты ГГГГ-ММ-ДД, включительно (от текущей даты считай «этот месяц», «прошлый год», «последние 3 месяца»); category — название из списка категорий выше; merchant — часть названия магазина или получателя; card_last4 — последние 4 цифры карты. Незаданное условие: пустая строка, для group_by — none, для limit — 0. Для сравнения периодов пришли по одному sum на каждый период. После результатов можно запросить ещё, но не больше двух раз; потом отвечай. Суммы в результатах — в той же валюте отображения, что и в списках.
 
         \(financeContext())
         """
@@ -398,7 +536,35 @@ enum CloudFinanceAssistant {
             .compactMap { transaction(from: $0) }
             .filter { seen.insert($0.dedupKey).inserted }
         let actions = (envelope.actions ?? []).compactMap { action(from: $0) }
-        return CloudReply(text: envelope.reply, operations: operations, actions: actions)
+        let queries = (envelope.queries ?? []).compactMap { query(from: $0) }
+        return CloudReply(text: envelope.reply, operations: operations, actions: actions, queries: queries)
+    }
+
+    /// Запрос модели в виде, который понимает движок; неизвестный вид запроса отбрасывается
+    private static func query(from raw: CloudQuery) -> DataQuery? {
+        guard let kind = DataQuery.Kind(rawValue: raw.kind) else { return nil }
+        var query = DataQuery(kind: kind)
+        query.type = raw.type.flatMap { TransactionType(rawValue: $0) } ?? .expense
+        query.from = raw.dateFrom.flatMap { parseISO($0) }
+        query.to = raw.dateTo.flatMap { endOfPeriod($0) }
+        query.category = clean(raw.category)
+        query.merchant = clean(raw.merchant)
+        query.cardLast4 = raw.cardLast4.flatMap { value -> String? in
+            let digits = value.filter(\.isNumber)
+            return digits.count == 4 ? digits : nil
+        }
+        query.groupBy = raw.groupBy.flatMap { DataQuery.GroupBy(rawValue: $0) }
+        query.sort = raw.sort.flatMap { DataQuery.Sort(rawValue: $0) }
+        query.limit = wholeNumber(raw.limit)
+        return query
+    }
+
+    /// Конец периода: если названа только дата, то это конец того дня, иначе названный момент
+    private static func endOfPeriod(_ raw: String) -> Date? {
+        guard let date = parseISO(raw) else { return nil }
+        guard raw.trimmingCharacters(in: .whitespacesAndNewlines).count <= 10 else { return date }
+        let calendar = Calendar.current
+        return calendar.date(byAdding: DateComponents(day: 1, second: -1), to: calendar.startOfDay(for: date)) ?? date
     }
 
     /// Предложение модели в виде, который понимает исполнитель; неизвестный вид действия отбрасывается

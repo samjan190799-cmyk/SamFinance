@@ -403,7 +403,7 @@ final class CloudActionParsingTests: XCTestCase {
 
     func testSchemaListsEveryActionFieldAsRequired() throws {
         let schema = CloudFinanceAssistant.responseSchema()
-        XCTAssertEqual(Set(schema["required"] as? [String] ?? []), ["reply", "operations", "actions"])
+        XCTAssertEqual(Set(schema["required"] as? [String] ?? []), ["reply", "operations", "actions", "queries"])
 
         let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
         let actions = try XCTUnwrap(properties["actions"] as? [String: Any])
