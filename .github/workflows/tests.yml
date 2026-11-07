@@ -14,7 +14,8 @@ permissions:
 jobs:
   test:
     name: Run Unit Tests
-    runs-on: macos-14
+    # macos-14 GitHub больше не поддерживает («The configuration 'macos-14-arm64-us-default' is not supported»)
+    runs-on: macos-latest
 
     steps:
       - name: Checkout Repository
