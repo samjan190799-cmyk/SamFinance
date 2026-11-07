@@ -275,30 +275,54 @@ public final class PurchasePromptService {
     }
 }
 
-/// Принимает нажатия на кнопки подсказки и показывает уведомления, пока приложение открыто
+/// Обработчик завершения из UserNotifications. Его вызывают на главном потоке: если вызвать на фоновом,
+/// после нажатия на уведомление при запуске UIKit падает в -[UIApplication _performBlockAfterCATransactionCommitSynchronizes:]
+/// (NSAssertionHandler, лог падения сборки 18). Сам обработчик не Sendable, поэтому обёртка помечена вручную.
+private struct MainThreadCompletion<Value: Sendable>: @unchecked Sendable {
+    let call: (Value) -> Void
+}
+
+/// Принимает нажатия на кнопки подсказки и показывает уведомления, пока приложение открыто.
+/// Методы с обработчиком завершения, а не async: async-вариант Swift вызывает обработчик там, где метод закончился,
+/// то есть на фоновом потоке. @MainActor на async-методах не собирается в Swift 6: UNNotification и UNNotificationResponse не Sendable.
+/// Поэтому всё нужное достаётся из уведомления заранее в Sendable-значения, а работа и обработчик уходят на главный актор.
 final class PurchaseNotificationDelegate: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
     static let shared = PurchaseNotificationDelegate()
 
-    // Оба метода выполняются на главном акторе. Swift превращает async-метод в вызов с обработчиком завершения
-    // и вызывает этот обработчик там, где метод закончился. Без @MainActor это фоновый поток, а после нажатия
-    // на уведомление при запуске UIKit обновляет снимок окна и на фоновом потоке падает с NSAssertionHandler
-    // в -[UIApplication _performBlockAfterCATransactionCommitSynchronizes:].
-    @MainActor
-    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .list, .sound]
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        let completion = MainThreadCompletion(call: completionHandler)
+        Task { @MainActor in
+            completion.call([.banner, .list, .sound])
+        }
     }
 
-    @MainActor
-    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
         let action = response.actionIdentifier
         let content = response.notification.request.content
+        let completion = MainThreadCompletion<Void>(call: { _ in completionHandler() })
+
         // Напоминания о долгах, копилках и картах обрабатывает свой сервис
         if content.categoryIdentifier.hasPrefix(ReminderID.prefix) {
             let target = content.userInfo[ReminderID.targetKey] as? String ?? ""
-            ReminderService.shared.handle(actionIdentifier: action, target: target)
+            Task { @MainActor in
+                ReminderService.shared.handle(actionIdentifier: action, target: target)
+                completion.call(())
+            }
             return
         }
+
         let context = PurchaseContext(info: content.userInfo)
-        PurchasePromptService.shared.handle(actionIdentifier: action, context: context)
+        Task { @MainActor in
+            PurchasePromptService.shared.handle(actionIdentifier: action, context: context)
+            completion.call(())
+        }
     }
 }
