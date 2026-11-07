@@ -786,3 +786,4 @@
 "Вам пока никто не должен." = "Nobody owes you anything right now.";
 "У вас нет долгов и кредитов." = "You have no debts or loans.";
 "Не получилось посчитать это за несколько запросов. Уточните период или условие." = "I could not work that out with a few queries. Please narrow down the period or the condition.";
+"Карточка с подтверждением не сохранилась. Попросите ещё раз." = "The confirmation card was not kept. Please ask again.";

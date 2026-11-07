@@ -23,6 +23,7 @@ Everything listed here stays on your device. We have no access to it.
 - **Savings goals:** name, target, deadline, log of deposits and withdrawals.
 - **Reminders:** text, date and time, repeat, note.
 - **Settings:** language, currency, chosen AI service, automation rules (remembered merchant categories, your surname used to recognize transfers to yourself).
+- **AI chat history:** the text of your questions and the answers (the last 200 messages), so the conversation continues after a restart. Screenshots and confirmation cards are not kept. "Start over" and resetting all data erase the history.
 - **AI keys:** a key you paste is kept in this device's Keychain and does not move to other devices.
 
 Data files are protected by iOS and open only while the phone is unlocked. They may be included in iPhone backups that you make yourself (iCloud or a computer). Keychain items are not part of backups.

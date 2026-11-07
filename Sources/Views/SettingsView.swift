@@ -407,6 +407,8 @@ struct SettingsView: View {
     
     private func resetAllData() {
         financeService.resetAllData()
+        // Переписка с ИИ — часть данных приложения: в ней суммы и названия из операций
+        AIChatStore.shared.reset()
         HapticManager.shared.trigger(.success)
     }
 }

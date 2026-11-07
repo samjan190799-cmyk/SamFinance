@@ -117,8 +117,46 @@ final class AIChatStore {
     /// Текущий разбор скриншотов или запрос к облачному ИИ: его можно отменить кнопкой в чате
     @ObservationIgnored private var workTask: Task<Void, Never>?
 
-    private init() {
-        messages = [Self.greeting()]
+    /// Где лежит переписка между запусками
+    @ObservationIgnored private let history: ChatHistoryStore
+
+    /// Переписка для снимков App Store и ролика не читается и не пишется: демо-диалог не должен попасть в настоящий файл
+    private static var persistsHistory: Bool {
+        ScreenshotMode.scene == nil && !ScreenshotMode.isTour
+    }
+
+    init(history: ChatHistoryStore = .standard) {
+        self.history = history
+        let saved = Self.persistsHistory ? history.load() : []
+        messages = [Self.greeting()] + Self.restored(saved)
+    }
+
+    /// Прежние реплики после приветствия. Карточка, которую не успели подтвердить, не возвращается: об этом сказано в тексте.
+    private static func restored(_ stored: [StoredChatMessage]) -> [ChatMessage] {
+        stored.map { item in
+            var text = item.text
+            if item.hadPendingCard {
+                text += "\n\n" + String(localized: "Карточка с подтверждением не сохранилась. Попросите ещё раз.")
+            }
+            return ChatMessage(role: item.isUser ? .user : .assistant, text: text)
+        }
+    }
+
+    /// Записывает переписку без приветствия. Вызывается после каждого нового сообщения.
+    private func persist() {
+        guard Self.persistsHistory else { return }
+        let greetingText = Self.greeting().text
+        let stored = messages
+            .filter { !($0.role == .assistant && $0.text == greetingText) }
+            .map { message in
+                StoredChatMessage(
+                    isUser: message.role == .user,
+                    text: message.text,
+                    hadPendingCard: (message.draft.map { !$0.isSaved } ?? false) || (message.actionDraft.map { !$0.isApplied } ?? false),
+                    date: Date()
+                )
+            }
+        history.save(stored)
     }
 
     private static func greeting() -> ChatMessage {
@@ -150,6 +188,9 @@ final class AIChatStore {
         messages = [Self.greeting()]
         workingText = nil
         pendingConsent = nil
+        if Self.persistsHistory {
+            history.clear()
+        }
     }
 
     /// Прерывает запрос, который идёт слишком долго. Ответ, который придёт позже, в чат не попадёт.
@@ -174,6 +215,7 @@ final class AIChatStore {
         guard !trimmed.isEmpty, !isWorking else { return }
         let history = cloudHistory()
         messages.append(ChatMessage(role: .user, text: trimmed))
+        persist()
 
         // Вставленный текст СМС разбирается на телефоне и сразу становится черновиком
         let found = Self.bankOperations(in: trimmed)
@@ -232,6 +274,7 @@ final class AIChatStore {
         let history = cloudHistory()
         let label = images.count == 1 ? String(localized: "Скриншот") : String(localized: "Скриншоты: \(images.count)")
         messages.append(ChatMessage(role: .user, text: label, thumbnails: images.compactMap { Self.thumbnail(from: $0) }))
+        persist()
 
         var texts: [String] = []
         for data in images {
@@ -425,6 +468,7 @@ final class AIChatStore {
         let made = makeDraft(found, intro: intro)
         HapticManager.shared.trigger(.success)
         messages.append(ChatMessage(role: .assistant, text: made.text, draft: made.draft))
+        persist()
     }
 
     /// Ответ облачного ИИ с операциями, изменениями приложения или тем и другим в одном сообщении
@@ -447,6 +491,7 @@ final class AIChatStore {
         }
         HapticManager.shared.trigger(.success)
         messages.append(ChatMessage(role: .assistant, text: text, draft: draft, actionDraft: actionDraft))
+        persist()
     }
 
     func toggle(itemID: UUID, in messageID: UUID) {
@@ -546,5 +591,6 @@ final class AIChatStore {
 
     private func reply(_ text: String) {
         messages.append(ChatMessage(role: .assistant, text: text))
+        persist()
     }
 }
