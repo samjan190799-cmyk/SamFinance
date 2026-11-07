@@ -94,6 +94,12 @@ jobs:
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             2>&1 | tee build/archive.log
 
+      - name: Show Archived Version
+        # Диагностика: какая версия и номер сборки реально попали в архив (App Store отклоняет уже закрытые версии)
+        run: |
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" -c "Print :CFBundleVersion" \
+            build/SamFinance.xcarchive/Products/Applications/SamFinance.app/Info.plist || true
+
       - name: Export and Upload to App Store Connect
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}

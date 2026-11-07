@@ -16,6 +16,11 @@ targets:
       path: Sources/Info.plist
       properties:
         CFBundleDisplayName: Hashiv
+        # Версия и номер сборки заданы явно. xcodegen при каждой генерации перезаписывает Info.plist, и без этих ключей
+        # в бандле оставалась версия 1.0 при MARKETING_VERSION 1.1.0: TestFlight отклонял загрузку («Invalid Pre-Release Train»).
+        # Версию менять здесь и в MARKETING_VERSION ниже; номер сборки CI подставляет сам (CURRENT_PROJECT_VERSION).
+        CFBundleShortVersionString: "1.1.0"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleLocalizations:
           - ru
           - en
