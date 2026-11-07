@@ -40,6 +40,19 @@ enum AppTab: Int, CaseIterable, Identifiable, Hashable {
     }
 }
 
+/// Сплошная полоса фона высотой со строку состояния: прокрутка скрывается под ней, а не просвечивает под часами и Wi-Fi.
+/// Высоту берёт из верхнего отступа безопасной области, поэтому подходит и к вырезу, и к островку, и к обычной строке.
+private struct StatusBarCover: View {
+    var body: some View {
+        GeometryReader { proxy in
+            Theme.background
+                .frame(height: proxy.safeAreaInsets.top)
+        }
+        .ignoresSafeArea(edges: .top)
+        .allowsHitTesting(false)
+    }
+}
+
 /// Главный контейнер приложения: пять разделов в нижней панели, ИИ — один из них.
 struct ContentView: View {
     @State private var financeService = FinanceService.shared
@@ -58,6 +71,13 @@ struct ContentView: View {
             .transition(.opacity.combined(with: .scale(scale: 0.985)))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .monoScreen()
+            // Прокрутка уходит под системные часы и значки: полоса фона не даёт им налезать на плитки и текст.
+            // В ролике для магазина сверху своя полоса с подписью, там накладка не нужна
+            .overlay(alignment: .top) {
+                if !ScreenshotMode.isTour {
+                    StatusBarCover()
+                }
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if !isKeyboardVisible {
                     tabBar

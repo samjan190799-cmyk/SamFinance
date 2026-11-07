@@ -324,46 +324,67 @@ struct DebtRowView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 14) {
-                badge
+            VStack(spacing: 0) {
+                HStack(spacing: 14) {
+                    badge
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(debt.name)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(debt.isPaid ? Theme.textTertiary : .white)
-                        .strikethrough(debt.isPaid)
-                        .lineLimit(1)
-                    Text(subtitle)
-                        .font(.system(size: 13))
-                        .foregroundColor(isOverdue ? Theme.danger : Theme.textTertiary)
-                        .lineLimit(2)
-                    if let note = debt.note, !note.isEmpty {
-                        Text(note)
-                            .font(.system(size: 12))
-                            .foregroundColor(Theme.textTertiary)
-                            .lineLimit(1)
+                    // Рядом с суммой и кнопкой на экране 6,1" остаётся колонка около 110 pt:
+                    // сюда идёт только короткое (название, срок, «просрочено»), остальное — строкой ниже на всю ширину
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(debt.name)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(debt.isPaid ? Theme.textTertiary : .white)
+                            .strikethrough(debt.isPaid)
+                            .lineLimit(2)
+                        Text(headline)
+                            .font(.system(size: 13))
+                            .foregroundColor(isOverdue ? Theme.danger : Theme.textTertiary)
+                            .lineLimit(2)
+                        if isOverdue {
+                            Text(String(localized: "просрочено"))
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(Theme.danger)
+                                .lineLimit(1)
+                        }
+                        if let note = debt.note, !note.isEmpty {
+                            Text(note)
+                                .font(.system(size: 12))
+                                .foregroundColor(Theme.textTertiary)
+                                .lineLimit(1)
+                        }
                     }
+
+                    Spacer(minLength: 8)
+
+                    Text("\(debt.isLent ? "+" : "−")\(amountPrefix)\(CurrencyManager.shared.format(debt.amount))")
+                        .font(Theme.number(16))
+                        .foregroundColor(amountColor)
+                        .strikethrough(debt.isPaid)
+
+                    Button(action: onTogglePaid) {
+                        Image(systemName: debt.isPaid ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 22))
+                            .foregroundColor(debt.isPaid ? Theme.accent : Theme.textTertiary)
+                            .contentTransition(.symbolEffect(.replace))
+                            .frame(width: 44, height: 44)
+                    }
+                    // Кнопка только в своей рамке: в List без этого нажатие на всю строку отмечало бы погашение
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel(payAccessibilityLabel)
                 }
+                .frame(minHeight: 72)
 
-                Spacer(minLength: 8)
-
-                Text("\(debt.isLent ? "+" : "−")\(amountPrefix)\(CurrencyManager.shared.format(debt.amount))")
-                    .font(Theme.number(16))
-                    .foregroundColor(amountColor)
-                    .strikethrough(debt.isPaid)
-
-                Button(action: onTogglePaid) {
-                    Image(systemName: debt.isPaid ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 22))
-                        .foregroundColor(debt.isPaid ? Theme.accent : Theme.textTertiary)
-                        .contentTransition(.symbolEffect(.replace))
-                        .frame(width: 44, height: 44)
+                if !details.isEmpty {
+                    // Отступ слева: значок 44 и промежуток 14, чтобы строка стояла ровно под названием
+                    Text(details)
+                        .font(.system(size: 13))
+                        .foregroundColor(Theme.textTertiary)
+                        .lineLimit(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 58)
+                        .padding(.bottom, 12)
                 }
-                // Кнопка только в своей рамке: в List без этого нажатие на всю строку отмечало бы погашение
-                .buttonStyle(.borderless)
-                .accessibilityLabel(payAccessibilityLabel)
             }
-            .frame(minHeight: 72)
             .contentShape(Rectangle())
             .onTapGesture(perform: onEdit)
             MonoDivider()
@@ -407,23 +428,35 @@ struct DebtRowView: View {
         CurrencyManager.shared.format(value)
     }
 
-    private var subtitle: String {
-        let date = debt.dueDate.formatted(.dateTime.day().month(.abbreviated))
+    /// Короткая подпись под названием: что это и до какого числа. Год виден, если срок не в этом году
+    private var headline: String {
+        let date = DebtDateText.due(debt.dueDate)
         if debt.type == .bill {
-            return billSubtitle(date: date)
+            let kind = (debt.billKind ?? .other).title
+            if debt.isPaid {
+                return String(localized: "\(kind) · оплачено \(date)")
+            }
+            return [kind, String(localized: "до \(date)")].joined(separator: " · ")
         }
         if debt.isPaid {
             return String(localized: "Погашено · \(date)")
         }
-        var parts = [directionText, String(localized: "до \(date)")]
-        if isOverdue {
-            parts.append(String(localized: "просрочено"))
-        }
-        if debt.type == .credit {
-            parts += creditDetails
-        }
-        if debt.hasPartialPayments, let original = debt.originalAmount {
-            parts.append(String(localized: "из \(money(original))"))
+        return [directionText, String(localized: "до \(date)")].joined(separator: " · ")
+    }
+
+    /// Остальные сведения: график кредита, остаток, повтор платежа, напоминание. Пустая строка у закрытых записей
+    private var details: String {
+        guard !debt.isPaid else { return "" }
+        var parts: [String] = []
+        if debt.type == .bill {
+            parts += billDetails
+        } else {
+            if debt.type == .credit {
+                parts += creditDetails
+            }
+            if debt.hasPartialPayments, let original = debt.originalAmount {
+                parts.append(String(localized: "из \(money(original))"))
+            }
         }
         // Выключенное напоминание видно сразу: иначе можно пропустить срок, думая, что приложение напомнит
         if !remindsAboutDebt {
@@ -448,16 +481,9 @@ struct DebtRowView: View {
         return parts
     }
 
-    /// «Интернет · до 5 нояб. · каждый месяц · оплачено 5 окт.»
-    private func billSubtitle(date: String) -> String {
-        let kind = (debt.billKind ?? .other).title
-        if debt.isPaid {
-            return String(localized: "\(kind) · оплачено \(date)")
-        }
-        var parts = [kind, String(localized: "до \(date)")]
-        if isOverdue {
-            parts.append(String(localized: "просрочено"))
-        }
+    /// «каждый месяц · из 5 000 · оплачено 5 окт.» у платежа
+    private var billDetails: [String] {
+        var parts: [String] = []
         if debt.isRecurringBill {
             parts.append(debt.effectiveRepeat.title(every: debt.effectiveInterval).lowercased())
         }
@@ -470,10 +496,18 @@ struct DebtRowView: View {
                 parts.append(money(paid))
             }
         }
-        if !remindsAboutDebt {
-            parts.append(String(localized: "без напоминания"))
+        return parts
+    }
+}
+
+/// Срок в строке долга: «4 нояб.», а если срок не в этом году, то с годом: «15 окт. 2027».
+/// Без года опечатка в году прячет просрочку: срок выглядит как будто уже или ещё не наступил.
+enum DebtDateText {
+    static func due(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
+        if calendar.isDate(date, equalTo: now, toGranularity: .year) {
+            return date.formatted(.dateTime.day().month(.abbreviated))
         }
-        return parts.joined(separator: " · ")
+        return date.formatted(.dateTime.day().month(.abbreviated).year())
     }
 }
 
