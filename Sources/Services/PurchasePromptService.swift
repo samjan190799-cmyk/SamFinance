@@ -279,20 +279,26 @@ public final class PurchasePromptService {
 final class PurchaseNotificationDelegate: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
     static let shared = PurchaseNotificationDelegate()
 
+    // Оба метода выполняются на главном акторе. Swift превращает async-метод в вызов с обработчиком завершения
+    // и вызывает этот обработчик там, где метод закончился. Без @MainActor это фоновый поток, а после нажатия
+    // на уведомление при запуске UIKit обновляет снимок окна и на фоновом потоке падает с NSAssertionHandler
+    // в -[UIApplication _performBlockAfterCATransactionCommitSynchronizes:].
+    @MainActor
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
         [.banner, .list, .sound]
     }
 
+    @MainActor
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let action = response.actionIdentifier
         let content = response.notification.request.content
         // Напоминания о долгах, копилках и картах обрабатывает свой сервис
         if content.categoryIdentifier.hasPrefix(ReminderID.prefix) {
             let target = content.userInfo[ReminderID.targetKey] as? String ?? ""
-            await ReminderService.shared.handle(actionIdentifier: action, target: target)
+            ReminderService.shared.handle(actionIdentifier: action, target: target)
             return
         }
         let context = PurchaseContext(info: content.userInfo)
-        await PurchasePromptService.shared.handle(actionIdentifier: action, context: context)
+        PurchasePromptService.shared.handle(actionIdentifier: action, context: context)
     }
 }
