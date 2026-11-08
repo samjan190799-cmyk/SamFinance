@@ -14,42 +14,29 @@ final class AIProviderTests: XCTestCase {
     }
 
     private func resetPreferences() {
-        let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: AIProvider.storageKey)
         for provider in AIProvider.allCases {
-            provider.setCustomModel("")
             provider.setConsent(false)
         }
     }
 
-    // MARK: - Ключи и модели
+    // MARK: - Сервис и модель из сборки
 
-    func testKeyFormatPerProvider() {
-        XCTAssertTrue(AIProvider.claude.isPlausibleKey("sk-ant-api03-abcdef"))
-        XCTAssertFalse(AIProvider.claude.isPlausibleKey("sk-proj-abcdef"))
-        XCTAssertTrue(AIProvider.openAI.isPlausibleKey("sk-proj-abcdef"))
-        XCTAssertFalse(AIProvider.openAI.isPlausibleKey("sk-ant-api03-abcdef"))
-        XCTAssertTrue(AIProvider.gemini.isPlausibleKey("AIzaSyD-1234567890abcdefghij"))
-        XCTAssertFalse(AIProvider.gemini.isPlausibleKey("short"))
-        XCTAssertFalse(AIProvider.claude.isPlausibleKey("sk-ant-with space"))
+    func testSelectedProviderComesFromTheBuild() {
+        XCTAssertEqual(AIProvider.selected, AIConfig.standard.provider)
     }
 
-    func testDefaultAndCustomModel() {
-        XCTAssertEqual(AIProvider.openAI.model, AIProvider.openAI.defaultModel)
-        AIProvider.openAI.setCustomModel("  my-model  ")
-        XCTAssertEqual(AIProvider.openAI.model, "my-model")
-        XCTAssertEqual(AIProvider.openAI.customModel, "my-model")
-        AIProvider.openAI.setCustomModel("")
-        XCTAssertNil(AIProvider.openAI.customModel)
-        XCTAssertEqual(AIProvider.openAI.model, AIProvider.openAI.defaultModel)
+    func testModelIsStandardWhenTheBuildSetsNone() {
+        let config = AIConfig(apiKey: "k", provider: .openAI, modelName: nil)
+        for provider in AIProvider.allCases {
+            XCTAssertEqual(provider.model(in: config), provider.defaultModel, provider.rawValue)
+        }
     }
 
-    func testSelectedProviderDefaultsToClaude() {
-        XCTAssertEqual(AIProvider.selected, .claude)
-        UserDefaults.standard.set(AIProvider.gemini.rawValue, forKey: AIProvider.storageKey)
-        XCTAssertEqual(AIProvider.selected, .gemini)
-        UserDefaults.standard.set("unknown", forKey: AIProvider.storageKey)
-        XCTAssertEqual(AIProvider.selected, .claude)
+    func testBuildModelAppliesOnlyToItsOwnProvider() {
+        let config = AIConfig(apiKey: "k", provider: .gemini, modelName: "gemini-custom")
+        XCTAssertEqual(AIProvider.gemini.model(in: config), "gemini-custom")
+        XCTAssertEqual(AIProvider.claude.model(in: config), AIProvider.claude.defaultModel)
+        XCTAssertEqual(AIProvider.openAI.model(in: config), AIProvider.openAI.defaultModel)
     }
 
     func testConsentIsStoredPerProvider() {

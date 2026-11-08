@@ -13,16 +13,7 @@ struct SettingsView: View {
     @AppStorage(AutomationKeys.autoCreateCards) private var autoCreateCards = true
     @AppStorage(AutomationKeys.skipOwnTransfers) private var skipOwnTransfers = true
     @AppStorage(AutomationKeys.ownSurnames) private var ownSurnames = ""
-    @AppStorage(AIProvider.storageKey) private var providerRaw = AIProvider.claude.rawValue
-    @State private var hasAPIKey = AIKeyStore.key(for: AIProvider.selected) != nil
-    @State private var apiKeyInput = ""
-    @State private var apiKeyError: String? = nil
-    @State private var modelInput = AIProvider.selected.customModel ?? ""
-    @State private var isCheckingConnection = false
-    @State private var connectionResult: AIConnectionCheck.Outcome? = nil
-
-    /// Выбранный облачный ИИ
-    private var provider: AIProvider { AIProvider(rawValue: providerRaw) ?? .claude }
+    @State private var aiConsent = AIProvider.selected.hasConsent
 
     var body: some View {
         NavigationStack {
@@ -99,8 +90,10 @@ struct SettingsView: View {
                     Text("preferences".localized)
                 }
                 
-                // Облачный ИИ: Claude, ChatGPT или Gemini с собственным ключом
-                aiKeySection
+                // Облачный ИИ: ключ задан сборкой, здесь только согласие на отправку данных
+                if AIKeyStore.key(for: AIProvider.selected) != nil {
+                    aiSection
+                }
 
                 // Авто-импорт СМС в фоне
                 Section {
@@ -232,150 +225,25 @@ struct SettingsView: View {
         return "\(version) (\(build))"
     }
 
-    // MARK: - Облачный ИИ
-    private var aiKeySection: some View {
+    // MARK: - ИИ-помощник
+    /// Ключ, сервис и модель задаёт сборка (AIConfig), поэтому здесь только согласие на отправку данных: его можно отозвать
+    private var aiSection: some View {
         Section {
-            Picker(selection: $providerRaw) {
-                ForEach(AIProvider.allCases) { item in
-                    Text(item.displayName).tag(item.rawValue)
-                }
-            } label: {
-                Label("Какой ИИ", systemImage: "sparkles")
+            Toggle(isOn: $aiConsent) {
+                Label("Отправлять данные ИИ", systemImage: "sparkles")
             }
-            .onChange(of: providerRaw) { _, _ in
+            .onAppear {
+                // Согласие могли дать или отозвать в чате, пока этот экран был закрыт
+                aiConsent = AIProvider.selected.hasConsent
+            }
+            .onChange(of: aiConsent) { _, granted in
+                AIProvider.selected.setConsent(granted)
                 HapticManager.shared.selection()
-                hasAPIKey = AIKeyStore.key(for: provider) != nil
-                apiKeyInput = ""
-                apiKeyError = nil
-                modelInput = provider.customModel ?? ""
-                connectionResult = nil
-            }
-
-            if hasAPIKey {
-                Label("Ключ \(provider.displayName) сохранён", systemImage: "checkmark.seal.fill")
-                    .foregroundColor(Theme.accent)
-                Button {
-                    checkConnection()
-                } label: {
-                    HStack {
-                        Label("Проверить подключение", systemImage: "antenna.radiowaves.left.and.right")
-                        Spacer()
-                        if isCheckingConnection {
-                            ProgressView()
-                        }
-                    }
-                }
-                .disabled(isCheckingConnection)
-                if let connectionResult {
-                    Text(connectionResult.text)
-                        .font(.caption)
-                        .foregroundColor(connectionResult.isWorking ? Theme.accent : .secondary)
-                }
-                Button(role: .destructive) {
-                    HapticManager.shared.trigger(.warning)
-                    AIKeyStore.deleteKey(for: provider)
-                    provider.setConsent(false)
-                    hasAPIKey = false
-                    connectionResult = nil
-                } label: {
-                    Label("Удалить ключ", systemImage: "trash")
-                }
-            } else {
-                SecureField(provider.keyPlaceholder, text: $apiKeyInput)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                Button {
-                    saveAPIKey()
-                } label: {
-                    Label("Сохранить ключ", systemImage: "key.fill")
-                }
-                .disabled(apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                if let apiKeyError {
-                    Text(apiKeyError)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                Link(destination: provider.consoleURL) {
-                    HStack {
-                        Label(provider.consoleLinkTitle, systemImage: "safari")
-                        Spacer()
-                        Image(systemName: "arrow.up.forward.app")
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-
-            HStack {
-                Text("Модель")
-                Spacer()
-                TextField(provider.defaultModel, text: $modelInput)
-                    .multilineTextAlignment(.trailing)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .foregroundColor(.secondary)
-                    .keyboardType(.asciiCapable)
-                    .onChange(of: modelInput) { _, value in
-                        // Пробелы и длинные тире, которые ставит клавиатура, убираются сразу: поле показывает то, что уйдёт сервису
-                        let cleaned = AIProvider.normalizedModel(value)
-                        if cleaned != value {
-                            modelInput = cleaned
-                            return
-                        }
-                        provider.setCustomModel(cleaned)
-                        connectionResult = nil
-                    }
             }
         } header: {
             Text("ИИ-помощник")
         } footer: {
-            Text(aiFooter)
-        }
-    }
-
-    private var aiFooter: String {
-        var text = String(localized: "Ключ каждого сервиса хранится в Keychain только на этом телефоне. С ключом ИИ-чат отвечает на любые вопросы, разбирает чеки, выписки и скриншоты моделью \(provider.model): вопрос, скриншоты и сводка ваших операций, карт (последние 4 цифры), долгов, копилок и напоминаний отправляются в \(provider.company), оплата по тарифу ключа.")
-        if provider == .openAI {
-            text += " " + String(localized: "Нужен ключ API с platform.openai.com: подписка ChatGPT для него не подходит.")
-        }
-        text += " " + String(localized: "Перед первой отправкой приложение спросит разрешение; оно сбрасывается, когда вы удаляете ключ.")
-        text += " " + String(localized: "Банковские СМС по-прежнему распознаются на телефоне и в облако не уходят. Без ключа всё считается только на телефоне.")
-        text += " " + String(localized: "Поле «Модель» можно оставить пустым: тогда используется \(provider.defaultModel).")
-        return text
-    }
-
-    /// Бесплатный запрос сведений о модели: показывает, достижим ли сервис, принят ли ключ и доступна ли модель
-    private func checkConnection() {
-        guard !isCheckingConnection, let key = AIKeyStore.key(for: provider) else { return }
-        let checked = provider
-        isCheckingConnection = true
-        connectionResult = nil
-        Task {
-            let outcome = await AIConnectionCheck.run(provider: checked, apiKey: key)
-            HapticManager.shared.trigger(outcome.isWorking ? .success : .error)
-            // Пока шла проверка, мог смениться сервис: чужой результат не показываем
-            if checked == provider {
-                connectionResult = outcome
-            }
-            isCheckingConnection = false
-        }
-    }
-
-    private func saveAPIKey() {
-        let key = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { return }
-        guard provider.isPlausibleKey(key) else {
-            apiKeyError = provider.keyFormatHint
-            HapticManager.shared.trigger(.error)
-            return
-        }
-        if AIKeyStore.setKey(key, for: provider) {
-            HapticManager.shared.trigger(.success)
-            apiKeyInput = ""
-            apiKeyError = nil
-            hasAPIKey = true
-        } else {
-            apiKeyError = String(localized: "Не получилось сохранить ключ в Keychain. Разблокируйте телефон и попробуйте ещё раз.")
-            HapticManager.shared.trigger(.error)
+            Text("Ответы на любые вопросы и разбор чеков, выписок и скриншотов идут через \(AIProvider.selected.company). Если включено, вопрос, скриншоты и сводка ваших операций, карт (последние 4 цифры), долгов, копилок и напоминаний отправляются туда. Банковские СМС распознаются на телефоне и в облако не уходят. Если выключить, приложение спросит разрешение снова перед следующей отправкой.")
         }
     }
 

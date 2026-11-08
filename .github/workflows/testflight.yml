@@ -68,6 +68,41 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate
 
+      - name: Inject AI Settings
+        # Ключ, сервис и модель ИИ-чата берутся из секретов GitHub (Settings → Secrets and variables → Actions):
+        #   AI_API_KEY  — ключ API (без него в сборке нет облачного ИИ, чат отвечает локальным помощником);
+        #   AI_PROVIDER — gemini, claude или openai (необязательно, по умолчанию gemini);
+        #   AI_MODEL    — название модели (необязательно, по умолчанию стандартная модель сервиса).
+        # Значения кладутся в Info.plist после xcodegen, который его перезаписывает. В xcodebuild ключ не передаётся:
+        # параметры команды печатаются в журнал, а журнал сборки при падении выгружается артефактом без маскировки.
+        env:
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_PROVIDER: ${{ secrets.AI_PROVIDER }}
+          AI_MODEL: ${{ secrets.AI_MODEL }}
+        run: |
+          if [ -z "$AI_API_KEY" ]; then
+            echo "::warning::Секрет AI_API_KEY не задан: в этой сборке ИИ-чат работает без облака, только локальный помощник"
+          else
+            echo "Ключ ИИ задан, он будет встроен в сборку"
+          fi
+          PLIST=Sources/Info.plist
+          # Delete + Add, а не Set: работает и тогда, когда xcodegen пустое значение в plist не записал
+          set_plist() {
+            /usr/libexec/PlistBuddy -c "Delete :$1" "$PLIST" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :$1 string \"$2\"" "$PLIST"
+          }
+          set_plist AIAPIKey "$AI_API_KEY"
+          set_plist AIProviderName "$AI_PROVIDER"
+          set_plist AIModelName "$AI_MODEL"
+          # Проверка без печати значений: ключи на месте, ключ API не пустой, если секрет задан
+          /usr/libexec/PlistBuddy -c "Print :AIAPIKey" "$PLIST" > /dev/null
+          /usr/libexec/PlistBuddy -c "Print :AIProviderName" "$PLIST" > /dev/null
+          /usr/libexec/PlistBuddy -c "Print :AIModelName" "$PLIST" > /dev/null
+          if [ -n "$AI_API_KEY" ] && [ -z "$(/usr/libexec/PlistBuddy -c 'Print :AIAPIKey' "$PLIST")" ]; then
+            echo "::error::Ключ ИИ не попал в Info.plist"
+            exit 1
+          fi
+
       - name: Archive (Signed)
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}

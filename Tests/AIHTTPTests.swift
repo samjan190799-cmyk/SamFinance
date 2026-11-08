@@ -22,7 +22,7 @@ private func stubReply(_ status: Int, _ body: String = "{}") -> (Data, URLRespon
     return (Data(body.utf8), response)
 }
 
-/// Общий запрос к облачному ИИ: срок ожидания, повторы и проверка подключения. Настоящая сеть не используется.
+/// Общий запрос к облачному ИИ: срок ожидания и повторы. Настоящая сеть не используется.
 final class AIHTTPTests: XCTestCase {
     private var request: URLRequest { URLRequest(url: stubAddress) }
 
@@ -120,76 +120,5 @@ final class AIHTTPTests: XCTestCase {
         } catch {
             XCTFail("ожидалась отмена, пришло \(error)")
         }
-    }
-}
-
-/// «Проверить подключение»: адреса запросов и понятные результаты
-final class AIConnectionCheckTests: XCTestCase {
-    func testEachServiceIsAskedAboutItsOwnModelWithItsOwnKeyHeader() throws {
-        let claude = try XCTUnwrap(AIConnectionCheck.request(for: .claude, apiKey: "key-1"))
-        XCTAssertEqual(claude.url?.absoluteString, "https://api.anthropic.com/v1/models/\(AIProvider.claude.model)")
-        XCTAssertEqual(claude.value(forHTTPHeaderField: "x-api-key"), "key-1")
-        XCTAssertEqual(claude.value(forHTTPHeaderField: "anthropic-version"), "2023-06-01")
-        XCTAssertEqual(claude.httpMethod, "GET")
-
-        let openAI = try XCTUnwrap(AIConnectionCheck.request(for: .openAI, apiKey: "key-2"))
-        XCTAssertEqual(openAI.url?.absoluteString, "https://api.openai.com/v1/models/\(AIProvider.openAI.model)")
-        XCTAssertEqual(openAI.value(forHTTPHeaderField: "Authorization"), "Bearer key-2")
-
-        let gemini = try XCTUnwrap(AIConnectionCheck.request(for: .gemini, apiKey: "key-3"))
-        XCTAssertEqual(gemini.url?.absoluteString, "https://generativelanguage.googleapis.com/v1beta/models/\(AIProvider.gemini.model)")
-        XCTAssertEqual(gemini.value(forHTTPHeaderField: "x-goog-api-key"), "key-3")
-    }
-
-    func testModelNameCannotChangeTheAddress() throws {
-        let saved = AIProvider.openAI.customModel
-        defer { AIProvider.openAI.setCustomModel(saved ?? "") }
-
-        AIProvider.openAI.setCustomModel("gpt/../x?y=1")
-        let request = try XCTUnwrap(AIConnectionCheck.request(for: .openAI, apiKey: "k"))
-        XCTAssertNil(request.url?.query, "из названия модели нельзя вписать параметры запроса")
-        XCTAssertEqual(request.url?.host, "api.openai.com")
-        XCTAssertTrue(request.url?.absoluteString.contains("gpt%2F..%2Fx%3Fy%3D1") ?? false, "\(String(describing: request.url))")
-    }
-
-    func testGeminiModelPrefixIsNotDuplicated() throws {
-        let saved = AIProvider.gemini.customModel
-        defer { AIProvider.gemini.setCustomModel(saved ?? "") }
-
-        AIProvider.gemini.setCustomModel("models/gemini-test")
-        let request = try XCTUnwrap(AIConnectionCheck.request(for: .gemini, apiKey: "k"))
-        XCTAssertEqual(request.url?.absoluteString, "https://generativelanguage.googleapis.com/v1beta/models/gemini-test")
-    }
-
-    func testWorkingKeyReportsTheModel() async {
-        let outcome = await AIConnectionCheck.run(provider: .claude, apiKey: "k") { _ in stubReply(200) }
-        XCTAssertTrue(outcome.isWorking)
-        XCTAssertEqual(outcome, .works(AIProvider.claude.statusTitle))
-        XCTAssertTrue(outcome.text.contains(AIProvider.claude.statusTitle))
-    }
-
-    func testRejectedKeyExplainsTheKey() async {
-        let outcome = await AIConnectionCheck.run(provider: .claude, apiKey: "bad") { _ in
-            stubReply(401, #"{"error":{"type":"authentication_error","message":"invalid x-api-key"}}"#)
-        }
-        XCTAssertFalse(outcome.isWorking)
-        XCTAssertEqual(outcome, .failed(AIAPIError.invalidKey(.claude).errorDescription ?? ""))
-    }
-
-    func testUnknownModelShowsTheServiceMessage() async {
-        let outcome = await AIConnectionCheck.run(provider: .openAI, apiKey: "k") { _ in
-            stubReply(404, #"{"error":{"message":"The model does not exist","code":"model_not_found"}}"#)
-        }
-        XCTAssertFalse(outcome.isWorking)
-        XCTAssertTrue(outcome.text.contains("The model does not exist"), outcome.text)
-    }
-
-    func testUnreachableServiceSaysTheNetworkIsTheProblem() async {
-        let outcome = await AIConnectionCheck.run(provider: .claude, apiKey: "k", deadline: .milliseconds(200)) { _ in
-            try await Task.sleep(for: .seconds(60))
-            return stubReply(200)
-        }
-        XCTAssertFalse(outcome.isWorking)
-        XCTAssertTrue(outcome.text.contains(AIProvider.claude.company), outcome.text)
     }
 }

@@ -311,7 +311,7 @@ final class AIChatStore {
         if texts.isEmpty {
             reply(String(localized: "Не нашёл текста на изображении. Нужен скриншот, где СМС банка видна целиком."))
         } else {
-            reply(String(localized: "Текст распознал, но банковских СМС в нём нет. Подойдут СМС с суммой и маской карты, например «GNUM 3,500.00 AMD 4318***0640». Чтобы разбирать чеки и выписки, добавьте ключ Claude, ChatGPT или Gemini: Настройки → ИИ-помощник."))
+            reply(String(localized: "Текст распознал, но банковских СМС в нём нет. Подойдут СМС с суммой и маской карты, например «GNUM 3,500.00 AMD 4318***0640»."))
         }
     }
 
@@ -336,7 +336,7 @@ final class AIChatStore {
 
     private func run(_ request: CloudRequest) async {
         guard let apiKey = AIKeyStore.key(for: request.provider) else {
-            reply(String(localized: "Ключ \(request.provider.displayName) не найден. Добавьте его в Настройках → ИИ-помощник."))
+            reply(String(localized: "ИИ-помощник в этой сборке недоступен."))
             return
         }
         workingText = request.workingText

@@ -20,18 +20,12 @@ enum AIAPIError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidKey(let provider):
-            return String(localized: "Ключ \(provider.displayName) не подошёл. Проверьте его в Настройках → ИИ-помощник.")
-        case .noCredit(let provider):
-            switch provider {
-            case .claude: return String(localized: "На счёте ключа закончились средства. Пополните баланс в консоли Anthropic.")
-            case .openAI: return String(localized: "На счёте ключа закончились средства. Пополните баланс в кабинете OpenAI.")
-            case .gemini: return String(localized: "На счёте ключа закончились средства. Пополните баланс в Google AI Studio.")
-            }
+            // Ключ задан сборкой, исправить его на телефоне нельзя: человеку остаётся написать разработчику
+            return String(localized: "Сервис \(provider.displayName) не принял ключ приложения. Напишите в поддержку.")
+        case .noCredit:
+            return String(localized: "Лимит или баланс ИИ-сервиса исчерпан. Попробуйте позже или напишите в поддержку.")
         case .rateLimited(let provider, let detail):
             var text = String(localized: "Слишком много запросов подряд или исчерпан лимит ключа \(provider.displayName). Подождите минуту и повторите.")
-            if provider == .gemini {
-                text += " " + String(localized: "У бесплатных ключей Gemini небольшой дневной лимит: попробуйте модель gemini-3.5-flash-lite в поле «Модель» (Настройки → ИИ-помощник) или повторите завтра.")
-            }
             if let detail {
                 text += "\n\n" + String(localized: "Ответ сервиса: \(detail)")
             }
@@ -47,7 +41,7 @@ enum AIAPIError: LocalizedError {
         case .network(let provider):
             return String(localized: "Нет связи с сервером \(provider.displayName). Проверьте интернет.")
         case .timedOut(let provider):
-            return String(localized: "\(provider.displayName) не ответил вовремя. Проверьте интернет и VPN и повторите. Если так каждый раз, нажмите «Проверить подключение» в Настройках → ИИ-помощник.")
+            return String(localized: "\(provider.displayName) не ответил вовремя. Проверьте интернет и VPN и повторите.")
         case .server(let provider, let message):
             return String(localized: "\(provider.displayName) вернул ошибку: \(message)")
         }

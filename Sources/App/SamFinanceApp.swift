@@ -9,6 +9,8 @@ struct SamFinanceApp: App {
         // нажатие на кнопку может запустить приложение в фоне
         UNUserNotificationCenter.current().delegate = PurchaseNotificationDelegate.shared
         PurchasePromptService.shared.registerCategories()
+        // Ключ ИИ теперь задаёт сборка; ключи, вписанные пользователями раньше, стираются из Keychain
+        AIKeyStore.removeLegacyKeys()
     }
 
     var body: some Scene {

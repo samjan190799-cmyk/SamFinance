@@ -21,6 +21,11 @@ targets:
         # Версию менять здесь и в MARKETING_VERSION ниже; номер сборки CI подставляет сам (CURRENT_PROJECT_VERSION).
         CFBundleShortVersionString: "1.1.0"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        # Облачный ИИ: ключ, сервис и модель подставляет сборка из секретов GitHub (шаг «Inject AI Settings» в testflight.yml).
+        # В репозитории значения пустые: без секрета ключа нет, и чат отвечает локальным помощником. Ключ в репозиторий не писать.
+        AIAPIKey: ""
+        AIProviderName: ""
+        AIModelName: ""
         CFBundleLocalizations:
           - ru
           - en

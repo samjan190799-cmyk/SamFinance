@@ -8,7 +8,6 @@ struct AIChatView: View {
     @State private var store = AIChatStore.shared
     @State private var inputText = ""
     @State private var pickerItems: [PhotosPickerItem] = []
-    @State private var isShowingSettings = false
     /// Счётчик отправок: по нему подпрыгивает стрелка
     @State private var sendCount = 0
     @FocusState private var isInputFocused: Bool
@@ -39,11 +38,6 @@ struct AIChatView: View {
         } message: { request in
             Text(request.provider.consentMessage)
         }
-        .sheet(isPresented: $isShowingSettings, onDismiss: {
-            store.refreshCloudState()
-        }) {
-            SettingsView(financeService: financeService)
-        }
         .onChange(of: pickerItems) { _, items in
             guard !items.isEmpty else { return }
             pickerItems = []
@@ -70,7 +64,7 @@ struct AIChatView: View {
                 Text("ИИ-помощник")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
-                Text(store.isCloudEnabled ? String(localized: "\(store.provider.statusTitle) · СМС распознаются на телефоне") : String(localized: "Без ключа \(store.provider.displayName): всё считается на телефоне"))
+                Text(store.isCloudEnabled ? String(localized: "\(store.provider.displayName) · СМС распознаются на телефоне") : String(localized: "ИИ недоступен: всё считается на телефоне"))
                     .font(.system(size: 13))
                     .foregroundColor(store.isCloudEnabled ? Theme.accent : Theme.textSecondary)
                     .lineLimit(1)
@@ -82,10 +76,6 @@ struct AIChatView: View {
                     HapticManager.shared.impact(.light)
                     withAnimation { store.reset() }
                 }
-            }
-            MonoCircleButton(systemName: "key", label: String(localized: "Выбор ИИ и ключ в настройках")) {
-                HapticManager.shared.impact(.light)
-                isShowingSettings = true
             }
         }
         .padding(.horizontal, 20)

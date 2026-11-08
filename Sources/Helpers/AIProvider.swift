@@ -1,7 +1,7 @@
 import Foundation
 
-/// Облачный ИИ, на котором работает чат. Выбор лежит в UserDefaults (это не секрет),
-/// ключ каждого сервиса хранится отдельно в Keychain (AIKeyStore).
+/// Облачный ИИ, на котором работает чат. Какой именно сервис, ключ и модель, задаёт сборка (AIConfig):
+/// пользователь ничего не выбирает и не вводит. Здесь остаются названия сервисов, согласие на отправку данных и модели.
 enum AIProvider: String, CaseIterable, Identifiable, Sendable {
     case claude
     case openAI
@@ -9,12 +9,9 @@ enum AIProvider: String, CaseIterable, Identifiable, Sendable {
 
     var id: String { rawValue }
 
-    /// Ключ UserDefaults, под которым хранится выбранный сервис
-    static let storageKey = "aiProvider"
-
-    /// Выбранный в настройках сервис; по умолчанию Claude, как было до появления выбора
+    /// Сервис, на который настроена эта сборка
     static var selected: AIProvider {
-        UserDefaults.standard.string(forKey: storageKey).flatMap { AIProvider(rawValue: $0) } ?? .claude
+        AIConfig.standard.provider
     }
 
     var displayName: String {
@@ -34,60 +31,13 @@ enum AIProvider: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    // MARK: - Ключ
-
-    var keyPlaceholder: String {
-        switch self {
-        case .claude: return "sk-ant-…"
-        case .openAI: return "sk-…"
-        case .gemini: return String(localized: "Ключ из Google AI Studio")
-        }
-    }
-
-    var keyFormatHint: String {
-        switch self {
-        case .claude:
-            return String(localized: "Ключ Claude начинается с «sk-ant-». Скопируйте его из консоли Anthropic целиком.")
-        case .openAI:
-            return String(localized: "Ключ OpenAI начинается с «sk-». Нужен ключ API с platform.openai.com, а не пароль или подписка ChatGPT.")
-        case .gemini:
-            return String(localized: "Ключ Gemini не похож на ключ API. Скопируйте его из Google AI Studio целиком.")
-        }
-    }
-
-    /// Грубая проверка формата, чтобы не отправлять в Keychain очевидно чужой текст
-    func isPlausibleKey(_ key: String) -> Bool {
-        guard !key.contains(where: \.isWhitespace) else { return false }
-        switch self {
-        case .claude: return key.hasPrefix("sk-ant-")
-        case .openAI: return key.hasPrefix("sk-") && !key.hasPrefix("sk-ant-")
-        case .gemini: return key.count >= 20
-        }
-    }
-
-    var consoleURL: URL {
-        switch self {
-        case .claude: return URL(string: "https://console.anthropic.com/settings/keys")!
-        case .openAI: return URL(string: "https://platform.openai.com/api-keys")!
-        case .gemini: return URL(string: "https://aistudio.google.com/apikey")!
-        }
-    }
-
-    var consoleLinkTitle: String {
-        switch self {
-        case .claude: return String(localized: "Создать ключ в консоли Anthropic")
-        case .openAI: return String(localized: "Создать ключ на platform.openai.com")
-        case .gemini: return String(localized: "Создать ключ в Google AI Studio")
-        }
-    }
-
     // MARK: - Согласие на отправку данных
 
     /// Версия 2: в ИИ теперь уходят ещё копилки и напоминания, поэтому прежнее согласие не действует и запрос повторяется один раз
     private var consentKey: String { "aiConsent.v2.\(rawValue)" }
 
     /// Пользователь разрешил отправлять этому сервису вопросы, скриншоты и сводку учёта.
-    /// Спрашивается один раз; сбрасывается, когда ключ сервиса удалён.
+    /// Спрашивается один раз; отзывается переключателем в Настройках.
     var hasConsent: Bool {
         UserDefaults.standard.bool(forKey: consentKey)
     }
@@ -98,52 +48,27 @@ enum AIProvider: String, CaseIterable, Identifiable, Sendable {
 
     /// Что именно уйдёт и кому: показывается перед первой отправкой
     var consentMessage: String {
-        String(localized: "Чтобы ответить, приложение отправит в \(company) (\(displayName)) ваш вопрос и скриншоты, а также сводку ваших операций, карт (только последние 4 цифры), долгов, копилок и напоминаний. Банковские СМС распознаются на телефоне и не отправляются. Если вы просите что-то изменить, ИИ только предлагает изменения: они применяются после вашего нажатия «Применить». Данные обрабатывает \(company) по условиям вашего ключа. Разрешение можно отозвать: удалите ключ в Настройках.")
+        String(localized: "Чтобы ответить, приложение отправит в \(company) (\(displayName)) ваш вопрос и скриншоты, а также сводку ваших операций, карт (только последние 4 цифры), долгов, копилок и напоминаний. Банковские СМС распознаются на телефоне и не отправляются. Если вы просите что-то изменить, ИИ только предлагает изменения: они применяются после вашего нажатия «Применить». Данные обрабатывает \(company) по своим правилам. Разрешение можно отозвать в Настройках → ИИ-помощник.")
     }
 
     // MARK: - Модель
 
+    /// Модель, на которую уходят запросы, если сборка не задала свою
     var defaultModel: String {
         switch self {
         case .claude: return "claude-opus-5-5"
         case .openAI: return "gpt-6.1-sol"
-        case .gemini: return "gemini-3.8-flash"
+        case .gemini: return "gemini-3.5-flash-lite"
         }
     }
 
-    private var modelKey: String { "aiModel.\(rawValue)" }
-
-    /// Модель, которую пользователь вписал в настройках вместо стандартной
-    var customModel: String? {
-        let value = UserDefaults.standard.string(forKey: modelKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let value, !value.isEmpty else { return nil }
-        return Self.normalizedModel(value)
+    /// Модель, на которую уходят запросы: своя из настроек сборки (для сервиса этой сборки) или стандартная
+    var model: String {
+        model(in: .standard)
     }
 
-    /// Название модели без пробелов и с обычными дефисами. Клавиатура телефона сама ставит пробелы вокруг тире
-    /// и заменяет дефис на длинное тире: «gemini - 3.6 - flash» сервис не принимает.
-    static func normalizedModel(_ raw: String) -> String {
-        let dashes: Set<Character> = ["–", "—", "−", "‐", "‑", "‒", "―"]
-        return String(raw.filter { !$0.isWhitespace }.map { dashes.contains($0) ? "-" : $0 })
-    }
-
-    /// Модель, на которую уходят запросы: своя из настроек или стандартная
-    var model: String { customModel ?? defaultModel }
-
-    func setCustomModel(_ value: String) {
-        let cleaned = Self.normalizedModel(value)
-        if cleaned.isEmpty {
-            UserDefaults.standard.removeObject(forKey: modelKey)
-        } else {
-            UserDefaults.standard.set(cleaned, forKey: modelKey)
-        }
-    }
-
-    /// Подпись в шапке чата
-    var statusTitle: String {
-        if customModel == nil, self == .claude {
-            return "Claude Opus 5.5"
-        }
-        return "\(displayName) · \(model)"
+    /// То же для заданной конфигурации: своя модель относится только к сервису, для которого её задали
+    func model(in config: AIConfig) -> String {
+        (config.provider == self ? config.modelName : nil) ?? defaultModel
     }
 }
