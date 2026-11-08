@@ -40,16 +40,20 @@ enum AppTab: Int, CaseIterable, Identifiable, Hashable {
     }
 }
 
-/// Сплошная полоса фона высотой со строку состояния: прокрутка скрывается под ней, а не просвечивает под часами и Wi-Fi.
-/// Высоту берёт из верхнего отступа безопасной области, поэтому подходит и к вырезу, и к островку, и к обычной строке.
-private struct StatusBarCover: View {
+/// Сплошная полоса фона над безопасной областью: прокрутка скрывается под ней, а не просвечивает под часами и Wi-Fi.
+/// Полоса стоит на верхней границе безопасной области и сдвинута вверх на собственную высоту. Поэтому она закрывает всю
+/// строку состояния, какой бы она ни была (вырез, островок, обычная строка), а лишняя высота уходит за край экрана.
+/// Прежняя версия брала высоту из GeometryReader с ignoresSafeArea, но такой GeometryReader видит нулевые отступы:
+/// полоса получалась высотой 0 и на устройстве ничего не закрывала.
+struct StatusBarCover: View {
+    /// Больше любой строки состояния (самая высокая на iPhone около 60 pt)
+    static let height: CGFloat = 200
+
     var body: some View {
-        GeometryReader { proxy in
-            Theme.background
-                .frame(height: proxy.safeAreaInsets.top)
-        }
-        .ignoresSafeArea(edges: .top)
-        .allowsHitTesting(false)
+        Theme.background
+            .frame(height: Self.height)
+            .offset(y: -Self.height)
+            .allowsHitTesting(false)
     }
 }
 
