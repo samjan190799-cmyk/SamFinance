@@ -18,13 +18,14 @@ final class AIConfigTests: XCTestCase {
     }
 
     func testMissingEmptyAndUnsubstitutedValuesMeanNone() {
-        for info in [
-            [String: Any](),
+        let cases: [[String: Any]] = [
+            [:],
             ["AIAPIKey": "", "AIProviderName": "", "AIModelName": ""],
             ["AIAPIKey": "   ", "AIProviderName": "\n", "AIModelName": " "],
             // Переменная сборки, которую никто не подставил, остаётся в Info.plist буквально
             ["AIAPIKey": "$(AI_API_KEY)", "AIProviderName": "$(AI_PROVIDER)", "AIModelName": "$(AI_MODEL)"]
-        ] {
+        ]
+        for info in cases {
             let config = AIConfig(info: info)
             XCTAssertNil(config.apiKey, "\(info)")
             XCTAssertNil(config.modelName, "\(info)")

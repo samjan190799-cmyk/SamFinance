@@ -103,6 +103,30 @@ jobs:
             exit 1
           fi
 
+      - name: Inject Ads Settings
+        # Идентификатор баннерного блока Яндекс Рекламы берётся из секрета GitHub YANDEX_ADS_BANNER_ID и кладётся в Info.plist.
+        #   R-M-<число>-<число> — боевой блок из партнёрского интерфейса Яндекса;
+        #   demo-banner-yandex  — демо-блок для проверки интеграции (тестовая реклама, в статистику не идёт);
+        #   пусто               — в сборке нет рекламы совсем (ни SDK, ни запроса отслеживания).
+        # Боевой блок нельзя проверять собственными нажатиями на рекламу: для проверки используйте демо-блок.
+        env:
+          YANDEX_ADS_BANNER_ID: ${{ secrets.YANDEX_ADS_BANNER_ID }}
+        run: |
+          PLIST=Sources/Info.plist
+          if [ -z "$YANDEX_ADS_BANNER_ID" ]; then
+            echo "::warning::Секрет YANDEX_ADS_BANNER_ID не задан: в этой сборке нет рекламы"
+          elif [ "$YANDEX_ADS_BANNER_ID" = "demo-banner-yandex" ]; then
+            echo "::warning::В сборке демо-блок Яндекс Рекламы: показывается тестовая реклама, дохода нет"
+          else
+            echo "Рекламный блок задан, он будет встроен в сборку"
+          fi
+          /usr/libexec/PlistBuddy -c "Delete :YandexAdsBannerUnitID" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :YandexAdsBannerUnitID string \"${YANDEX_ADS_BANNER_ID}\"" "$PLIST"
+          # Проверка без печати значения: ключ на месте, а список SKAdNetwork и текст запроса отслеживания не потерялись
+          /usr/libexec/PlistBuddy -c "Print :YandexAdsBannerUnitID" "$PLIST" > /dev/null
+          /usr/libexec/PlistBuddy -c "Print :SKAdNetworkItems:0:SKAdNetworkIdentifier" "$PLIST" > /dev/null
+          /usr/libexec/PlistBuddy -c "Print :NSUserTrackingUsageDescription" "$PLIST" > /dev/null
+
       - name: Archive (Signed)
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
