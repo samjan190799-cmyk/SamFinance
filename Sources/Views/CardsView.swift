@@ -63,6 +63,10 @@ struct CardsView: View {
                         .appearAnimation(order: 2)
                     }
                 }
+
+                // Реклама Яндекса в конце экрана: без идентификатора блока в сборке ничего не показывает и места не занимает
+                AdBannerSection()
+                    .padding(.horizontal, 20)
             }
             .padding(.bottom, 24)
             .animation(Motion.spring, value: currentCard?.id)

@@ -68,6 +68,12 @@ struct DebtsView: View {
             .monoListRow()
 
             debtsList
+
+            // Реклама Яндекса последней строкой списка; без идентификатора блока в сборке строки нет
+            if AdBannerSection.isAvailable {
+                AdBannerSection(bottomInset: 24)
+                    .monoListRow()
+            }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)

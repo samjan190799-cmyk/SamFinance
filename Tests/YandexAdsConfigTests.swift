@@ -53,6 +53,12 @@ final class YandexAdsConfigTests: XCTestCase {
         XCTAssertFalse(YandexAdsConfig.standard.isBannerEnabled, "в Info.plist из репозитория должен быть пустой идентификатор блока")
     }
 
+    @MainActor
+    func testBuildsWithoutAUnitIDHaveNoAdPlacement() {
+        // Списку долгов баннер нужен отдельной строкой; без идентификатора блока строки быть не должно
+        XCTAssertFalse(AdBannerSection.isAvailable)
+    }
+
     // MARK: - Info.plist приложения
 
     func testAppInfoPlistHasTheAdsSlotAndTheKeysAdsNeed() throws {

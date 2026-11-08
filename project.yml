@@ -3,7 +3,7 @@ options:
   bundleIdPrefix: com.samvel.samfinance
   xcodeVersion: "15.0"
 packages:
-  # Яндекс Реклама (Mobile Ads SDK): баннер на экране «Обзор». Тянет за собой AppMetrica.
+  # Яндекс Реклама (Mobile Ads SDK): баннеры на экранах «Обзор», «Карты», «Долги», «Отчёт» и в «ИИ». Тянет за собой AppMetrica.
   YandexMobileAds:
     url: https://github.com/yandexmobile/yandex-ads-sdk-ios
     from: 8.6.0
