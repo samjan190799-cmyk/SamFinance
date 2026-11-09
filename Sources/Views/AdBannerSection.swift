@@ -2,40 +2,31 @@ import AppTrackingTransparency
 import SwiftUI
 import YandexMobileAds
 
-/// Баннер Яндекс Рекламы. Стоит в конце экранов «Обзор», «Карты», «Долги» и «Отчёт» и в начале короткой переписки с ИИ:
-/// там, где он не закрывает поля ввода и кнопки. Это единственное место приложения, которое знает про SDK Яндекса.
+/// Баннер Яндекс Рекламы: один на всё приложение, закреплён вверху экрана над разделами (ContentView) и виден на любом
+/// из них, как бы далеко ни прокрутили содержимое. Это единственное место приложения, которое знает про SDK Яндекса.
 /// В данные баннера не передаётся ничего из учёта: ни операции, ни карты, ни долги.
 ///
 /// Без идентификатора блока (YandexAdsConfig) и в режимах снимков App Store ничего не показывает и не занимает места.
 /// Порядок такой: приложение становится активным, iOS спрашивает разрешение на отслеживание (ATT), SDK инициализируется
-/// (оба шага один раз за запуск на все баннеры, см. AdsRuntime), баннер создаётся один раз на экран. Пока реклама не
-/// загрузилась (или не загрузится вовсе), баннер не занимает места.
+/// (см. AdsRuntime), баннер создаётся один раз. Смена раздела его не пересоздаёт, поэтому реклама не запрашивается заново
+/// при каждом переходе. Пока реклама не загрузилась (или не загрузится вовсе), баннер не занимает места.
 @MainActor
 struct AdBannerSection: View {
+    /// Отступ сверху и снизу, пока баннер показан: сверху до строки состояния, снизу до заголовка раздела
+    static let verticalSpacing: CGFloat = 6
+
     @Environment(\.scenePhase) private var scenePhase
 
     private let unitID: String?
-    /// Отступ под баннером там, где у прокрутки нет своего нижнего отступа (список долгов). Пока баннера нет, не добавляется.
-    private let bottomInset: CGFloat
 
     /// Создаётся один раз: пересоздание при каждом обновлении экрана перезагружало бы рекламу
     @State private var bannerState: BannerState?
     @State private var isLoaded = false
     @State private var isPreparing = false
 
-    init(config: YandexAdsConfig = .standard, bottomInset: CGFloat = 0) {
-        unitID = Self.resolveUnitID(config: config)
-        self.bottomInset = bottomInset
-    }
-
-    /// Есть ли в этой сборке и в этом режиме реклама вообще. Списку это нужно знать заранее, чтобы не заводить пустую строку.
-    static var isAvailable: Bool {
-        resolveUnitID(config: .standard) != nil
-    }
-
-    private static func resolveUnitID(config: YandexAdsConfig) -> String? {
+    init(config: YandexAdsConfig = .standard) {
         let isScreenshotMode = ScreenshotMode.scene != nil || ScreenshotMode.isTour
-        return YandexAdsConfig.shouldShowAds(config: config, isScreenshotMode: isScreenshotMode) ? config.bannerUnitID : nil
+        unitID = YandexAdsConfig.shouldShowAds(config: config, isScreenshotMode: isScreenshotMode) ? config.bannerUnitID : nil
     }
 
     var body: some View {
@@ -68,11 +59,13 @@ struct AdBannerSection: View {
                     .clipped()
             }
         }
-        .padding(.top, isLoaded ? 20 : 0)
-        .padding(.bottom, isLoaded ? bottomInset : 0)
+        .padding(.vertical, isLoaded ? Self.verticalSpacing : 0)
+        .frame(maxWidth: .infinity)
+        // Сплошной фон: когда баннер закреплён над прокруткой, она не должна просвечивать за ним
+        .background(isLoaded ? Theme.background : Color.clear)
     }
 
-    /// Ждёт запуска SDK и создаёт баннер этого экрана. Повторные вызовы ничего не делают.
+    /// Ждёт запуска SDK и создаёт баннер. Повторные вызовы ничего не делают.
     private func prepareBanner(unitID: String) async {
         guard bannerState == nil, !isPreparing else { return }
         isPreparing = true
@@ -83,9 +76,9 @@ struct AdBannerSection: View {
     }
 }
 
-/// Запрос ATT и запуск SDK Яндекса: один раз за запуск приложения, сколько бы баннеров ни было на экранах.
-/// Баннер, которому понадобилось то же самое позже, ждёт результат первого. Работа идёт в отдельной задаче: когда iOS
-/// показывает окно ATT, приложение на миг неактивно, и задача баннера (`.task(id: scenePhase)`) отменяется, а запрос должен дойти до конца.
+/// Запрос ATT и запуск SDK Яндекса: один раз за запуск приложения.
+/// Работа идёт в отдельной задаче: когда iOS показывает окно ATT, приложение на миг неактивно, и задача баннера
+/// (`.task(id: scenePhase)`) отменяется, а запрос должен дойти до конца.
 @MainActor
 private enum AdsRuntime {
     private static var preparation: Task<Void, Never>?

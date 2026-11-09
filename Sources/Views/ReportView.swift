@@ -61,9 +61,6 @@ struct ReportView: View {
                     .padding(.top, 28)
                     .appearAnimation(order: 4)
 
-                // Реклама Яндекса между долями категорий и историей: история может быть длинной, и до конца её никто не долистает
-                AdBannerSection()
-
                 history
                     .padding(.top, 28)
                     .appearAnimation(order: 5)

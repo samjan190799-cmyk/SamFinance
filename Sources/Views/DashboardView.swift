@@ -78,8 +78,6 @@ struct DashboardView: View {
                 .appearAnimation(order: 4)
                 recentTransactionsSection
                     .appearAnimation(order: 5)
-                // Реклама Яндекса: без идентификатора блока в сборке ничего не показывает и места не занимает
-                AdBannerSection()
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 24)

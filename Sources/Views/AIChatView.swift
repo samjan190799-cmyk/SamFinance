@@ -88,9 +88,6 @@ struct AIChatView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 12) {
-                    // Реклама Яндекса в начале переписки, далеко от поля ввода. Ленивый стек создаёт её, только пока начало
-                    // переписки видно, то есть в короткой переписке; в длинной баннера нет и запросов за рекламой тоже
-                    AdBannerSection()
                     ForEach(store.messages) { message in
                         messageView(message)
                             .transition(messageTransition(for: message))

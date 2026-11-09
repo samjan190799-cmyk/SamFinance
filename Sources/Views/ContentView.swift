@@ -70,11 +70,19 @@ struct ContentView: View {
     @Namespace private var tabNamespace
 
     var body: some View {
-        tabContent
-            .id(selectedTab)
-            .transition(.opacity.combined(with: .scale(scale: 0.985)))
+        VStack(spacing: 0) {
+            // Реклама Яндекса закреплена над разделами и видна на любом из них. Без идентификатора блока в сборке
+            // и пока реклама не загрузилась, она не занимает места
+            AdBannerSection()
+            // ZStack: при смене раздела старый и новый экраны накладываются, а не встают друг под другом
+            ZStack {
+                tabContent
+                    .id(selectedTab)
+                    .transition(.opacity.combined(with: .scale(scale: 0.985)))
+            }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .monoScreen()
+        }
+        .monoScreen()
             // Прокрутка уходит под системные часы и значки: полоса фона не даёт им налезать на плитки и текст.
             // В ролике для магазина сверху своя полоса с подписью, там накладка не нужна
             .overlay(alignment: .top) {
