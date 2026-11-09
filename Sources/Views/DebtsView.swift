@@ -318,7 +318,8 @@ struct DebtRowView: View {
         if debt.isPaid {
             return Theme.textTertiary
         }
-        return debt.isLent ? Theme.accent : .white
+        // «Мне должны» в мятном, как их плитка и значок
+        return debt.isLent ? PaletteColor.mint.color : .white
     }
 
     /// Срок прошёл, а долг или платёж не закрыт

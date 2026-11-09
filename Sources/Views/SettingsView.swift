@@ -83,7 +83,7 @@ struct SettingsView: View {
                         exportDataToClipboard()
                     } label: {
                         HStack {
-                            Label("export_data".localized, systemImage: "doc.arrow.up.fill")
+                            Label("export_data".localized, systemImage: "square.and.arrow.up")
                                 .labelStyle(.settingsIcon(.peach))
                             Spacer()
                             Text(exportMessage ?? "CSV")
@@ -193,7 +193,7 @@ struct SettingsView: View {
                         isShowingDeleteAlert = true
                     } label: {
                         Label("reset_data".localized, systemImage: "trash.fill")
-                            .labelStyle(.settingsIcon(.coral))
+                            .labelStyle(.settingsIcon(.coral, keepsTitleColor: true))
                     }
                 } header: {
                     Text("danger_zone".localized)

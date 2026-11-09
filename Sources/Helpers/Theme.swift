@@ -330,9 +330,11 @@ struct CategoryBadge: View {
     }
 }
 
-/// Строка настроек со значком в цветном квадрате, как в Настройках iOS: разделы различаются по цвету
+/// Строка настроек со значком в цветном квадрате, как в Настройках iOS: разделы различаются по цвету.
+/// Название белое, даже у кнопки (иначе List красит его лаймом); без titleColor остаётся системный цвет, например красный у сброса
 struct SettingsIconLabelStyle: LabelStyle {
     let tint: Color
+    var titleColor: Color? = .white
 
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 12) {
@@ -342,15 +344,20 @@ struct SettingsIconLabelStyle: LabelStyle {
                 .frame(width: 30, height: 30)
                 .background(tint)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-            configuration.title
+            if let titleColor {
+                configuration.title
+                    .foregroundColor(titleColor)
+            } else {
+                configuration.title
+            }
         }
     }
 }
 
 extension LabelStyle where Self == SettingsIconLabelStyle {
-    /// Значок строки настроек в цветном квадрате
+    /// Значок строки настроек в цветном квадрате; keepsTitleColor оставляет системный цвет названия (красный у сброса)
     @MainActor
-    static func settingsIcon(_ tint: PaletteColor) -> SettingsIconLabelStyle {
-        SettingsIconLabelStyle(tint: tint.color)
+    static func settingsIcon(_ tint: PaletteColor, keepsTitleColor: Bool = false) -> SettingsIconLabelStyle {
+        SettingsIconLabelStyle(tint: tint.color, titleColor: keepsTitleColor ? nil : .white)
     }
 }
