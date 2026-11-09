@@ -798,3 +798,5 @@
 "Отправлять данные ИИ" = "Send data to AI";
 "Ответы на любые вопросы и разбор чеков, выписок и скриншотов идут через %@. Если включено, вопрос, скриншоты и сводка ваших операций, карт (последние 4 цифры), долгов, копилок и напоминаний отправляются туда. Банковские СМС распознаются на телефоне и в облако не уходят. Если выключить, приложение спросит разрешение снова перед следующей отправкой." = "Answers to any question and reading of receipts, statements and screenshots go through %@. When on, your question, screenshots and a summary of your transactions, cards (last 4 digits), debts, goals and reminders are sent there. Bank SMS are recognized on your phone and never leave it. If you turn it off, the app asks for permission again before the next send.";
 "Из СМС" = "From SMS";
+"Закрепить первой" = "Pin first";
+"Карта закреплена первой" = "Card is pinned first";

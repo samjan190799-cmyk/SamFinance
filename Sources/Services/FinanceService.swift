@@ -175,6 +175,15 @@ public final class FinanceService {
         }
     }
 
+    /// Ставит карту первой: с неё открывается карусель. Порядок карт сохраняется на диск, а новые карты встают в конец,
+    /// поэтому закреплённая карта остаётся первой, пока первой не закрепят другую. Остальные карты сохраняют свой порядок
+    public func pinCardFirst(id: UUID) {
+        guard prepareForWrite(.cards), let index = cards.firstIndex(where: { $0.id == id }), index > 0 else { return }
+        let card = cards.remove(at: index)
+        cards.insert(card, at: 0)
+        saveCards()
+    }
+
     /// Добавляет карту. Полный номер уходит в Keychain, в файле карт остаются только последние 4 цифры.
     public func addCard(_ card: Card, number: String) {
         guard prepareForWrite(.cards) else { return }
