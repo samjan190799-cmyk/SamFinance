@@ -11,7 +11,7 @@ Hashiv is a personal finance tracker for iPhone: transactions, cards, debts, sav
 
 HOW TO TRY IT (no setup required)
 1. Overview tab, "+" button: add an expense or income. Cards tab, "+" button: add a card (any test number, for example 4111 1111 1111 1111; the CVV is never requested or stored). On the Cards tab, "Edit" opens the card editor and "All goals" opens the savings goals; Overview also has a "Goals" block.
-2. SMS recognition. iOS does not let apps read SMS, so the app works with text the user copies. Copy this sample bank SMS (typical for Armenian banks), then on the Overview tab tap the clipboard icon at the top right and tap "Add" on the banner "SMS found in clipboard". A transaction, a card ending 0640 and its balance are created automatically. The same text can also be pasted into the "AI" tab.
+2. SMS recognition. iOS does not let apps read SMS, so the app works with text the user copies. Copy this sample bank SMS (typical for Armenian banks), then on the Overview tab tap "From SMS" under the balance card and tap "Add" on the banner "SMS found in clipboard". A transaction, a card ending 0640 and its balance are created automatically. The same text can also be pasted into the "AI" tab.
 
 GNUM
 3,500.00 AMD

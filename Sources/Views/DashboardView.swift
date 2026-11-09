@@ -41,7 +41,7 @@ extension TransactionType: Identifiable {
     public var id: String { rawValue }
 }
 
-/// Раздел «Обзор»: лаймовая карточка баланса, траты за неделю, главные категории и последние операции.
+/// Раздел «Обзор»: лаймовая карточка баланса, быстрые действия, траты за неделю, главные категории и последние операции.
 @MainActor
 struct DashboardView: View {
     let financeService: FinanceService
@@ -53,7 +53,7 @@ struct DashboardView: View {
     @State private var isShowingAllTransactions = false
     @State private var isShowingSavings = false
 
-    // Распознавание СМС из буфера обмена: только по кнопке в шапке, иначе iOS каждый раз спрашивала бы разрешение на вставку
+    // Распознавание СМС из буфера обмена: только по кнопке «Из СМС», иначе iOS каждый раз спрашивала бы разрешение на вставку
     @State private var detectedBatchTransactions: [ParsedSMSTransaction] = []
     @State private var clipboardMessage: String? = nil
 
@@ -63,6 +63,8 @@ struct DashboardView: View {
                 headerView
                     .appearAnimation(order: 0)
                 balanceCard
+                    .appearAnimation(order: 1)
+                quickActions
                     .appearAnimation(order: 1)
                 smsSection
                 WeekSpendingCard(financeService: financeService, onTap: onOpenReport)
@@ -105,10 +107,6 @@ struct DashboardView: View {
                 .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
             Spacer()
-            MonoCircleButton(systemName: "doc.on.clipboard", label: String(localized: "Распознать СМС из буфера")) {
-                HapticManager.shared.impact(.light)
-                scanClipboard()
-            }
             MonoCircleButton(systemName: "plus", label: String(localized: "Новая операция"), filled: true) {
                 HapticManager.shared.impact(.light)
                 addSheetType = .expense
@@ -193,6 +191,51 @@ struct DashboardView: View {
             .padding(.vertical, 7)
             .background(Theme.onAccent.opacity(0.12))
             .clipShape(Capsule())
+    }
+
+    // MARK: - Быстрые действия
+    /// Четыре главных действия с подписями под карточкой баланса: что можно сделать, видно без поиска по значкам
+    private var quickActions: some View {
+        HStack(spacing: 8) {
+            quickAction(String(localized: "Расход"), systemName: "minus", tint: .coral) {
+                addSheetType = .expense
+            }
+            quickAction(String(localized: "Доход"), systemName: "plus", tint: .mint) {
+                addSheetType = .income
+            }
+            quickAction(String(localized: "Из СМС"), systemName: "doc.on.clipboard", tint: .sky) {
+                scanClipboard()
+            }
+            quickAction(String(localized: "Отчёт"), systemName: "chart.bar.fill", tint: .sun) {
+                onOpenReport()
+            }
+        }
+        .padding(.top, 16)
+    }
+
+    private func quickAction(_ title: String, systemName: String, tint: PaletteColor, action: @escaping () -> Void) -> some View {
+        Button {
+            HapticManager.shared.impact(.light)
+            action()
+        } label: {
+            VStack(spacing: 8) {
+                Image(systemName: systemName)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(Theme.onAccent)
+                    .frame(width: 52, height: 52)
+                    .background(tint.color)
+                    .clipShape(Circle())
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableButtonStyle(scale: 0.92))
+        .accessibilityLabel(title)
     }
 
     // MARK: - Распознанные СМС
@@ -310,7 +353,7 @@ struct DashboardView: View {
         let time = transaction.date.formatted(.dateTime.day().month(.abbreviated))
         return VStack(spacing: 0) {
             HStack(spacing: 12) {
-                MonoInitialBadge(title: transaction.title)
+                CategoryBadge(category: transaction.category)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(transaction.title)
@@ -336,7 +379,7 @@ struct DashboardView: View {
 
     // MARK: - Буфер обмена
 
-    /// Проверка буфера по нажатию кнопки в шапке: к буферу приложение обращается только здесь
+    /// Проверка буфера по нажатию кнопки «Из СМС»: к буферу приложение обращается только здесь
     private func scanClipboard() {
         let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let batch = text.isEmpty ? [] : SMSParser.parseBatch(text: text)

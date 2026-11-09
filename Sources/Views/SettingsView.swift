@@ -23,7 +23,7 @@ struct SettingsView: View {
                     HStack(spacing: 16) {
                         Image(systemName: "person.crop.circle.fill")
                             .font(.system(size: 56))
-                            .foregroundColor(.white)
+                            .foregroundColor(Theme.accent)
                             .symbolRenderingMode(.hierarchical)
                         
                         Text("user_name".localized)
@@ -43,6 +43,7 @@ struct SettingsView: View {
                         }
                     } label: {
                         Label("app_language".localized, systemImage: "globe")
+                            .labelStyle(.settingsIcon(.sky))
                     }
                     .onChange(of: selectedLanguage) { _, newValue in
                         guard newValue != AppLanguage.selected else { return }
@@ -58,6 +59,7 @@ struct SettingsView: View {
                         }
                     } label: {
                         Label("main_currency".localized, systemImage: "dollarsign.circle.fill")
+                            .labelStyle(.settingsIcon(.mint))
                     }
                     .onChange(of: currencyManager.currentCurrency) { _, _ in
                         HapticManager.shared.selection()
@@ -69,6 +71,7 @@ struct SettingsView: View {
                     } label: {
                         HStack {
                             Label("Онлайн конвертер валют", systemImage: "arrow.triangle.2.circlepath")
+                                .labelStyle(.settingsIcon(.aqua))
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .foregroundColor(.secondary)
@@ -81,6 +84,7 @@ struct SettingsView: View {
                     } label: {
                         HStack {
                             Label("export_data".localized, systemImage: "doc.arrow.up.fill")
+                                .labelStyle(.settingsIcon(.peach))
                             Spacer()
                             Text(exportMessage ?? "CSV")
                                 .foregroundColor(exportMessage != nil ? .green : .secondary)
@@ -104,6 +108,7 @@ struct SettingsView: View {
                     } label: {
                         HStack {
                             Label("Фоновые команды СМС (Siri Shortcuts)", systemImage: "bolt.horizontal.fill")
+                                .labelStyle(.settingsIcon(.sun))
                             Spacer()
                             Image(systemName: "arrow.up.forward.app")
                                 .foregroundColor(.secondary)
@@ -147,6 +152,7 @@ struct SettingsView: View {
                     } label: {
                         HStack {
                             Label("Включить подсказки покупок", systemImage: "applelogo")
+                                .labelStyle(.settingsIcon(.rose))
                             Spacer()
                             if let status = purchasePromptStatus {
                                 Text(status)
@@ -167,9 +173,11 @@ struct SettingsView: View {
                         PrivacyPolicyView()
                     } label: {
                         Label(String(localized: "Политика конфиденциальности"), systemImage: "hand.raised.fill")
+                            .labelStyle(.settingsIcon(.slate))
                     }
                     HStack {
                         Label(String(localized: "Версия"), systemImage: "info.circle")
+                            .labelStyle(.settingsIcon(.sand))
                         Spacer()
                         Text(appVersion)
                             .foregroundColor(.secondary)
@@ -185,6 +193,7 @@ struct SettingsView: View {
                         isShowingDeleteAlert = true
                     } label: {
                         Label("reset_data".localized, systemImage: "trash.fill")
+                            .labelStyle(.settingsIcon(.coral))
                     }
                 } header: {
                     Text("danger_zone".localized)
@@ -231,6 +240,7 @@ struct SettingsView: View {
         Section {
             Toggle(isOn: $aiConsent) {
                 Label("Отправлять данные ИИ", systemImage: "sparkles")
+                    .labelStyle(.settingsIcon(.lilac))
             }
             .onAppear {
                 // Согласие могли дать или отозвать в чате, пока этот экран был закрыт

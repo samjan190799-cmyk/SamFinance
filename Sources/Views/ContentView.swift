@@ -38,6 +38,17 @@ enum AppTab: Int, CaseIterable, Identifiable, Hashable {
         default: return "\(icon).fill"
         }
     }
+
+    /// Цвет раздела: им подсвечены значок, подпись и подложка выбранной вкладки. У «Обзора» лайм, цвет бренда
+    var tint: Color {
+        switch self {
+        case .overview: return Theme.accent
+        case .cards: return PaletteColor.sky.color
+        case .assistant: return PaletteColor.lilac.color
+        case .debts: return PaletteColor.coral.color
+        case .report: return PaletteColor.sun.color
+        }
+    }
 }
 
 /// Сплошная полоса фона над безопасной областью: прокрутка скрывается под ней, а не просвечивает под часами и Wi-Fi.
@@ -185,13 +196,13 @@ struct ContentView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
-            .foregroundColor(isSelected ? Theme.accent : Theme.textSecondary)
+            .foregroundColor(isSelected ? tab.tint : Theme.textSecondary)
             .frame(maxWidth: .infinity, minHeight: 50)
             .background {
                 // Подложка перетекает от прежней вкладки к новой
                 if isSelected {
                     RoundedRectangle(cornerRadius: 16)
-                        .fill(Theme.accent.opacity(0.12))
+                        .fill(tab.tint.opacity(0.14))
                         .matchedGeometryEffect(id: "selectedTab", in: tabNamespace)
                 }
             }

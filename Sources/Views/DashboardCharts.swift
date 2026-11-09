@@ -170,9 +170,9 @@ struct TopCategoriesRow: View {
         if !items.isEmpty {
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 10) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    ForEach(items) { item in
                         Button(action: onTap) {
-                            tile(item, highlighted: index == 0)
+                            tile(item)
                         }
                         .buttonStyle(PressableButtonStyle(scale: 0.95))
                         .scrollTransition(axis: .horizontal) { content, phase in
@@ -191,26 +191,30 @@ struct TopCategoriesRow: View {
         }
     }
 
-    private func tile(_ item: CategoryTotal, highlighted: Bool) -> some View {
+    /// Плитка залита цветом категории: категорию узнают по цвету и значку раньше, чем прочтут название
+    private func tile(_ item: CategoryTotal) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Image(systemName: item.category.icon)
-                .font(.system(size: 20))
-                .foregroundColor(highlighted ? Theme.accent : .white)
-            Spacer(minLength: 12)
+            Image(systemName: item.category.badgeSymbol)
+                .font(.system(size: 16, weight: .semibold))
+                .frame(width: 34, height: 34)
+                .background(Theme.onAccent.opacity(0.1))
+                .clipShape(Circle())
+            Spacer(minLength: 10)
             Text(item.category.displayName)
-                .font(.system(size: 12))
-                .foregroundColor(Theme.textSecondary)
+                .font(.system(size: 12, weight: .medium))
+                .opacity(0.75)
                 .lineLimit(1)
             Text(compactAmount(item.amount))
                 .font(Theme.number(17))
-                .foregroundColor(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
+        .foregroundColor(Theme.onAccent)
         .padding(14)
         .frame(width: 124, alignment: .leading)
         .frame(minHeight: 104)
-        .monoSurface(cornerRadius: 24)
+        .background(item.category.tint)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
     }
 }
 
@@ -227,13 +231,17 @@ struct DashboardCategoriesSection: View {
         let amount: Double
         let share: Double
         let color: Color
+        /// Значок категории в строке под кольцом
+        let symbol: String
     }
 
     /// Четыре крупные категории и «Прочее» из остальных
     private var slices: [CategorySlice] {
         var totals: [String: Double] = [:]
+        var symbols: [String: String] = [:]
         for transaction in financeService.transactions where transaction.type == .expense && selectedPeriod.contains(transaction.date) {
             totals[transaction.category.name, default: 0.0] += transaction.amount
+            symbols[transaction.category.name] = transaction.category.badgeSymbol
         }
 
         let sorted = totals.sorted { $0.value > $1.value }
@@ -241,13 +249,21 @@ struct DashboardCategoriesSection: View {
         guard total > 0 else { return [] }
 
         var result: [CategorySlice] = []
-        for (index, item) in sorted.prefix(4).enumerated() {
-            result.append(CategorySlice(id: item.key, name: Category.displayName(for: item.key), amount: item.value, share: item.value / total, color: Theme.shades[index]))
+        // У каждой категории свой цвет из палитры, тот же, что у её значка в списке операций
+        for item in sorted.prefix(4) {
+            result.append(CategorySlice(
+                id: item.key,
+                name: Category.displayName(for: item.key),
+                amount: item.value,
+                share: item.value / total,
+                color: PaletteColor.forCategory(named: item.key).color,
+                symbol: symbols[item.key] ?? "tag.fill"
+            ))
         }
 
         let rest = sorted.dropFirst(4).reduce(0.0) { $0 + $1.value }
         if rest > 0 {
-            result.append(CategorySlice(id: "other", name: String(localized: "Остальное"), amount: rest, share: rest / total, color: Theme.shades[4]))
+            result.append(CategorySlice(id: "other", name: String(localized: "Остальное"), amount: rest, share: rest / total, color: Theme.textTertiary, symbol: "square.grid.2x2.fill"))
         }
         return result
     }
@@ -328,9 +344,7 @@ struct DashboardCategoriesSection: View {
     private func row(_ slice: CategorySlice) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Circle()
-                    .fill(slice.color)
-                    .frame(width: 10, height: 10)
+                TintedIconBadge(systemName: slice.symbol, tint: slice.color, size: 32)
 
                 Text(slice.name)
                     .font(.system(size: 15))

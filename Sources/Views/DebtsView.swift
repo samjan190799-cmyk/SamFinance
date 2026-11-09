@@ -121,21 +121,25 @@ struct DebtsView: View {
     private var summaryView: some View {
         HStack(spacing: 10) {
             if selectedTab == .bills {
-                summaryTile(title: String(localized: "К оплате за 30 дней"), amount: billsDueSoon, highlighted: true)
-                summaryTile(title: String(localized: "Просрочено"), amount: billsOverdue, highlighted: false)
+                summaryTile(title: String(localized: "К оплате за 30 дней"), amount: billsDueSoon, highlighted: true, tint: PaletteColor.sky.color)
+                // Просрочка заливается цветом, только когда она есть: так её не пропустить
+                summaryTile(title: String(localized: "Просрочено"), amount: billsOverdue, highlighted: billsOverdue > 0, tint: PaletteColor.coral.color)
             } else {
-                summaryTile(title: DebtTab.owedToMe.title, amount: owedToMe, highlighted: selectedTab == .owedToMe)
-                summaryTile(title: DebtTab.iOwe.title, amount: iOwe, highlighted: selectedTab == .iOwe)
+                summaryTile(title: DebtTab.owedToMe.title, amount: owedToMe, highlighted: selectedTab == .owedToMe, tint: PaletteColor.mint.color)
+                summaryTile(title: DebtTab.iOwe.title, amount: iOwe, highlighted: selectedTab == .iOwe, tint: PaletteColor.coral.color)
             }
         }
         .padding(.top, 20)
     }
 
-    private func summaryTile(title: String, amount: Double, highlighted: Bool) -> some View {
+    /// Плитка итога в цвете своего вида: мне должны — мятная, я должен — коралловая, платежи — голубая.
+    /// Выбранная плитка залита цветом, у второй цветом выделена подпись
+    private func summaryTile(title: String, amount: Double, highlighted: Bool, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.system(size: 13, weight: .medium))
-                .opacity(0.8)
+                .foregroundColor(highlighted ? Theme.onAccent : tint)
+                .opacity(highlighted ? 0.8 : 1)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             Text(CurrencyManager.shared.format(amount))
@@ -148,7 +152,7 @@ struct DebtsView: View {
         .foregroundColor(highlighted ? Theme.onAccent : .white)
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(highlighted ? Theme.accent : Theme.surface)
+        .background(highlighted ? tint : Theme.surface)
         .clipShape(RoundedRectangle(cornerRadius: 24))
     }
 
@@ -392,18 +396,26 @@ struct DebtRowView: View {
         .background(Theme.background)
     }
 
-    /// У платежа значок его вида, у долга первая буква имени
+    /// Цвет записи: мне должны — мятный, я должен и кредит — коралловый, платёж — голубой; у закрытых серый
+    private var tint: Color {
+        if debt.isPaid {
+            return Theme.textTertiary
+        }
+        if debt.type == .bill {
+            return PaletteColor.sky.color
+        }
+        return debt.isLent ? PaletteColor.mint.color : PaletteColor.coral.color
+    }
+
+    /// У платежа значок его вида, у кредита купюра, у долга первая буква имени; всё в цвете записи
     @ViewBuilder
     private var badge: some View {
         if debt.type == .bill {
-            Image(systemName: (debt.billKind ?? .other).icon)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(debt.isPaid ? Theme.textTertiary : Theme.accent)
-                .frame(width: 44, height: 44)
-                .background(Theme.surface)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+            TintedIconBadge(systemName: (debt.billKind ?? .other).icon, tint: tint)
+        } else if debt.type == .credit {
+            TintedIconBadge(systemName: DebtProfile.credit.icon, tint: tint)
         } else {
-            MonoInitialBadge(title: debt.name)
+            MonoInitialBadge(title: debt.name, tint: tint)
         }
     }
 

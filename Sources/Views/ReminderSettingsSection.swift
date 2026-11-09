@@ -36,6 +36,7 @@ struct ReminderSettingsSection: View {
                 } label: {
                     HStack {
                         Label("Уведомления выключены в настройках iOS", systemImage: "bell.slash")
+                            .labelStyle(.settingsIcon(.coral))
                         Spacer()
                         Image(systemName: "arrow.up.forward.app")
                             .foregroundColor(.secondary)
@@ -48,6 +49,7 @@ struct ReminderSettingsSection: View {
             } label: {
                 HStack {
                     Label("Мои напоминания", systemImage: "bell.badge")
+                        .labelStyle(.settingsIcon(.sun))
                     Spacer()
                     if !financeService.customReminders.isEmpty {
                         Text("\(financeService.customReminders.count)")
@@ -58,14 +60,17 @@ struct ReminderSettingsSection: View {
 
             Toggle(isOn: $debts) {
                 Label("Долги и кредиты", systemImage: "person.2")
+                    .labelStyle(.settingsIcon(.coral))
             }
             NavigationLink {
                 DebtTypeSettingsView(financeService: financeService)
             } label: {
                 Label("Настройки по видам", systemImage: "slider.horizontal.3")
+                    .labelStyle(.settingsIcon(.slate))
             }
             Toggle(isOn: $goalDeadlines) {
                 Label("Сроки копилок", systemImage: "flag")
+                    .labelStyle(.settingsIcon(.lilac))
             }
             Picker(selection: $goalSavingRaw) {
                 ForEach(GoalSavingReminder.allCases) { option in
@@ -73,19 +78,24 @@ struct ReminderSettingsSection: View {
                 }
             } label: {
                 Label("Отложить в копилки", systemImage: "banknote")
+                    .labelStyle(.settingsIcon(.mint))
             }
             Toggle(isOn: $cardExpiry) {
                 Label("Срок действия карт", systemImage: "creditcard")
+                    .labelStyle(.settingsIcon(.sky))
             }
             DatePicker(selection: time($minutes), displayedComponents: .hourAndMinute) {
                 Label("Во сколько напоминать", systemImage: "clock")
+                    .labelStyle(.settingsIcon(.peach))
             }
             Toggle(isOn: $dailyLog) {
                 Label("Вечером: записать траты", systemImage: "square.and.pencil")
+                    .labelStyle(.settingsIcon(.aqua))
             }
             if dailyLog {
                 DatePicker(selection: time($dailyLogMinutes), displayedComponents: .hourAndMinute) {
                     Label("Время вечернего напоминания", systemImage: "moon")
+                        .labelStyle(.settingsIcon(.sand))
                 }
             }
         } header: {

@@ -1,6 +1,9 @@
 import SwiftUI
 
 /// Токены дизайна SamFinance «Пульс»: графитовый фон, лаймовый акцент, крупные скруглённые цифры.
+/// Цвет работает на понятность. Лайм — бренд и главное действие: карточка баланса, кнопка «+», выбранное, доходы.
+/// Пастельная палитра (PaletteColor) — смысл: у каждой категории, вида долга, раздела и строки настроек свой цвет и значок.
+/// Карточки плоские, без градиентов и материалов: так прокрутка остаётся плавной.
 enum Theme {
     static let background = Color(hex: "#111214")
     static let surface = Color(hex: "#1C1D21")
@@ -18,15 +21,6 @@ enum Theme {
     static let accentStrong = Color(hex: "#5E7A0F")
     /// Необратимые действия: удаление
     static let danger = Color(hex: "#FF6B6B")
-
-    /// Цвета долей категорий: от самой крупной к самой мелкой
-    static let shades: [Color] = [
-        Color(hex: "#C6F432"),
-        Color(hex: "#F4F4F5"),
-        Color(hex: "#9B9DA4"),
-        Color(hex: "#5E6068"),
-        Color(hex: "#3A3B41")
-    ]
 
     /// Шрифт для сумм и крупных цифр
     static func number(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
@@ -145,13 +139,15 @@ struct MonoSegmentedControl<Option: Hashable>: View {
 struct MonoInitialBadge: View {
     let title: String
     var size: CGFloat = 44
+    /// Цвет буквы и бледной подложки; без него графитовая плитка с белой буквой
+    var tint: Color? = nil
 
     var body: some View {
         Text(String(title.trimmingCharacters(in: .whitespaces).prefix(1)).uppercased())
             .font(Theme.number(16, weight: .bold))
-            .foregroundColor(.white)
+            .foregroundColor(tint ?? .white)
             .frame(width: size, height: size)
-            .background(Theme.surface)
+            .background(tint.map { $0.opacity(0.16) } ?? Theme.surface)
             .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 }
@@ -243,5 +239,118 @@ extension View {
             .background(Theme.background.ignoresSafeArea())
             .preferredColorScheme(.dark)
             .tint(Theme.accent)
+    }
+}
+
+// MARK: - Разноцветная палитра
+
+/// Пастельная палитра «Пульса»: у каждой категории, вида долга, раздела и строки настроек свой цвет, чтобы их узнавали
+/// с первого взгляда. Лайма в ней нет: он остаётся цветом бренда (карточка баланса, главные кнопки, выбранное, доходы).
+/// Все тона светлые: поверх них пишется тёмный текст (Theme.onAccent), а на графитовом фоне они хорошо видны как значки.
+enum PaletteColor: String, CaseIterable, Sendable {
+    case sky = "#8DB8FF"
+    case lilac = "#B9A0FF"
+    case coral = "#FF8D7E"
+    case peach = "#FFB86C"
+    case sun = "#FFE07A"
+    case mint = "#74E3B5"
+    case aqua = "#7FDBEA"
+    case rose = "#FF9ECF"
+    case sand = "#D9C3A0"
+    case slate = "#A3A7B3"
+
+    var color: Color {
+        Color(hex: rawValue)
+    }
+
+    /// Цвета для категорий без закреплённого цвета: созданных пользователем или ИИ
+    static let rotation: [PaletteColor] = [.sky, .lilac, .coral, .peach, .sun, .mint, .aqua, .rose]
+
+    /// Цвет категории по её названию (в данных оно хранится по-русски). У встроенных категорий цвет закреплён,
+    /// у остальных выбирается по названию и одинаков при каждом запуске
+    static func forCategory(named name: String) -> PaletteColor {
+        switch name {
+        case "Зарплата": return .mint
+        case "Фриланс": return .sky
+        case "Инвестиции": return .lilac
+        case "Возврат долга": return .sand
+        case "Продукты": return .peach
+        case "Транспорт": return .sky
+        case "Рестораны": return .coral
+        case "Жилье": return .lilac
+        case "Развлечения": return .sun
+        case "Здоровье": return .rose
+        case "Долги": return .sand
+        case "Прочее": return .slate
+        case "Переводы": return .aqua
+        default:
+            // Сумма кодов символов, а не hashValue: hashValue в Swift меняется от запуска к запуску
+            let sum = name.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+            return rotation[sum % rotation.count]
+        }
+    }
+}
+
+extension Category {
+    /// Цвет категории в пастельной палитре
+    var tint: Color {
+        PaletteColor.forCategory(named: name).color
+    }
+
+    /// Значок категории; если такого символа нет в SF Symbols (категорию придумал ИИ или пользователь), то ярлык
+    var badgeSymbol: String {
+        UIImage(systemName: icon) == nil ? "tag.fill" : icon
+    }
+}
+
+/// Значок в цветной плитке: символ в цвете на бледной подложке того же цвета. Так выглядят категории, долги и платежи
+struct TintedIconBadge: View {
+    let systemName: String
+    let tint: Color
+    var size: CGFloat = 44
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: size * 0.4, weight: .semibold))
+            .foregroundColor(tint)
+            .frame(width: size, height: size)
+            .background(tint.opacity(0.16))
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.32))
+            .accessibilityHidden(true)
+    }
+}
+
+/// Значок категории операции: её символ в её цвете
+struct CategoryBadge: View {
+    let category: Category
+    var size: CGFloat = 44
+
+    var body: some View {
+        TintedIconBadge(systemName: category.badgeSymbol, tint: category.tint, size: size)
+    }
+}
+
+/// Строка настроек со значком в цветном квадрате, как в Настройках iOS: разделы различаются по цвету
+struct SettingsIconLabelStyle: LabelStyle {
+    let tint: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 12) {
+            configuration.icon
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Theme.onAccent)
+                .frame(width: 30, height: 30)
+                .background(tint)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            configuration.title
+        }
+    }
+}
+
+extension LabelStyle where Self == SettingsIconLabelStyle {
+    /// Значок строки настроек в цветном квадрате
+    @MainActor
+    static func settingsIcon(_ tint: PaletteColor) -> SettingsIconLabelStyle {
+        SettingsIconLabelStyle(tint: tint.color)
     }
 }

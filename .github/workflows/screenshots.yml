@@ -22,7 +22,7 @@ concurrency:
 jobs:
   screenshots:
     name: Capture Screenshots (${{ matrix.device }})
-    runs-on: macos-14
+    runs-on: macos-latest
     timeout-minutes: 40
     strategy:
       fail-fast: false
