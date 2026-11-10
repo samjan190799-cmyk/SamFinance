@@ -53,6 +53,17 @@ final class YandexAdsConfigTests: XCTestCase {
         XCTAssertFalse(YandexAdsConfig.standard.isBannerEnabled, "в Info.plist из репозитория должен быть пустой идентификатор блока")
     }
 
+    @MainActor
+    func testSpaceIsHeldOnlyWhileTheAdIsStillLoading() {
+        // Пока реклама грузится, держим высоту прошлого баннера, чтобы экран не прыгал при смене вкладки
+        XCTAssertEqual(AdBannerSection.reservedHeight(isLoaded: false, isFailed: false, lastHeight: 112), 112)
+        // Загруженный баннер занимает своё место сам, у незагрузившегося места быть не должно
+        XCTAssertEqual(AdBannerSection.reservedHeight(isLoaded: true, isFailed: false, lastHeight: 112), 0)
+        XCTAssertEqual(AdBannerSection.reservedHeight(isLoaded: false, isFailed: true, lastHeight: 112), 0)
+        // До первой загрузки держать нечего
+        XCTAssertEqual(AdBannerSection.reservedHeight(isLoaded: false, isFailed: false, lastHeight: 0), 0)
+    }
+
     // MARK: - Info.plist приложения
 
     func testAppInfoPlistHasTheAdsSlotAndTheKeysAdsNeed() throws {
