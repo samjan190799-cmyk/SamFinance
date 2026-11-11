@@ -104,6 +104,9 @@ final class YandexAdsConfigTests: XCTestCase {
         let url = try XCTUnwrap(appBundle.url(forResource: "PrivacyInfo", withExtension: "xcprivacy"), "манифест приватности не попал в приложение")
         let manifest = try XCTUnwrap(NSDictionary(contentsOf: url) as? [String: Any])
         XCTAssertEqual(manifest["NSPrivacyTracking"] as? Bool, true, "реклама отслеживает: без этого App Store отклонит сборку с запросом ATT")
+        // При true пустой список доменов Apple считает недопустимым (ITMS-91064, TN3181): сборка получает «Ошибку двоичного файла»
+        let trackingDomains = try XCTUnwrap(manifest["NSPrivacyTrackingDomains"] as? [String])
+        XCTAssertFalse(trackingDomains.isEmpty, "NSPrivacyTracking = true требует домены отслеживания (домены AppMetrica из её манифеста)")
 
         let collected = try XCTUnwrap(manifest["NSPrivacyCollectedDataTypes"] as? [[String: Any]])
         let forAds = collected.filter { item in

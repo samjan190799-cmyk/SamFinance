@@ -153,6 +153,50 @@ jobs:
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             2>&1 | tee build/archive.log
 
+      - name: Check Privacy Manifests
+        # Apple проверяет манифесты приватности после отправки на проверку; нарушение ставит версии «Ошибка двоичного файла»
+        # (ITMS-91064, TN3181). Те же правила проверяются здесь, до загрузки: упавший шаг дешевле отклонённой версии.
+        run: |
+          python3 - <<'PY'
+          import os, plistlib, re, sys
+          app = "build/SamFinance.xcarchive/Products/Applications/SamFinance.app"
+          problems, count = [], 0
+          for folder, _, names in os.walk(app):
+              for name in names:
+                  if name != "PrivacyInfo.xcprivacy":
+                      continue
+                  full = os.path.join(folder, name)
+                  path = os.path.relpath(full, app)
+                  count += 1
+                  try:
+                      with open(full, "rb") as handle:
+                          manifest = plistlib.load(handle)
+                  except Exception as error:
+                      problems.append(f"{path}: не читается ({error})")
+                      continue
+                  tracking = manifest.get("NSPrivacyTracking")
+                  domains = manifest.get("NSPrivacyTrackingDomains", [])
+                  print(f"{path}: tracking={tracking} domains={domains}")
+                  if tracking is not None and not isinstance(tracking, bool):
+                      problems.append(f"{path}: NSPrivacyTracking должен быть Boolean")
+                  if not isinstance(domains, list) or not all(isinstance(item, str) for item in domains):
+                      problems.append(f"{path}: NSPrivacyTrackingDomains должен быть массивом строк")
+                      continue
+                  if tracking is True and not domains:
+                      problems.append(f"{path}: NSPrivacyTracking = true, а список доменов пуст")
+                  if tracking is not True and domains:
+                      problems.append(f"{path}: есть домены отслеживания, а NSPrivacyTracking не true")
+                  for domain in domains:
+                      if not re.fullmatch(r"[A-Za-z0-9.-]+", domain):
+                          problems.append(f"{path}: неверный домен {domain!r} (без схемы, пути и слеша)")
+          if count == 0:
+              problems.append("в приложении нет ни одного манифеста приватности")
+          print(f"Манифестов приватности: {count}")
+          for problem in problems:
+              print("::error::" + problem)
+          sys.exit(1 if problems else 0)
+          PY
+
       - name: Show Archived Version
         # Диагностика: какая версия и номер сборки реально попали в архив (App Store отклоняет уже закрытые версии)
         run: |
