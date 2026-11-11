@@ -11,7 +11,7 @@ Hashiv is a personal finance tracker for iPhone: transactions, cards, debts, sav
 
 HOW TO TRY IT (no setup required)
 1. Overview tab, "+" button: add an expense or income. Cards tab, "+" button: add a card (any test number, for example 4111 1111 1111 1111; the CVV is never requested or stored). On the Cards tab, "Edit" opens the card editor and "All goals" opens the savings goals; Overview also has a "Goals" block.
-2. SMS recognition. iOS does not let apps read SMS, so the app works with text the user copies. Copy this sample bank SMS (typical for Armenian banks), then on the Overview tab tap the clipboard icon at the top right and tap "Add" on the banner "SMS found in clipboard". A transaction, a card ending 0640 and its balance are created automatically. The same text can also be pasted into the "AI" tab.
+2. SMS recognition. iOS does not let apps read SMS, so the app works with text the user copies. Copy this sample bank SMS (typical for Armenian banks), then on the Overview tab tap "From SMS" under the balance card and tap "Add" on the banner "SMS found in clipboard". A transaction, a card ending 0640 and its balance are created automatically. The same text can also be pasted into the "AI" tab.
 
 GNUM
 3,500.00 AMD
@@ -24,7 +24,10 @@ Recognition runs on the device. The same works with screenshots of such SMS (the
 3. "AI" tab without a key: a local assistant answers questions from the data on the phone, for example "what is my balance?", "how are my goals?", "how much did I spend this week?" (it understands Russian, English and Armenian).
 
 OPTIONAL CLOUD AI
-In Settings > AI assistant the user may paste their OWN API key of Claude (Anthropic), ChatGPT (OpenAI) or Gemini (Google). We provide no keys and sell no AI access, so this part cannot be tried without a personal key and is off by default. Before the first request the app shows a consent dialog that says exactly what is sent and to whom (question, screenshots, a summary of transactions, cards with the last 4 digits only, and debts). Deleting the key withdraws the consent. Full card numbers, CVV and cardholder names are never sent.
+The AI assistant works out of the box: the app uses an API key that belongs to the developer and is built into the build (users enter no key and are charged nothing). It is a cloud service (Anthropic, OpenAI or Google, named in the consent dialog). Before the first request the app shows a consent dialog that says exactly what is sent and to whom (question, screenshots, a summary of transactions, cards with the last 4 digits only, debts, savings goals and reminders, and, when a question needs older data, the results of on-device calculations over the history such as totals and up to 25 transactions per query). The AI can also propose changes (for example add a debt or set a reminder); nothing is changed until the user taps "Apply" on the card in the chat. The switch "Send data to AI" in Settings > AI assistant withdraws the consent. Full card numbers, CVV and cardholder names are never sent.
+
+ADVERTISING
+Each of the five tabs shows its own Yandex Mobile Ads banner (Yandex Advertising Network), pinned at the top of the screen; it stays visible while the content scrolls and loads a new ad when the tab is opened. It is a separate strip above the screen content and never covers an input field or a button. Before the first ad iOS shows the App Tracking Transparency prompt (the usage description is localized in Russian, English and Armenian); declining does not disable ads, they are just less personalized. No transactions, cards, debts or other financial data are ever passed to the ad SDK. Builds without an ad unit id contain no ads at all.
 
 PERMISSIONS AND NETWORK
 - Notifications only (optional): reminders for debt due dates and prompts after Apple Pay purchases.

@@ -148,6 +148,27 @@ final class FinanceServiceTests: XCTestCase {
         XCTAssertTrue(reloaded.transactions.contains { $0.title == "Persisted" })
     }
 
+    func testPinnedCardGoesFirstAndStaysFirst() {
+        for last4 in ["1111", "2222", "3333"] {
+            service.addCard(makeCard(last4: last4), number: "")
+        }
+        let third = try? XCTUnwrap(service.card(withLast4: "3333"))
+        service.pinCardFirst(id: third?.id ?? UUID())
+        XCTAssertEqual(service.cards.map(\.last4), ["3333", "1111", "2222"], "остальные карты сохраняют порядок")
+
+        // Новая карта встаёт в конец: закреплённая остаётся первой
+        service.addCard(makeCard(last4: "4444"), number: "")
+        XCTAssertEqual(service.cards.map(\.last4), ["3333", "1111", "2222", "4444"])
+
+        // Порядок сохраняется на диск
+        XCTAssertEqual(FinanceService().cards.map(\.last4), ["3333", "1111", "2222", "4444"])
+
+        // Закрепить уже первую или несуществующую карту: порядок не меняется
+        service.pinCardFirst(id: third?.id ?? UUID())
+        service.pinCardFirst(id: UUID())
+        XCTAssertEqual(service.cards.map(\.last4), ["3333", "1111", "2222", "4444"])
+    }
+
     func testResetClearsEverything() throws {
         service.addCard(makeCard(), number: "")
         service.addDebt(Debt(name: "X", amount: 1, isLent: false))

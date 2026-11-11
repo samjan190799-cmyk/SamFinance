@@ -1,6 +1,15 @@
 import Foundation
 import Observation
 
+/// С какой карты оплачен долг или платёж
+public enum PaymentSource: Equatable, Sendable {
+    /// С карты, указанной у самой записи; если её нет, расход не записывается
+    case debtDefault
+    case card(UUID)
+    /// Оплата отмечена только в долгах, расход и баланс карты не трогаются
+    case notRecorded
+}
+
 /// Менеджер данных финансов. Управляет картами, транзакциями, долгами и копилками.
 /// Данные сохраняются локально в JSON-файлы. Демо-данные удалены для чистого старта.
 @Observable
@@ -12,6 +21,7 @@ public final class FinanceService {
     public private(set) var cards: [Card] = []
     public private(set) var debts: [Debt] = []
     public private(set) var goals: [Goal] = []
+    public private(set) var customReminders: [CustomReminder] = []
     public private(set) var categories: [Category] = Category.defaultCategories
     
     // Пути к файлам сохранения в песочнице
@@ -34,19 +44,31 @@ public final class FinanceService {
         let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
         return paths[0].appendingPathComponent("goals.json")
     }()
-    
+
+    private let remindersURL: URL = {
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        return paths[0].appendingPathComponent("reminders.json")
+    }()
+
     /// Хранилища данных на диске
     private enum Store: String {
         case transactions
         case cards
         case debts
         case goals
+        case reminders
     }
 
     /// Хранилища, файл которых существует, но не удалось прочитать или сохранить рядом резервную копию
     /// (например, телефон заблокирован, а файлы защищены `completeFileProtection`).
     /// Пока хранилище в этом списке, запись в него запрещена, чтобы пустой массив не затёр непрочитанные данные.
     @ObservationIgnored private var unreadableStores: Set<Store> = []
+
+    /// Все файлы прочитаны. Пока это не так (телефон заблокирован), напоминания не пересоздаются:
+    /// пустые списки иначе удалили бы напоминания о непрочитанных долгах и копилках.
+    var isFullyLoaded: Bool {
+        unreadableStores.isEmpty
+    }
 
     public init() {
         loadData()
@@ -135,10 +157,12 @@ public final class FinanceService {
         cards.removeAll()
         debts.removeAll()
         goals.removeAll()
+        customReminders.removeAll()
         saveData()
         saveCards()
         saveDebts()
         saveGoals()
+        saveReminders()
     }
     
     // MARK: - API для карт
@@ -149,6 +173,15 @@ public final class FinanceService {
             cards[index].isFrozen.toggle()
             saveCards()
         }
+    }
+
+    /// Ставит карту первой: с неё открывается карусель. Порядок карт сохраняется на диск, а новые карты встают в конец,
+    /// поэтому закреплённая карта остаётся первой, пока первой не закрепят другую. Остальные карты сохраняют свой порядок
+    public func pinCardFirst(id: UUID) {
+        guard prepareForWrite(.cards), let index = cards.firstIndex(where: { $0.id == id }), index > 0 else { return }
+        let card = cards.remove(at: index)
+        cards.insert(card, at: 0)
+        saveCards()
     }
 
     /// Добавляет карту. Полный номер уходит в Keychain, в файле карт остаются только последние 4 цифры.
@@ -233,6 +266,14 @@ public final class FinanceService {
         saveCards()
         CardSecretsStore.deleteNumber(for: id)
 
+        // Долги и платежи, которые оплачивались этой картой, дальше оплачиваются без записи расхода
+        if debts.contains(where: { $0.cardId == id }), prepareForWrite(.debts) {
+            for index in debts.indices where debts[index].cardId == id {
+                debts[index].cardId = nil
+            }
+            saveDebts()
+        }
+
         // Копилки удалённой карты без неё нигде не показываются, поэтому уходят вместе с ней
         if goals.contains(where: { $0.cardId == id }), prepareForWrite(.goals) {
             goals.removeAll { $0.cardId == id }
@@ -248,18 +289,173 @@ public final class FinanceService {
         saveDebts()
     }
 
+    /// Оплата: долг и разовый платёж закрываются, повторяющийся платёж переносит срок на следующий период и остаётся активным,
+    /// а у кредита с графиком уменьшается остаток. Сумма меньше остатка вносит долг частично. Без суммы вносится всё,
+    /// что положено (подробнее — в `Debt.applyPayment`).
+    /// Если у записи (или в `source`) есть карта, оплата записывается расходом и меняет баланс карты.
+    /// Возвращает запись после оплаты; nil, если такой записи нет.
+    @discardableResult
+    public func payDebt(id: UUID, amount: Double? = nil, source: PaymentSource = .debtDefault, now: Date = Date(), calendar: Calendar = .current) -> Debt? {
+        guard prepareForWrite(.debts), let index = debts.firstIndex(where: { $0.id == id }) else { return nil }
+        let before = debts[index]
+        debts[index].applyPayment(amount, now: now, calendar: calendar)
+        let paid = debts[index]
+        saveDebts()
+        if paid != before {
+            recordPayment(of: paid, source: source, now: now)
+        }
+        return paid
+    }
+
+    /// Взнос в счёт долга без смены срока: остаток уменьшается, а при полном погашении запись закрывается.
+    /// Нужен для досрочного взноса по кредиту с графиком и для оплаты по частям.
+    @discardableResult
+    public func repayDebt(id: UUID, amount: Double, source: PaymentSource = .debtDefault, now: Date = Date()) -> Debt? {
+        guard prepareForWrite(.debts), let index = debts.firstIndex(where: { $0.id == id }), amount > 0, !debts[index].isPaid else { return nil }
+        debts[index].applyRepayment(amount)
+        debts[index].lastPaidAt = now
+        let repaid = debts[index]
+        saveDebts()
+        recordPayment(of: repaid, source: source, now: now)
+        return repaid
+    }
+
+    /// Записывает оплату на карту: расход (при возврате долга вам — доход), изменение баланса и ссылку на долг.
+    /// Сумма берётся из последней оплаты. Если такая же операция уже пришла из СМС, второй раз она не записывается.
+    @discardableResult
+    private func recordPayment(of debt: Debt, source: PaymentSource, now: Date) -> Transaction? {
+        let cardID: UUID
+        switch source {
+        case .notRecorded:
+            return nil
+        case .card(let id):
+            cardID = id
+        case .debtDefault:
+            guard let id = debt.cardId else { return nil }
+            cardID = id
+        }
+        guard let amount = debt.lastPaidAmount, amount > 0, cards.contains(where: { $0.id == cardID }) else { return nil }
+
+        let type = debt.paymentType
+        // Банковское СМС об этой же оплате уже записано: второй раз не считаем
+        let alreadyFromSMS = transactions.contains {
+            $0.externalKey != nil && $0.debtId == nil && Self.isSamePayment($0, cardID: cardID, amount: amount, type: type, near: now)
+        }
+        if alreadyFromSMS { return nil }
+
+        let paymentCategory = category(named: debt.paymentCategoryName, type: type)
+        let transaction = Transaction(
+            title: debt.name,
+            amount: amount,
+            type: type,
+            category: paymentCategory,
+            date: now,
+            notes: String(localized: "Оплата из раздела «Долги»"),
+            brandName: debt.name,
+            brandIcon: paymentCategory.icon,
+            brandColorHex: paymentCategory.colorHex,
+            cardId: cardID,
+            debtId: debt.id
+        )
+        guard addTransaction(transaction) else { return nil }
+
+        let delta = type == .income ? amount : -amount
+        if let applied = applyToCardBalance(id: cardID, delta: delta, asOf: now) {
+            setBalanceDelta(transactionID: transaction.id, delta: applied)
+        }
+        return transaction
+    }
+
+    /// Операция совпадает с оплатой: та же карта, тип и сумма в пределах двух суток
+    private static func isSamePayment(_ transaction: Transaction, cardID: UUID, amount: Double, type: TransactionType, near date: Date) -> Bool {
+        transaction.cardId == cardID
+            && transaction.type == type
+            && abs(transaction.amount - amount) < 0.5
+            && abs(transaction.date.timeIntervalSince(date)) < 2 * 86_400
+    }
+
+    /// Такая оплата уже записана из раздела «Долги»: банковское СМС о ней второй раз не считается
+    public func hasDebtPayment(cardID: UUID, amount: Double, type: TransactionType, near date: Date) -> Bool {
+        transactions.contains { $0.debtId != nil && Self.isSamePayment($0, cardID: cardID, amount: amount, type: type, near: date) }
+    }
+
+    /// Кнопка с кружком: погашенный долг возвращается в активные, остальные оплачиваются
     public func togglePayDebt(id: UUID) {
-        guard prepareForWrite(.debts) else { return }
-        if let index = debts.firstIndex(where: { $0.id == id }) {
-            debts[index].isPaid.toggle()
+        guard prepareForWrite(.debts), let index = debts.firstIndex(where: { $0.id == id }) else { return }
+        if debts[index].isPaid {
+            debts[index].isPaid = false
+            saveDebts()
+        } else {
+            payDebt(id: id)
+        }
+    }
+
+    /// Отмечает долг погашенным или возвращает в активные (кнопка «Погашен» в напоминании, действие ИИ).
+    /// Повторяющийся платёж при «погашен» переносит срок вперёд.
+    public func setDebtPaid(id: UUID, isPaid: Bool) {
+        guard prepareForWrite(.debts), let index = debts.firstIndex(where: { $0.id == id }) else { return }
+        if isPaid {
+            if !debts[index].isPaid {
+                payDebt(id: id)
+            }
+        } else if debts[index].isPaid {
+            debts[index].isPaid = false
             saveDebts()
         }
+    }
+
+    /// Меняет, когда заранее напомнить о сроке долга
+    public func setDebtReminder(id: UUID, reminder: DebtReminder) {
+        guard prepareForWrite(.debts) else { return }
+        if let index = debts.firstIndex(where: { $0.id == id }) {
+            debts[index].reminder = reminder
+            saveDebts()
+        }
+    }
+
+    /// Сохраняет правку долга: имя, сумму, срок, направление, тип и напоминание. Признак погашения не трогает.
+    public func updateDebt(_ debt: Debt) {
+        guard prepareForWrite(.debts), let index = debts.firstIndex(where: { $0.id == debt.id }) else { return }
+        var updated = debt
+        updated.isPaid = debts[index].isPaid
+        if updated.lastPaidAt == nil {
+            updated.lastPaidAt = debts[index].lastPaidAt
+        }
+        if updated.lastPaidAmount == nil {
+            updated.lastPaidAmount = debts[index].lastPaidAmount
+        }
+        // Сумму подняли выше прежней: прошлые взносы больше не показывают прогресс
+        if let original = updated.originalAmount, updated.amount >= original {
+            updated.originalAmount = nil
+        }
+        debts[index] = updated
+        saveDebts()
     }
 
     public func deleteDebt(id: UUID) {
         guard prepareForWrite(.debts) else { return }
         debts.removeAll { $0.id == id }
         saveDebts()
+    }
+
+    // MARK: - API для своих напоминаний
+
+    public func addCustomReminder(_ reminder: CustomReminder) {
+        guard prepareForWrite(.reminders) else { return }
+        customReminders.append(reminder)
+        saveReminders()
+    }
+
+    public func updateCustomReminder(_ reminder: CustomReminder) {
+        guard prepareForWrite(.reminders), let index = customReminders.firstIndex(where: { $0.id == reminder.id }) else { return }
+        customReminders[index] = reminder
+        saveReminders()
+    }
+
+    public func deleteCustomReminder(id: UUID) {
+        guard prepareForWrite(.reminders) else { return }
+        customReminders.removeAll { $0.id == id }
+        saveReminders()
     }
 
     // MARK: - API для копилок (Goals)
@@ -415,6 +611,8 @@ public final class FinanceService {
         loadCards()
         loadDebts()
         loadGoals()
+        loadReminders()
+        ReminderService.shared.update(from: self)
     }
 
     private func loadTransactions() {
@@ -472,13 +670,18 @@ public final class FinanceService {
     private func loadDebts() {
         if let loaded = readStore([Debt].self, store: .debts, url: debtsURL, dateStrategy: .iso8601) {
             debts = loaded
-            DebtReminderService.shared.reschedule(loaded)
         }
     }
 
     private func loadGoals() {
         if let loaded = readStore([Goal].self, store: .goals, url: goalsURL) {
             goals = loaded
+        }
+    }
+
+    private func loadReminders() {
+        if let loaded = readStore([CustomReminder].self, store: .reminders, url: remindersURL, dateStrategy: .iso8601) {
+            customReminders = loaded
         }
     }
 
@@ -555,6 +758,7 @@ public final class FinanceService {
             case .cards: loadCards()
             case .debts: loadDebts()
             case .goals: loadGoals()
+            case .reminders: loadReminders()
             }
         }
         return !unreadableStores.contains(store)
@@ -571,6 +775,8 @@ public final class FinanceService {
         } catch {
             print("⚠️ Не удалось сохранить транзакции: \(error.localizedDescription)")
         }
+        // Вечернее напоминание не приходит в день, когда операции уже записаны
+        ReminderService.shared.update(from: self)
     }
     
     private func saveCards() {
@@ -583,6 +789,7 @@ public final class FinanceService {
         } catch {
             print("⚠️ Не удалось сохранить карты: \(error.localizedDescription)")
         }
+        ReminderService.shared.update(from: self)
     }
     
     private func saveDebts() {
@@ -596,7 +803,7 @@ public final class FinanceService {
         } catch {
             print("⚠️ Не удалось сохранить долги: \(error.localizedDescription)")
         }
-        DebtReminderService.shared.reschedule(debts)
+        ReminderService.shared.update(from: self)
     }
     
     private func saveGoals() {
@@ -609,5 +816,20 @@ public final class FinanceService {
         } catch {
             print("⚠️ Не удалось сохранить цели: \(error.localizedDescription)")
         }
+        ReminderService.shared.update(from: self)
+    }
+
+    private func saveReminders() {
+        guard !unreadableStores.contains(.reminders) else { return }
+        do {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            encoder.outputFormatting = .prettyPrinted
+            let data = try encoder.encode(customReminders)
+            try data.write(to: remindersURL, options: [.atomic, .completeFileProtection])
+        } catch {
+            print("⚠️ Не удалось сохранить напоминания: \(error.localizedDescription)")
+        }
+        ReminderService.shared.update(from: self)
     }
 }

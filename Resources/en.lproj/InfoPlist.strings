@@ -1,0 +1,2 @@
+/* The text of the "Allow tracking" request shown by iOS before the first ad */
+"NSUserTrackingUsageDescription" = "Your advertising identifier is used to show more relevant ads. Your financial data is never used for ads and is never shared with anyone.";

@@ -133,7 +133,7 @@ struct TransactionsView: View {
                 editing = transaction
             } label: {
                 HStack(spacing: 14) {
-                    MonoInitialBadge(title: transaction.title)
+                    CategoryBadge(category: transaction.category)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(transaction.title)

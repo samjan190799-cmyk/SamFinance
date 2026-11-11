@@ -35,7 +35,7 @@ enum LocalFinanceAssistant {
     }
 
     static var helpText: String {
-        String(localized: "Пока я понимаю скриншоты и тексты банковских СМС и такие вопросы:\n• сколько я потратил за неделю?\n• сколько ушло на продукты за месяц?\n• какой у меня баланс?\n• кому я должен?\n• дай совет\n• как мои копилки?\nЧтобы я отвечал на любые вопросы и разбирал чеки и выписки, добавьте ключ Claude, ChatGPT или Gemini: кнопка с ключом вверху или Настройки → ИИ-помощник.")
+        String(localized: "Пока я понимаю скриншоты и тексты банковских СМС и такие вопросы:\n• сколько я потратил за неделю?\n• сколько ушло на продукты за месяц?\n• какой у меня баланс?\n• кому я должен?\n• дай совет\n• как мои копилки?")
     }
 
     // MARK: - Слова из вопроса (корни слов: русский, английский, армянский)
@@ -54,7 +54,8 @@ enum LocalFinanceAssistant {
         static let debts = [
             "долг", "должен", "должна", "должны", "одолжил", "занял",
             "debt", "owe", "borrow", "lent", "loan",
-            "պարտք", "վարկ"
+            "պարտք", "վարկ",
+            "платёж", "платеж", "коммунал", "bill", "utilit", "վճարում"
         ]
         static let advice = [
             "совет", "анализ", "рекоменд", "сэконом", "экономить",
@@ -227,26 +228,37 @@ enum LocalFinanceAssistant {
     }
 
     private static func debtsAnswer(_ financeService: FinanceService) -> String {
-        let open = financeService.debts.filter { !$0.isPaid }
-        guard !open.isEmpty else {
+        // Платежи (коммуналка, интернет) считаются отдельно: это не долги людям и не кредиты
+        let open = financeService.debts.filter { !$0.isPaid && $0.type != .bill }
+        let bills = financeService.debts.filter { !$0.isPaid && $0.type == .bill }
+        guard !open.isEmpty || !bills.isEmpty else {
             return String(localized: "Открытых долгов нет.")
         }
-        let lent = open.filter(\.isLent)
-        let borrowed = open.filter { !$0.isLent }
-        let owedToMe = format(lent.reduce(0.0) { $0 + $1.amount })
-        let iOwe = format(borrowed.reduce(0.0) { $0 + $1.amount })
-        var answer = String(localized: "Мне должны: \(owedToMe). Я должен: \(iOwe).")
 
-        if let nearest = open.min(by: { $0.dueDate < $1.dueDate }) {
-            let date = nearest.dueDate.formatted(.dateTime.day().month(.wide))
-            let amount = format(nearest.amount)
-            if nearest.isLent {
-                answer += "\n" + String(localized: "Ближайший срок: \(date) — \(nearest.name) должен вам \(amount).")
-            } else {
-                answer += "\n" + String(localized: "Ближайший срок: \(date) — вы должны \(nearest.name): \(amount).")
+        var lines: [String] = []
+        if !open.isEmpty {
+            let lent = open.filter(\.isLent)
+            let borrowed = open.filter { !$0.isLent }
+            let owedToMe = format(lent.reduce(0.0) { $0 + $1.amount })
+            let iOwe = format(borrowed.reduce(0.0) { $0 + $1.amount })
+            lines.append(String(localized: "Мне должны: \(owedToMe). Я должен: \(iOwe)."))
+
+            if let nearest = open.min(by: { $0.dueDate < $1.dueDate }) {
+                let date = nearest.dueDate.formatted(.dateTime.day().month(.wide))
+                let amount = format(nearest.amount)
+                if nearest.isLent {
+                    lines.append(String(localized: "Ближайший срок: \(date) — \(nearest.name) должен вам \(amount)."))
+                } else {
+                    lines.append(String(localized: "Ближайший срок: \(date) — вы должны \(nearest.name): \(amount)."))
+                }
             }
         }
-        return answer
+        if let nextBill = bills.min(by: { $0.dueDate < $1.dueDate }) {
+            let total = format(bills.reduce(0.0) { $0 + $1.amount })
+            let date = nextBill.dueDate.formatted(.dateTime.day().month(.wide))
+            lines.append(String(localized: "Платежи к оплате: \(bills.count) на \(total). Ближайший: \(nextBill.name), \(date) — \(format(nextBill.amount))."))
+        }
+        return lines.joined(separator: "\n")
     }
 
     private static func adviceAnswer(_ financeService: FinanceService) -> String {

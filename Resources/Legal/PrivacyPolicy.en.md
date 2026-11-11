@@ -6,7 +6,7 @@ Effective October 22, 2026.
 
 - Hashiv keeps your data only on your iPhone. The app has no accounts and no server of ours: we do not receive or see your transactions, cards, debts or savings goals.
 - The app has no ads, analytics, tracking or third-party SDKs.
-- The only things that leave your phone are exchange-rate requests (without your data) and, if you turn on the AI assistant yourself, your requests to the AI service you chose.
+- The only things that leave your phone are exchange-rate requests (without your data), technical data for showing Yandex ads (without your financial data) and, if you allow the AI assistant to send data, your requests to the AI service.
 - You can erase all your data in Settings.
 
 ## Who we are
@@ -19,10 +19,11 @@ Everything listed here stays on your device. We have no access to it.
 
 - **Transactions:** title, amount, category, date, note.
 - **Cards:** purpose, cardholder name, expiry date, last 4 digits, balance, bank and design. The full card number is saved only if you enter it yourself, and it lives in this device's secure iOS storage (Keychain). The app never asks for or stores the CVV code.
-- **Debts and loans:** name of a person or bank, amount, due date.
+- **Debts, loans and payments:** name of a person or bank or the name of a payment (utilities, internet, subscription), amount, due date, repeat, loan terms (monthly payment, rate, payments left), how much has been paid so far, your note.
 - **Savings goals:** name, target, deadline, log of deposits and withdrawals.
-- **Settings:** language, currency, chosen AI service, automation rules (remembered merchant categories, your surname used to recognize transfers to yourself).
-- **AI keys:** a key you paste is kept in this device's Keychain and does not move to other devices.
+- **Reminders:** text, date and time, repeat, note.
+- **Settings:** language, currency, permission to send data to the AI service, automation rules (remembered merchant categories, your surname used to recognize transfers to yourself).
+- **AI chat history:** the text of your questions and the answers (the last 200 messages), so the conversation continues after a restart. Screenshots and confirmation cards are not kept. "Start over" and resetting all data erase the history.
 
 Data files are protected by iOS and open only while the phone is unlocked. They may be included in iPhone backups that you make yourself (iCloud or a computer). Keychain items are not part of backups.
 
@@ -30,26 +31,31 @@ Data files are protected by iOS and open only while the phone is unlocked. They 
 
 **1. Exchange rates.** On launch the app requests currency rates from the open service open.er-api.com. The request contains none of your data, but like any website the service sees the IP address of your connection.
 
-**2. AI assistant (optional).** It works only if you add your own Claude (Anthropic), ChatGPT (OpenAI) or Gemini (Google) key and allow data sharing before the first request. Then the chosen service receives:
+**2. AI assistant.** It works through a cloud AI service (Anthropic, OpenAI or Google; the consent dialog says which) using a key built into the app. Data is sent only if you allow it before the first request. Then the service receives:
 
 - your question and the recent messages of the conversation;
 - screenshots you attach (receipts, statements, bank apps) and the text recognized on them on your phone;
-- a summary of your records: cards (purpose, last 4 digits, balance), spending and income for 30 days by category, up to 60 latest transactions (date, amount, title, category, card), open debts (name, amount, due date), the current date, language and currency.
+- a summary of your records: cards (purpose, last 4 digits, balance), spending and income for 30 days by category, up to 60 latest transactions (date, amount, title, category, card), debts and payments (name, amount, due date, repeat, reminder, loan terms: monthly payment, rate, payments left; notes on debts are not sent), savings goals (name, target, amount saved, deadline), your own reminders (text, date, repeat), the current date, language and currency;
+- results of calculations over your history: if a question needs a period or filter that is not in the summary (for example, "how much did I spend in September"), the app works out the answer on the phone and sends only the results: totals and number of transactions, breakdowns by category, merchant, month, week, day or card, and up to 25 transactions per query (date, amount, title, category, card).
 
-Not sent: full card numbers, CVV, cardholder names and savings goals. Bank SMS that the app recognizes on the phone never go to the cloud. The key is used only to sign in to the chosen service.
+Not sent: full card numbers, CVV and cardholder names. Bank SMS that the app recognizes on the phone never go to the cloud.
 
-Requests go straight from your phone to the chosen service using your key. Our server is not part of this chain and we receive no copies. The service processes data under its own rules, possibly in another country: [Anthropic](https://www.anthropic.com/legal/privacy), [OpenAI](https://openai.com/policies/privacy-policy), [Google](https://policies.google.com/privacy). Requests are billed to your key.
+Requests go straight from your phone to the chosen service using the app's key. Our server is not part of this chain and we receive no copies. The service processes data under its own rules, possibly in another country: [Anthropic](https://www.anthropic.com/legal/privacy), [OpenAI](https://openai.com/policies/privacy-policy), [Google](https://policies.google.com/privacy).
 
-You can withdraw permission at any time: delete the key in Settings → AI assistant. Without a key the app answers questions using only the data on your phone.
+If you ask the AI to change something in the app (add a debt, set a reminder), it only proposes the changes as a card in the chat. The app makes them only when you tap "Apply".
 
-**3. iOS features.** You choose screenshots in the system iOS picker, and the app sees only the pictures you pick. The clipboard is read only when you tap the buttons that scan an SMS or paste from the clipboard. Export puts a CSV table on the clipboard when you tap it. Reminders about due debts and Apple Pay purchases are shown by the device itself if you allowed notifications. Shortcuts run on your phone; the app does not read messages on its own, iOS does not allow that.
+You can withdraw permission at any time: turn off "Send data to AI" in Settings → AI assistant. While it is off, the app asks for permission again before sending and, without it, answers questions using only the data on your phone.
+
+**3. Advertising.** The app shows Yandex advertising (Yandex Advertising Network, Yandex Mobile Ads SDK). Before the first ad iOS asks for permission to track you. The advertising service may receive technical data about the device and the app: for example, the IP address, device identifiers, the advertising identifier (only if you allow tracking), device model and iOS version, language, and ad impressions and taps. Your transactions, cards, debts, savings goals, questions to the AI and other financial data are not passed to advertising. You can withdraw the tracking permission at any time: iOS Settings → Privacy & Security → Tracking. Yandex processes data under its own rules: [Yandex Privacy Policy](https://yandex.ru/legal/confidential/).
+
+**3. iOS features.** You choose screenshots in the system iOS picker, and the app sees only the pictures you pick. The clipboard is read only when you tap the buttons that scan an SMS or paste from the clipboard. Export puts a CSV table on the clipboard when you tap it. Reminders (about debts, savings goals, cards and your own) and Apple Pay purchase prompts are shown by the device itself if you allowed notifications. Shortcuts run on your phone; the app does not read messages on its own, iOS does not allow that.
 
 ## What we do not do
 
 - we do not create accounts or collect contact details;
 - we do not show ads or pass data to ad networks;
 - we do not use analytics, tracking or third-party SDKs;
-- we do not sell or share your data with third parties, except as described above when you connect an AI service yourself.
+- we do not sell or share your data with third parties, except as described above: when you allow data to be sent to an AI service and when the Yandex advertising service receives technical data to show ads.
 
 ## Your control
 

@@ -38,11 +38,41 @@ enum AppTab: Int, CaseIterable, Identifiable, Hashable {
         default: return "\(icon).fill"
         }
     }
+
+    /// Цвет раздела: им подсвечены значок, подпись и подложка выбранной вкладки. У «Обзора» лайм, цвет бренда
+    var tint: Color {
+        switch self {
+        case .overview: return Theme.accent
+        case .cards: return PaletteColor.sky.color
+        case .assistant: return PaletteColor.lilac.color
+        case .debts: return PaletteColor.coral.color
+        case .report: return PaletteColor.sun.color
+        }
+    }
+}
+
+/// Сплошная полоса фона над безопасной областью: прокрутка скрывается под ней, а не просвечивает под часами и Wi-Fi.
+/// Полоса стоит на верхней границе безопасной области и сдвинута вверх на собственную высоту. Поэтому она закрывает всю
+/// строку состояния, какой бы она ни была (вырез, островок, обычная строка), а лишняя высота уходит за край экрана.
+/// Прежняя версия брала высоту из GeometryReader с ignoresSafeArea, но такой GeometryReader видит нулевые отступы:
+/// полоса получалась высотой 0 и на устройстве ничего не закрывала.
+struct StatusBarCover: View {
+    /// Больше любой строки состояния (самая высокая на iPhone около 60 pt)
+    static let height: CGFloat = 200
+
+    var body: some View {
+        Theme.background
+            .frame(height: Self.height)
+            .offset(y: -Self.height)
+            .allowsHitTesting(false)
+    }
 }
 
 /// Главный контейнер приложения: пять разделов в нижней панели, ИИ — один из них.
 struct ContentView: View {
     @State private var financeService = FinanceService.shared
+    @State private var router = AppRouter.shared
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab: AppTab = .overview
     /// Пока открыта клавиатура, панель прячется, чтобы поле ввода чата стояло прямо над клавиатурой
     @State private var isKeyboardVisible = false
@@ -51,11 +81,27 @@ struct ContentView: View {
     @Namespace private var tabNamespace
 
     var body: some View {
-        tabContent
-            .id(selectedTab)
-            .transition(.opacity.combined(with: .scale(scale: 0.985)))
+        VStack(spacing: 0) {
+            // Реклама Яндекса: у каждой из пяти вкладок свой баннер, закреплённый вверху над содержимым. .id пересоздаёт его
+            // при смене вкладки, и новая вкладка запрашивает свою рекламу. Без идентификатора блока в сборке баннера нет
+            AdBannerSection()
+                .id(selectedTab)
+            // ZStack: при смене раздела старый и новый экраны накладываются, а не встают друг под другом
+            ZStack {
+                tabContent
+                    .id(selectedTab)
+                    .transition(.opacity.combined(with: .scale(scale: 0.985)))
+            }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .monoScreen()
+        }
+        .monoScreen()
+            // Прокрутка уходит под системные часы и значки: полоса фона не даёт им налезать на плитки и текст.
+            // В ролике для магазина сверху своя полоса с подписью, там накладка не нужна
+            .overlay(alignment: .top) {
+                if !ScreenshotMode.isTour {
+                    StatusBarCover()
+                }
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if !isKeyboardVisible {
                     tabBar
@@ -70,6 +116,19 @@ struct ContentView: View {
             .task {
                 // Курсы валют обновляются сами при каждом запуске
                 CurrencyService.shared.fetchLatestRates()
+            }
+            // Нажатие на напоминание открывает его раздел: долги, карты с копилками или обзор
+            .onAppear {
+                openRequestedTab()
+            }
+            .onChange(of: router.requestedTab) {
+                openRequestedTab()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                // Вечерние напоминания ставятся на две недели вперёд: при каждом возвращении в приложение окно сдвигается
+                if phase == .active {
+                    ReminderService.shared.update(from: financeService)
+                }
             }
             .screenshotScene(selectedTab: $selectedTab, financeService: financeService)
     }
@@ -91,6 +150,12 @@ struct ContentView: View {
         case .report:
             ReportView(financeService: financeService)
         }
+    }
+
+    private func openRequestedTab() {
+        guard let tab = router.requestedTab else { return }
+        router.requestedTab = nil
+        switchTo(tab)
     }
 
     private func switchTo(_ tab: AppTab) {
@@ -132,13 +197,13 @@ struct ContentView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
-            .foregroundColor(isSelected ? Theme.accent : Theme.textSecondary)
+            .foregroundColor(isSelected ? tab.tint : Theme.textSecondary)
             .frame(maxWidth: .infinity, minHeight: 50)
             .background {
                 // Подложка перетекает от прежней вкладки к новой
                 if isSelected {
                     RoundedRectangle(cornerRadius: 16)
-                        .fill(Theme.accent.opacity(0.12))
+                        .fill(tab.tint.opacity(0.14))
                         .matchedGeometryEffect(id: "selectedTab", in: tabNamespace)
                 }
             }

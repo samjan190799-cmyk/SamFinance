@@ -53,6 +53,10 @@ struct CardsView: View {
                             },
                             onAddGoal: {
                                 selectedCardForNewGoal = card
+                            },
+                            isFirst: card.id == financeService.cards.first?.id,
+                            onPinFirst: {
+                                pinFirst(card)
                             }
                         )
                         // Новая карта — новый блок: прежний исчезает сразу, новый выплывает снизу
@@ -115,6 +119,13 @@ struct CardsView: View {
                     FlippableCardView(card: card)
                         .containerRelativeFrame(.horizontal)
                         .contextMenu {
+                            if card.id != financeService.cards.first?.id {
+                                Button {
+                                    pinFirst(card)
+                                } label: {
+                                    Label(String(localized: "Закрепить первой"), systemImage: "pin")
+                                }
+                            }
                             Button {
                                 HapticManager.shared.impact(.light)
                                 cardBeingEdited = card
@@ -142,10 +153,21 @@ struct CardsView: View {
         }
         .contentMargins(.horizontal, 44, for: .scrollContent)
         .scrollTargetBehavior(.viewAligned)
-        .scrollPosition(id: $centeredCardID)
+        // Текущая карта та, что в центре. Без anchor SwiftUI считает текущей самую левую видимую, а это выглядывающая
+        // слева предыдущая карта: после листания цели, точки и «+ Цель» оставались у неё
+        .scrollPosition(id: $centeredCardID, anchor: .center)
         .scrollIndicators(.hidden)
         .scrollClipDisabled()
         .sensoryFeedback(.selection, trigger: centeredCardID)
+    }
+
+    /// Ставит карту первой и оставляет её в центре карусели
+    private func pinFirst(_ card: Card) {
+        HapticManager.shared.trigger(.success)
+        withAnimation(Motion.spring) {
+            financeService.pinCardFirst(id: card.id)
+            centeredCardID = card.id
+        }
     }
 
     /// Точки под каруселью: текущая карта вытягивается в лаймовую капсулу, по нажатию карусель листает к карте
@@ -258,6 +280,9 @@ struct CardWithGoalsSection: View {
     let onEdit: () -> Void
     let onShowAllGoals: () -> Void
     let onAddGoal: () -> Void
+    /// Карта стоит первой в карусели
+    var isFirst = false
+    var onPinFirst: () -> Void = {}
 
     private var goals: [Goal] {
         financeService.goalsForCard(cardId: card.id)
@@ -308,7 +333,28 @@ struct CardWithGoalsSection: View {
                     financeService.toggleFreezeCard(id: card.id)
                 }
             }
+            if financeService.cards.count > 1 {
+                pinButton
+            }
         }
+    }
+
+    /// Булавка: у первой карты залита лаймом, у остальных нажатие ставит карту первой
+    private var pinButton: some View {
+        Button {
+            guard !isFirst else { return }
+            onPinFirst()
+        } label: {
+            Image(systemName: isFirst ? "pin.fill" : "pin")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(isFirst ? Theme.onAccent : .white)
+                .frame(width: 44, height: 44)
+                .background(isFirst ? Theme.accent : Theme.surfaceRaised)
+                .clipShape(Circle())
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel(isFirst ? String(localized: "Карта закреплена первой") : String(localized: "Закрепить первой"))
     }
 
     private func outlineButton(title: String, action: @escaping () -> Void) -> some View {

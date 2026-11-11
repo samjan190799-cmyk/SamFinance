@@ -89,6 +89,11 @@ enum GeminiAPI {
         request.timeoutInterval = 180
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
+        // Ключ встроен в приложение, поэтому его стоит ограничить в Google Cloud Console приложением iOS:
+        // Google сверяет этот заголовок с идентификатором из ограничения, и чужие запросы с этим ключом не пройдут
+        if let bundleID = Bundle.main.bundleIdentifier {
+            request.setValue(bundleID, forHTTPHeaderField: "X-Ios-Bundle-Identifier")
+        }
         request.httpBody = body
 
         let data = try await AIHTTP.send(request, provider: .gemini)

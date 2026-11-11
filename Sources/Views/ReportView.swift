@@ -196,7 +196,7 @@ struct ReportView: View {
     private func historyRow(_ transaction: Transaction) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                MonoInitialBadge(title: transaction.title)
+                CategoryBadge(category: transaction.category)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(transaction.title)
