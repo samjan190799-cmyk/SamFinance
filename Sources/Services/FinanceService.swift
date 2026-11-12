@@ -22,6 +22,7 @@ public final class FinanceService {
     public private(set) var debts: [Debt] = []
     public private(set) var goals: [Goal] = []
     public private(set) var customReminders: [CustomReminder] = []
+    public private(set) var subscriptions: [AppSubscription] = []
     public private(set) var categories: [Category] = Category.defaultCategories
     
     // Пути к файлам сохранения в песочнице
@@ -50,6 +51,12 @@ public final class FinanceService {
         return paths[0].appendingPathComponent("reminders.json")
     }()
 
+    /// Подписки лежат в своём файле: появился он позже остальных, и у тех, кто обновился, его просто нет (чистый старт)
+    private let subscriptionsURL: URL = {
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        return paths[0].appendingPathComponent("subscriptions.json")
+    }()
+
     /// Хранилища данных на диске
     private enum Store: String {
         case transactions
@@ -57,6 +64,7 @@ public final class FinanceService {
         case debts
         case goals
         case reminders
+        case subscriptions
     }
 
     /// Хранилища, файл которых существует, но не удалось прочитать или сохранить рядом резервную копию
@@ -158,11 +166,13 @@ public final class FinanceService {
         debts.removeAll()
         goals.removeAll()
         customReminders.removeAll()
+        subscriptions.removeAll()
         saveData()
         saveCards()
         saveDebts()
         saveGoals()
         saveReminders()
+        saveSubscriptions()
     }
     
     // MARK: - API для карт
@@ -272,6 +282,14 @@ public final class FinanceService {
                 debts[index].cardId = nil
             }
             saveDebts()
+        }
+
+        // Подписки остаются, но без указанной карты списания
+        if subscriptions.contains(where: { $0.cardId == id }), prepareForWrite(.subscriptions) {
+            for index in subscriptions.indices where subscriptions[index].cardId == id {
+                subscriptions[index].cardId = nil
+            }
+            saveSubscriptions()
         }
 
         // Копилки удалённой карты без неё нигде не показываются, поэтому уходят вместе с ней
@@ -436,6 +454,51 @@ public final class FinanceService {
         guard prepareForWrite(.debts) else { return }
         debts.removeAll { $0.id == id }
         saveDebts()
+    }
+
+    // MARK: - API для подписок
+
+    public func addSubscription(_ subscription: AppSubscription) {
+        guard prepareForWrite(.subscriptions) else { return }
+        var added = subscription
+        if added.createdAt == nil {
+            added.createdAt = Date()
+        }
+        subscriptions.insert(added, at: 0)
+        saveSubscriptions()
+    }
+
+    /// Сохраняет правку подписки целиком; подписки с таким номером нет — ничего не меняет
+    public func updateSubscription(_ subscription: AppSubscription) {
+        guard prepareForWrite(.subscriptions), let index = subscriptions.firstIndex(where: { $0.id == subscription.id }) else { return }
+        var updated = subscription
+        // Когда подписку завели, правка не стирает
+        if updated.createdAt == nil {
+            updated.createdAt = subscriptions[index].createdAt
+        }
+        subscriptions[index] = updated
+        saveSubscriptions()
+    }
+
+    /// Пауза, возобновление, архив и возврат из архива
+    public func setSubscriptionStatus(id: UUID, status: SubscriptionStatus) {
+        guard prepareForWrite(.subscriptions), let index = subscriptions.firstIndex(where: { $0.id == id }),
+              subscriptions[index].status != status else { return }
+        subscriptions[index].status = status
+        saveSubscriptions()
+    }
+
+    /// Меняет, за сколько дней напомнить о списании
+    public func setSubscriptionReminder(id: UUID, reminder: DebtReminder) {
+        guard prepareForWrite(.subscriptions), let index = subscriptions.firstIndex(where: { $0.id == id }) else { return }
+        subscriptions[index].reminder = reminder
+        saveSubscriptions()
+    }
+
+    public func deleteSubscription(id: UUID) {
+        guard prepareForWrite(.subscriptions) else { return }
+        subscriptions.removeAll { $0.id == id }
+        saveSubscriptions()
     }
 
     // MARK: - API для своих напоминаний
@@ -612,6 +675,7 @@ public final class FinanceService {
         loadDebts()
         loadGoals()
         loadReminders()
+        loadSubscriptions()
         ReminderService.shared.update(from: self)
     }
 
@@ -682,6 +746,13 @@ public final class FinanceService {
     private func loadReminders() {
         if let loaded = readStore([CustomReminder].self, store: .reminders, url: remindersURL, dateStrategy: .iso8601) {
             customReminders = loaded
+        }
+    }
+
+    /// Файла подписок у тех, кто обновился, нет: список остаётся пустым и файл создаётся при первой подписке
+    private func loadSubscriptions() {
+        if let loaded = readStore([AppSubscription].self, store: .subscriptions, url: subscriptionsURL, dateStrategy: .iso8601) {
+            subscriptions = loaded
         }
     }
 
@@ -759,6 +830,7 @@ public final class FinanceService {
             case .debts: loadDebts()
             case .goals: loadGoals()
             case .reminders: loadReminders()
+            case .subscriptions: loadSubscriptions()
             }
         }
         return !unreadableStores.contains(store)
@@ -829,6 +901,20 @@ public final class FinanceService {
             try data.write(to: remindersURL, options: [.atomic, .completeFileProtection])
         } catch {
             print("⚠️ Не удалось сохранить напоминания: \(error.localizedDescription)")
+        }
+        ReminderService.shared.update(from: self)
+    }
+
+    private func saveSubscriptions() {
+        guard !unreadableStores.contains(.subscriptions) else { return }
+        do {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            encoder.outputFormatting = .prettyPrinted
+            let data = try encoder.encode(subscriptions)
+            try data.write(to: subscriptionsURL, options: [.atomic, .completeFileProtection])
+        } catch {
+            print("⚠️ Не удалось сохранить подписки: \(error.localizedDescription)")
         }
         ReminderService.shared.update(from: self)
     }

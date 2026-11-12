@@ -1,15 +1,19 @@
 import SwiftUI
 import UIKit
 
-/// Экран долгов: две суммы сверху, вкладки «Мне должны», «Я должен» и «Платежи» и список с отметкой об оплате.
-/// Кредиты лежат на вкладке «Я должен», коммуналка, интернет и подписки — на вкладке «Платежи».
+/// Экран долгов: две суммы сверху, вкладки «Мне должны», «Я должен», «Платежи» и «Подписки» и список с отметкой об оплате.
+/// Кредиты лежат на вкладке «Я должен», коммуналка и интернет — на вкладке «Платежи», подписки, которые списываются сами, — на «Подписках»
+/// (там итоги «в месяц» и «в год», а строки идут по ближайшему списанию).
 /// Строку можно смахнуть вправо, чтобы отметить оплату, и влево, чтобы удалить; нажатие открывает правку.
 struct DebtsView: View {
     let financeService: FinanceService
+    @State private var router = AppRouter.shared
     @State private var selectedTab: DebtTab = ScreenshotMode.scene == .debts ? .owedToMe : .iOwe
     @State private var isShowingAddSheet = false
     @State private var isShowingTypeSettings = false
+    @State private var isShowingSubscriptionEditor = false
     @State private var editingDebt: Debt? = nil
+    @State private var editingSubscription: AppSubscription? = nil
     @State private var paymentRequest: DebtPaymentRequest? = nil
     /// Настройки видов записей: по ним строки показывают, придёт ли напоминание
     @State private var typeSettings = DebtTypeSettings.load()
@@ -67,7 +71,11 @@ struct DebtsView: View {
             }
             .monoListRow()
 
-            debtsList
+            if selectedTab == .subscriptions {
+                subscriptionsList
+            } else {
+                debtsList
+            }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
@@ -75,6 +83,13 @@ struct DebtsView: View {
         .environment(\.defaultMinListRowHeight, 0)
         .animation(Motion.spring, value: selectedTab)
         .monoScreen()
+        // Нажатие на напоминание о списании открывает «Подписки»
+        .onAppear {
+            openRequestedTab()
+        }
+        .onChange(of: router.requestedDebtTab) {
+            openRequestedTab()
+        }
         .sheet(isPresented: $isShowingAddSheet) {
             // Новая запись открывается на своей вкладке, чтобы она не «пропала» после сохранения
             AddDebtView(financeService: financeService, tab: selectedTab) { tab in
@@ -88,6 +103,12 @@ struct DebtsView: View {
         }
         .sheet(item: $paymentRequest) { request in
             DebtPaymentSheet(financeService: financeService, request: request)
+        }
+        .sheet(isPresented: $isShowingSubscriptionEditor) {
+            SubscriptionEditorView(financeService: financeService)
+        }
+        .sheet(item: $editingSubscription) { subscription in
+            SubscriptionEditorView(financeService: financeService, editing: subscription)
         }
         .sheet(isPresented: $isShowingTypeSettings, onDismiss: {
             typeSettings = DebtTypeSettings.load()
@@ -105,16 +126,29 @@ struct DebtsView: View {
                 .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
             Spacer()
-            MonoCircleButton(systemName: "slider.horizontal.3", label: String(localized: "Настройки по видам")) {
-                HapticManager.shared.impact(.light)
-                isShowingTypeSettings = true
+            // Настройки видов относятся к долгам и платежам; у подписок свой переключатель напоминаний в настройках
+            if selectedTab != .subscriptions {
+                MonoCircleButton(systemName: "slider.horizontal.3", label: String(localized: "Настройки по видам")) {
+                    HapticManager.shared.impact(.light)
+                    isShowingTypeSettings = true
+                }
             }
-            MonoCircleButton(systemName: "plus", label: "add_debt".localized, filled: true) {
+            MonoCircleButton(systemName: "plus", label: selectedTab == .subscriptions ? String(localized: "Добавить подписку") : "add_debt".localized, filled: true) {
                 HapticManager.shared.impact(.light)
-                isShowingAddSheet = true
+                if selectedTab == .subscriptions {
+                    isShowingSubscriptionEditor = true
+                } else {
+                    isShowingAddSheet = true
+                }
             }
         }
         .padding(.top, 8)
+    }
+
+    private func openRequestedTab() {
+        guard let tab = router.requestedDebtTab else { return }
+        router.requestedDebtTab = nil
+        selectedTab = tab
     }
 
     // MARK: - Итоги
@@ -124,6 +158,10 @@ struct DebtsView: View {
                 summaryTile(title: String(localized: "К оплате за 30 дней"), amount: billsDueSoon, highlighted: true, tint: PaletteColor.sky.color)
                 // Просрочка заливается цветом, только когда она есть: так её не пропустить
                 summaryTile(title: String(localized: "Просрочено"), amount: billsOverdue, highlighted: billsOverdue > 0, tint: PaletteColor.coral.color)
+            } else if selectedTab == .subscriptions {
+                let totals = subscriptionTotals
+                summaryTile(title: String(localized: "В месяц"), amount: totals.perMonth, highlighted: true, tint: PaletteColor.lilac.color)
+                summaryTile(title: String(localized: "В год"), amount: totals.perYear, highlighted: false, tint: PaletteColor.lilac.color)
             } else {
                 summaryTile(title: DebtTab.owedToMe.title, amount: owedToMe, highlighted: selectedTab == .owedToMe, tint: PaletteColor.mint.color)
                 summaryTile(title: DebtTab.iOwe.title, amount: iOwe, highlighted: selectedTab == .iOwe, tint: PaletteColor.coral.color)
@@ -132,7 +170,15 @@ struct DebtsView: View {
         .padding(.top, 20)
     }
 
-    /// Плитка итога в цвете своего вида: мне должны — мятная, я должен — коралловая, платежи — голубая.
+    /// Итоги по активным подпискам: каждая считается в своей валюте и переводится в основную по курсу
+    private var subscriptionTotals: SubscriptionTotals {
+        let base = CurrencyManager.shared.baseCurrency
+        return SubscriptionTotals(financeService.subscriptions) { amount, currency in
+            CurrencyService.shared.convert(amount: amount, from: currency, to: base)
+        }
+    }
+
+    /// Плитка итога в цвете своего вида: мне должны — мятная, я должен — коралловая, платежи — голубая, подписки — сиреневая.
     /// Выбранная плитка залита цветом, у второй цветом выделена подпись
     private func summaryTile(title: String, amount: Double, highlighted: Bool, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -173,27 +219,33 @@ struct DebtsView: View {
         case .owedToMe: return String(localized: "Вам пока никто не должен.")
         case .iOwe: return String(localized: "У вас нет долгов и кредитов.")
         case .bills: return String(localized: "Платежей пока нет. Добавьте коммуналку, интернет или подписку кнопкой «+»: приложение напомнит об оплате и само перенесёт срок на следующий месяц.")
+        case .subscriptions: return String(localized: "Подписок пока нет. Добавьте кино, музыку или облако кнопкой «+»: приложение посчитает, сколько они стоят в месяц и в год, и напомнит о списании заранее.")
         }
+    }
+
+    /// Пустой список вкладки: заголовок и подсказка, что добавить
+    private func emptyState(_ text: String) -> some View {
+        VStack(spacing: 8) {
+            Text("Пусто")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(.white)
+            Text(text)
+                .font(.system(size: 14))
+                .foregroundColor(Theme.textTertiary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 56)
+        .padding(.horizontal, 12)
+        .transition(.opacity)
+        .monoListRow()
     }
 
     @ViewBuilder
     private var debtsList: some View {
         let debts = visibleDebts
         if debts.isEmpty {
-            VStack(spacing: 8) {
-                Text("Пусто")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(.white)
-                Text(emptyText)
-                    .font(.system(size: 14))
-                    .foregroundColor(Theme.textTertiary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 56)
-            .padding(.horizontal, 12)
-            .transition(.opacity)
-            .monoListRow()
+            emptyState(emptyText)
         } else {
             ForEach(Array(debts.enumerated()), id: \.element.id) { index, debt in
                 DebtRowView(debt: debt, typeSettings: typeSettings, onEdit: {
@@ -293,6 +345,161 @@ struct DebtsView: View {
         HapticManager.shared.trigger(.warning)
         withAnimation(Motion.spring) {
             financeService.deleteDebt(id: debt.id)
+        }
+    }
+
+    // MARK: - Подписки
+
+    /// Подписки по порядку: активные по ближайшему списанию, ниже те, что на паузе, и архив
+    @ViewBuilder
+    private var subscriptionsList: some View {
+        let items = AppSubscription.sortedForList(financeService.subscriptions)
+        if items.isEmpty {
+            emptyState(emptyText)
+        } else {
+            ForEach(SubscriptionStatus.allCases) { status in
+                let group = items.filter { $0.status == status }
+                if !group.isEmpty {
+                    if status != .active {
+                        Text(status.title)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(Theme.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 20)
+                            .padding(.bottom, 8)
+                            .monoListRow()
+                    }
+                    ForEach(Array(group.enumerated()), id: \.element.id) { index, subscription in
+                        subscriptionRow(subscription, index: index)
+                    }
+                }
+            }
+        }
+    }
+
+    private func subscriptionRow(_ subscription: AppSubscription, index: Int) -> some View {
+        SubscriptionRowView(subscription: subscription, cardTitle: cardTitle(for: subscription), onEdit: {
+            editingSubscription = subscription
+        })
+        .appearAnimation(delay: 0.12 + Double(index) * Motion.stagger)
+        .monoListRow()
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button {
+                togglePause(subscription)
+            } label: {
+                Label(pauseTitle(for: subscription), systemImage: pauseIcon(for: subscription))
+            }
+            .tint(Theme.accentStrong)
+        }
+        // Без полного смахивания: удаление подписки не должно срабатывать от случайного движения пальца
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                delete(subscription)
+            } label: {
+                Label("Удалить", systemImage: "trash")
+            }
+            if subscription.status != .archived {
+                Button {
+                    setStatus(.archived, for: subscription)
+                } label: {
+                    Label("В архив", systemImage: "archivebox")
+                }
+                .tint(Theme.surfaceRaised)
+            }
+        }
+        .contextMenu {
+            Button {
+                editingSubscription = subscription
+            } label: {
+                Label("Изменить", systemImage: "pencil")
+            }
+            Button {
+                togglePause(subscription)
+            } label: {
+                Label(pauseTitle(for: subscription), systemImage: pauseIcon(for: subscription))
+            }
+            if subscription.status != .archived {
+                Button {
+                    setStatus(.archived, for: subscription)
+                } label: {
+                    Label("В архив", systemImage: "archivebox")
+                }
+            }
+            if subscription.isActive {
+                subscriptionReminderMenu(subscription)
+            }
+            Button(role: .destructive) {
+                delete(subscription)
+            } label: {
+                Label("Удалить", systemImage: "trash")
+            }
+        }
+    }
+
+    /// «•••• 1234», если карта указана и ещё есть в приложении
+    private func cardTitle(for subscription: AppSubscription) -> String? {
+        guard let id = subscription.cardId, let card = financeService.cards.first(where: { $0.id == id }) else { return nil }
+        return "•••• \(card.last4)"
+    }
+
+    /// Активная подписка ставится на паузу; подписка на паузе и из архива возвращается в активные
+    private func togglePause(_ subscription: AppSubscription) {
+        setStatus(subscription.isActive ? .paused : .active, for: subscription)
+    }
+
+    private func pauseTitle(for subscription: AppSubscription) -> String {
+        switch subscription.status {
+        case .active: return String(localized: "Пауза")
+        case .paused: return String(localized: "Возобновить")
+        case .archived: return String(localized: "Вернуть")
+        }
+    }
+
+    private func pauseIcon(for subscription: AppSubscription) -> String {
+        switch subscription.status {
+        case .active: return "pause.fill"
+        case .paused: return "play.fill"
+        case .archived: return "arrow.uturn.backward"
+        }
+    }
+
+    private func setStatus(_ status: SubscriptionStatus, for subscription: AppSubscription) {
+        HapticManager.shared.selection()
+        withAnimation(Motion.spring) {
+            financeService.setSubscriptionStatus(id: subscription.id, status: status)
+        }
+    }
+
+    private func delete(_ subscription: AppSubscription) {
+        HapticManager.shared.trigger(.warning)
+        withAnimation(Motion.spring) {
+            financeService.deleteSubscription(id: subscription.id)
+        }
+    }
+
+    /// За сколько дней напомнить о списании: выбор прямо из меню строки
+    private func subscriptionReminderMenu(_ subscription: AppSubscription) -> some View {
+        let current = subscription.effectiveReminder
+        return Menu {
+            ForEach(DebtReminder.allCases) { option in
+                Button {
+                    HapticManager.shared.selection()
+                    financeService.setSubscriptionReminder(id: subscription.id, reminder: option)
+                    if option != .off {
+                        Task {
+                            _ = await PurchasePromptService.shared.requestAuthorization()
+                        }
+                    }
+                } label: {
+                    if option == current {
+                        Label(option.title, systemImage: "checkmark")
+                    } else {
+                        Text(option.title)
+                    }
+                }
+            }
+        } label: {
+            Label("Напоминание", systemImage: current == .off ? "bell.slash" : "bell")
         }
     }
 }
@@ -588,7 +795,8 @@ struct AddDebtView: View {
             case .iOwe:
                 type = .credit
                 profile = .credit
-            case .bills:
+            case .bills, .subscriptions:
+                // На «Подписках» кнопка «+» открывает свою форму (SubscriptionEditorView); сюда вкладка попасть не может
                 type = .bill
                 profile = .bill(.utilities)
             }

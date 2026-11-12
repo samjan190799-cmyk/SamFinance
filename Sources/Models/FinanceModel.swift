@@ -493,11 +493,13 @@ public enum DebtSide: String, CaseIterable, Identifiable, Hashable, Sendable {
     }
 }
 
-/// Все вкладки экрана долгов: «Мне должны», «Я должен» и «Платежи»
+/// Все вкладки экрана долгов: «Мне должны», «Я должен», «Платежи» и «Подписки».
+/// Подписки хранятся отдельно от долгов (`AppSubscription`), поэтому ни одна запись `Debt` на этой вкладке не лежит.
 public enum DebtTab: String, CaseIterable, Identifiable, Hashable, Sendable {
     case owedToMe
     case iOwe
     case bills
+    case subscriptions
 
     public var id: String { rawValue }
 
@@ -506,10 +508,12 @@ public enum DebtTab: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .owedToMe: return DebtSide.owedToMe.title
         case .iOwe: return DebtSide.iOwe.title
         case .bills: return String(localized: "Платежи")
+        // Короткий ключ: в переключателе из четырёх вкладок длинное слово («Բաժանորդագրություններ») не помещается
+        case .subscriptions: return "tab_subscriptions".localized
         }
     }
 
-    /// Вкладка, на которой лежит запись
+    /// Вкладка, на которой лежит запись. Долги и платежи не попадают на «Подписки».
     public init(debt: Debt) {
         if debt.type == .bill {
             self = .bills
