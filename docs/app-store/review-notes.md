@@ -1,6 +1,6 @@
 # Заметки для проверяющего (App Review Information → Notes)
 
-Где вставить: App Store Connect → версия приложения → **App Review Information** → поле **Notes**. Сам текст ниже написан по-английски: проверяющие читают его. Поле принимает до 4000 знаков, здесь около 3000.
+Где вставить: App Store Connect → версия приложения → **App Review Information** → поле **Notes**. Сам текст ниже написан по-английски: проверяющие читают его. Поле принимает до 4000 знаков, при правках проверяйте длину (сейчас текст ниже около 4000: если не влезает, сократите абзацы про рекламу и разрешения).
 
 В поле **Sign-In Information** галочку «Sign-in required» не ставьте: входа нет. В **Contact Information** укажите своё имя, телефон и почту (они видны только Apple).
 
@@ -21,10 +21,8 @@ SAS SUPERMARKET, AM
 MNACORD 120,000.00
 
 Recognition runs on the device. The same works with screenshots of such SMS (the "AI" tab, photo button): text is recognized on the device with Apple's Vision framework.
-3. "AI" tab without a key: a local assistant answers questions from the data on the phone, for example "what is my balance?", "how are my goals?", "how much did I spend this week?" (it understands Russian, English and Armenian).
-
-OPTIONAL CLOUD AI
-The AI assistant works out of the box: the app uses an API key that belongs to the developer and is built into the build (users enter no key and are charged nothing). It is a cloud service (Anthropic, OpenAI or Google, named in the consent dialog). Before the first request the app shows a consent dialog that says exactly what is sent and to whom (question, screenshots, a summary of transactions, cards with the last 4 digits only, debts, savings goals and reminders, and, when a question needs older data, the results of on-device calculations over the history such as totals and up to 25 transactions per query). The AI can also propose changes (for example add a debt or set a reminder); nothing is changed until the user taps "Apply" on the card in the chat. The switch "Send data to AI" in Settings > AI assistant withdraws the consent. Full card numbers, CVV and cardholder names are never sent.
+3. "AI" tab: bank SMS text and screenshots are recognized on the device. Other questions, for example "what is my balance?", "how are my goals?", "how much did I spend this week?", go to the cloud AI after the user allows it in the consent dialog (see CLOUD AI
+The assistant works out of the box with an API key that belongs to the developer and is built into the build (users enter no key and pay nothing). The only cloud AI service is Google Gemini, named in the consent dialog; the app does not use ChatGPT or OpenAI and cannot be switched to them (guideline 5, China). Before the first request a consent dialog says exactly what is sent and to whom (question, screenshots, a summary of transactions, cards with the last 4 digits only, debts, goals and reminders, and, when a question needs older data, on-device totals and up to 25 transactions per query). The AI can propose changes (for example add a debt); nothing changes until the user taps "Apply" in the chat. The switch "Send data to AI" in Settings > AI assistant withdraws the consent. Full card numbers, CVV and cardholder names are never sent.
 
 ADVERTISING
 Each of the five tabs shows its own Yandex Mobile Ads banner (Yandex Advertising Network) inside the scrolling content, between the first and second blocks of the screen (on Overview, between the balance card and the quick-action buttons); it scrolls with the content and loads a new ad when the tab is opened. It is a separate strip above the screen content and never covers an input field or a button. Before the first ad iOS shows the App Tracking Transparency prompt (the usage description is localized in Russian, English and Armenian); declining does not disable ads, they are just less personalized. No transactions, cards, debts or other financial data are ever passed to the ad SDK. Builds without an ad unit id contain no ads at all.
@@ -32,7 +30,7 @@ Each of the five tabs shows its own Yandex Mobile Ads banner (Yandex Advertising
 PERMISSIONS AND NETWORK
 - Notifications only (optional): reminders for debt due dates and prompts after Apple Pay purchases.
 - Photos are chosen in the system picker; the clipboard is read only when the user taps a scan or paste button. No location, camera, microphone, contacts or tracking.
-- Network: exchange rates from open.er-api.com (no user data) and the AI provider the user chose, only after they add a key and give consent. Encryption is limited to standard HTTPS (ITSAppUsesNonExemptEncryption = NO).
+- Network: exchange rates from open.er-api.com (no user data) and the AI service named in the consent dialog (Google Gemini), only after the user gives consent. Encryption is limited to standard HTTPS (ITSAppUsesNonExemptEncryption = NO).
 
 OTHER
 - Languages: Russian, English and Armenian. Armenian is not an iOS system language, so it is chosen in Settings > Language and applies after a restart.
@@ -43,6 +41,6 @@ OTHER
 ## Что это значит для вас
 
 - Проверяющему не нужны ни аккаунт, ни ключ ИИ: всё основное проверяется без настройки. Это главное, ради чего написаны заметки.
-- Если проверяющий захочет увидеть облачного ИИ, он поймёт из заметок, что приложение не выдаёт ключи. Если Apple всё же попросит показать эту часть, можно приложить короткое видео, где вы вставляете свой ключ и задаёте вопрос.
+- Облачный ИИ работает по ключу сборки (Google Gemini). Слова ChatGPT и OpenAI ни в карточке, ни в этих заметках, кроме одной фразы про Китай, не используйте: 12 ноября 2026 Apple отклонила версию 1.1.0 по Guideline 5 (Китай) именно из-за них.
 - Названия кнопок в тексте даны по английскому интерфейсу (проверяющие обычно открывают приложение на английском). Если подписи на экране поменяются, поправьте и текст.
 - Ссылка на политику конфиденциальности должна работать до отправки на проверку. См. `docs/app-store/README.md`.

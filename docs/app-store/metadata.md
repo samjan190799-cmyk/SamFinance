@@ -36,8 +36,8 @@ Hashiv — личный учёт денег для тех, кому надоел
 ИИ-ПОМОЩНИК
 • Пришлите скриншот СМС или вставьте её текст — приложение найдёт операции, привяжет их к картам и разложит по категориям
 • Банковские СМС распознаются на телефоне и никуда не отправляются
-• По желанию подключите свой ключ Claude, ChatGPT или Gemini: помощник ответит на любые вопросы о ваших деньгах и разберёт чеки и выписки. Перед первой отправкой данных приложение спросит разрешение, ключ хранится в Keychain
-• Без ключа помощник отвечает на частые вопросы по данным на телефоне
+• Помощник отвечает на любые вопросы о ваших деньгах и разбирает чеки и выписки через облачный ИИ-сервис. Перед первой отправкой данных приложение спросит разрешение
+• Если не разрешить отправку, помощник отвечает на частые вопросы по данным на телефоне
 
 КАРТЫ
 • Добавляйте карты: номер и срок форматируются сами, платёжная система определяется по номеру
@@ -71,8 +71,8 @@ Hashiv — личный учёт денег для тех, кому надоел
 • Интерфейс на русском, английском и армянском
 
 КОНФИДЕНЦИАЛЬНОСТЬ
-• Нет регистрации и рекламы, данные хранятся на вашем телефоне
-• В облако данные уходят только если вы сами добавили ключ ИИ и разрешили отправку
+• Нет регистрации, данные хранятся на вашем телефоне
+• В облако данные уходят только если вы разрешили отправку ИИ-помощнику
 • Политика конфиденциальности есть в Настройках приложения
 ```
 
@@ -112,8 +112,8 @@ A NEW TRANSACTION IN A FEW TAPS
 AI ASSISTANT
 • Send a screenshot of an SMS or paste its text: the app finds the transactions, links them to your cards and sorts them into categories
 • Bank SMS are recognized on your phone and never sent anywhere
-• Optionally add your own Claude, ChatGPT or Gemini key: the assistant answers any question about your money and reads receipts and statements. The app asks permission before the first send, and the key is kept in the Keychain
-• Without a key the assistant answers common questions using the data on your phone
+• The assistant answers any question about your money and reads receipts and statements through a cloud AI service. The app asks permission before the first send
+• If you do not allow sending, the assistant answers common questions using the data on your phone
 
 CARDS
 • Add cards: the number and expiry are formatted for you and the payment network is detected from the number
@@ -147,8 +147,8 @@ CURRENCIES AND LANGUAGES
 • The interface is in Russian, English and Armenian
 
 PRIVACY
-• No sign-up and no ads; your data stays on your phone
-• Data goes to the cloud only if you add an AI key yourself and allow sending
+• No sign-up; your data stays on your phone
+• Data goes to the cloud only if you allow sending to the AI assistant
 • The privacy policy is in the app's Settings
 ```
 
