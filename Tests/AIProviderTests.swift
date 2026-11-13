@@ -26,7 +26,7 @@ final class AIProviderTests: XCTestCase {
     }
 
     func testModelIsStandardWhenTheBuildSetsNone() {
-        let config = AIConfig(apiKey: "k", provider: .openAI, modelName: nil)
+        let config = AIConfig(apiKey: "k", provider: .claude, modelName: nil)
         for provider in AIProvider.allCases {
             XCTAssertEqual(provider.model(in: config), provider.defaultModel, provider.rawValue)
         }
@@ -36,14 +36,13 @@ final class AIProviderTests: XCTestCase {
         let config = AIConfig(apiKey: "k", provider: .gemini, modelName: "gemini-custom")
         XCTAssertEqual(AIProvider.gemini.model(in: config), "gemini-custom")
         XCTAssertEqual(AIProvider.claude.model(in: config), AIProvider.claude.defaultModel)
-        XCTAssertEqual(AIProvider.openAI.model(in: config), AIProvider.openAI.defaultModel)
     }
 
     func testConsentIsStoredPerProvider() {
         XCTAssertFalse(AIProvider.claude.hasConsent)
         AIProvider.claude.setConsent(true)
         XCTAssertTrue(AIProvider.claude.hasConsent)
-        XCTAssertFalse(AIProvider.openAI.hasConsent)
+        XCTAssertFalse(AIProvider.gemini.hasConsent)
         AIProvider.claude.setConsent(false)
         XCTAssertFalse(AIProvider.claude.hasConsent)
     }
@@ -69,16 +68,6 @@ final class AIProviderTests: XCTestCase {
         XCTAssertTrue(map(429).hasPrefix("rateLimited"))
         XCTAssertTrue(map(529).hasPrefix("overloaded"))
         XCTAssertTrue(map(500, #"{"error":{"type":"api_error","message":"boom"}}"#).hasPrefix("server"))
-    }
-
-    func testOpenAIErrorMapping() {
-        func map(_ status: Int, _ body: String) -> String {
-            String(describing: AIAPIError.from(status: status, data: data(body), provider: .openAI))
-        }
-        XCTAssertTrue(map(401, #"{"error":{"code":"invalid_api_key","message":"bad"}}"#).hasPrefix("invalidKey"))
-        XCTAssertTrue(map(429, #"{"error":{"code":"insufficient_quota","message":"quota"}}"#).hasPrefix("noCredit"))
-        XCTAssertTrue(map(429, #"{"error":{"code":"rate_limit_exceeded","message":"slow"}}"#).hasPrefix("rateLimited"))
-        XCTAssertTrue(map(503, "{}").hasPrefix("overloaded"))
     }
 
     func testGeminiErrorMapping() {
@@ -137,21 +126,6 @@ final class AIProviderTests: XCTestCase {
         let output = try XCTUnwrap(body["output_config"] as? [String: Any])
         XCTAssertEqual(output["effort"] as? String, "medium")
         XCTAssertEqual((output["format"] as? [String: Any])?["type"] as? String, "json_schema")
-    }
-
-    func testOpenAIRequestBody() throws {
-        let body = try json(OpenAIAPI.requestBody(samplePrompt(images: [Data([1, 2, 3])]), schema: schema))
-        let messages = try XCTUnwrap(body["messages"] as? [[String: Any]])
-        XCTAssertEqual(messages.first?["role"] as? String, "system")
-        XCTAssertEqual(messages.count, 4)
-        let content = try XCTUnwrap(messages.last?["content"] as? [[String: Any]])
-        let image = try XCTUnwrap(content.first { $0["type"] as? String == "image_url" })
-        let url = (image["image_url"] as? [String: Any])?["url"] as? String
-        XCTAssertEqual(url?.hasPrefix("data:image/jpeg;base64,"), true)
-        let format = try XCTUnwrap(body["response_format"] as? [String: Any])
-        XCTAssertEqual(format["type"] as? String, "json_schema")
-        let jsonSchema = try XCTUnwrap(format["json_schema"] as? [String: Any])
-        XCTAssertEqual(jsonSchema["strict"] as? Bool, true)
     }
 
     func testGeminiRequestBodyUsesGeminiSchema() throws {

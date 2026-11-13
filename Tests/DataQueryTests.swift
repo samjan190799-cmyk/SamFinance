@@ -308,7 +308,6 @@ final class DataQueryParsingTests: XCTestCase {
 
         let prompt = AIPrompt(system: "SYSTEM", turns: [], leadingText: nil, images: [], text: "question")
         XCTAssertNoThrow(try ClaudeAPI.requestBody(prompt, schema: schema))
-        XCTAssertNoThrow(try OpenAIAPI.requestBody(prompt, schema: schema))
         XCTAssertNoThrow(try GeminiAPI.requestBody(prompt, schema: schema))
     }
 

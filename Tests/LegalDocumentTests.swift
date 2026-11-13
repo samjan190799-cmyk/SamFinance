@@ -91,7 +91,7 @@ final class LegalDocumentTests: XCTestCase {
     func testPolicyNamesEveryRecipientOfAIData() {
         for language in [AppLanguage.russian, .english] {
             let body = text(of: LegalDocument.privacyPolicy(for: language, bundle: appBundle))
-            for name in ["Anthropic", "OpenAI", "Google", "open.er-api.com", "CVV", "Keychain"] {
+            for name in ["Anthropic", "Google", "open.er-api.com", "CVV", "Keychain"] {
                 XCTAssertTrue(body.contains(name), "в политике (\(language.rawValue)) нет «\(name)»")
             }
         }

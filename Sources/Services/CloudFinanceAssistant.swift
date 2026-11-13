@@ -78,7 +78,7 @@ private struct CloudOperation: Decodable {
     let counterparty: String?
 }
 
-/// Облачный ИИ-помощник на Claude, ChatGPT или Gemini (на выбор пользователя): отвечает на любые вопросы по данным пользователя
+/// Облачный ИИ-помощник на Claude или Gemini (сервис задаёт сборка): отвечает на любые вопросы по данным пользователя
 /// и находит операции в чеках, выписках, скриншотах и обычных фразах («купил кофе за 1500»).
 /// Найденные операции не записываются сами: они приходят черновиком, который пользователь подтверждает.
 @MainActor
@@ -133,8 +133,6 @@ enum CloudFinanceAssistant {
         switch provider {
         case .claude:
             text = try await ClaudeAPI.send(body: ClaudeAPI.requestBody(prompt, schema: schema), apiKey: apiKey)
-        case .openAI:
-            text = try await OpenAIAPI.send(body: OpenAIAPI.requestBody(prompt, schema: schema), apiKey: apiKey)
         case .gemini:
             text = try await GeminiAPI.send(body: GeminiAPI.requestBody(prompt, schema: schema), apiKey: apiKey)
         }

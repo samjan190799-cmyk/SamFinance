@@ -31,7 +31,7 @@ Data files are protected by iOS and open only while the phone is unlocked. They 
 
 **1. Exchange rates.** On launch the app requests currency rates from the open service open.er-api.com. The request contains none of your data, but like any website the service sees the IP address of your connection.
 
-**2. AI assistant.** It works through a cloud AI service (Anthropic, OpenAI or Google; the consent dialog says which) using a key built into the app. Data is sent only if you allow it before the first request. Then the service receives:
+**2. AI assistant.** It works through a cloud AI service (Anthropic or Google; the consent dialog says which) using a key built into the app. Data is sent only if you allow it before the first request. Then the service receives:
 
 - your question and the recent messages of the conversation;
 - screenshots you attach (receipts, statements, bank apps) and the text recognized on them on your phone;
@@ -40,7 +40,7 @@ Data files are protected by iOS and open only while the phone is unlocked. They 
 
 Not sent: full card numbers, CVV and cardholder names. Bank SMS that the app recognizes on the phone never go to the cloud.
 
-Requests go straight from your phone to the chosen service using the app's key. Our server is not part of this chain and we receive no copies. The service processes data under its own rules, possibly in another country: [Anthropic](https://www.anthropic.com/legal/privacy), [OpenAI](https://openai.com/policies/privacy-policy), [Google](https://policies.google.com/privacy).
+Requests go straight from your phone to the chosen service using the app's key. Our server is not part of this chain and we receive no copies. The service processes data under its own rules, possibly in another country: [Anthropic](https://www.anthropic.com/legal/privacy), [Google](https://policies.google.com/privacy).
 
 If you ask the AI to change something in the app (add a debt, set a reminder), it only proposes the changes as a card in the chat. The app makes them only when you tap "Apply".
 

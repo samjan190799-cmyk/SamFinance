@@ -54,7 +54,6 @@ enum AIAPIError: LocalizedError {
         let serviceMessage = (details?["message"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let message = serviceMessage.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "код \(status)")
         let type = details?["type"] as? String ?? ""
-        let code = details?["code"] as? String ?? ""
         let limitDetail = shortened(serviceMessage)
 
         switch provider {
@@ -63,11 +62,6 @@ enum AIAPIError: LocalizedError {
             if status == 402 || type == "billing_error" { return .noCredit(provider) }
             if status == 429 || type == "rate_limit_error" { return .rateLimited(provider, limitDetail) }
             if status == 529 || type == "overloaded_error" { return .overloaded(provider) }
-        case .openAI:
-            if status == 401 || code == "invalid_api_key" { return .invalidKey(provider) }
-            if status == 402 || code == "insufficient_quota" { return .noCredit(provider) }
-            if status == 429 { return .rateLimited(provider, limitDetail) }
-            if status == 503 { return .overloaded(provider) }
         case .gemini:
             if status == 401 || (status == 400 && message.localizedCaseInsensitiveContains("api key")) {
                 return .invalidKey(provider)

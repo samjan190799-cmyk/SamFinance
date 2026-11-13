@@ -12,21 +12,19 @@ enum AIKeyStore {
 
     private static let account = "default"
 
-    /// Имена записей Keychain, под которыми ключи хранились до встроенного ключа
-    private static func legacyService(for provider: AIProvider) -> String {
-        switch provider {
-        case .claude: return "com.samvel.samfinance.anthropic-api-key"
-        case .openAI: return "com.samvel.samfinance.openai-api-key"
-        case .gemini: return "com.samvel.samfinance.gemini-api-key"
-        }
-    }
+    /// Имена записей Keychain, под которыми ключи хранились до встроенного ключа (по одной на каждый сервис, который был в прежних версиях)
+    private static let legacyServices = [
+        "com.samvel.samfinance.anthropic-api-key",
+        "com.samvel.samfinance.openai-api-key",
+        "com.samvel.samfinance.gemini-api-key"
+    ]
 
     /// Стирает ключи, вписанные пользователем в прежних версиях. Безопасно вызывать при каждом запуске.
     static func removeLegacyKeys() {
-        for provider in AIProvider.allCases {
+        for service in legacyServices {
             let query: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: legacyService(for: provider),
+                kSecAttrService as String: service,
                 kSecAttrAccount as String: account
             ]
             SecItemDelete(query as CFDictionary)

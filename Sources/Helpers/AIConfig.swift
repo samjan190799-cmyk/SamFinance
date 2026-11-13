@@ -42,7 +42,7 @@ struct AIConfig: Sendable, Equatable {
         return text
     }
 
-    /// Название сервиса в любом регистре: «gemini», «OpenAI», «claude»
+    /// Название сервиса в любом регистре: «gemini», «Claude»
     private static func provider(named name: String?) -> AIProvider {
         guard let name else { return .gemini }
         return AIProvider.allCases.first { $0.rawValue.caseInsensitiveCompare(name) == .orderedSame } ?? .gemini

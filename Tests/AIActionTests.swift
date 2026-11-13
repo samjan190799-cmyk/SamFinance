@@ -386,7 +386,7 @@ final class CloudActionParsingTests: XCTestCase {
 
     func testBlankStringsBecomeNil() throws {
         let json = #"{"reply":"ок","operations":[],"actions":[{"kind":"delete_debt","target":"  ","name":"","amount":null,"currency":"zzz","date":"не дата","direction":"nobody","debt_type":null,"reminder":null,"repeat_rule":null,"note":null,"category":null,"setting":null,"value":null}]}"#
-        let action = try XCTUnwrap(CloudFinanceAssistant.parse(json, provider: .openAI).actions.first)
+        let action = try XCTUnwrap(CloudFinanceAssistant.parse(json, provider: .claude).actions.first)
         XCTAssertNil(action.target)
         XCTAssertNil(action.name)
         XCTAssertNil(action.currency)
@@ -410,7 +410,7 @@ final class CloudActionParsingTests: XCTestCase {
         let item = try XCTUnwrap(actions["items"] as? [String: Any])
         let itemProperties = try XCTUnwrap(item["properties"] as? [String: Any])
 
-        // Строгие схемы (OpenAI, Claude) требуют, чтобы все поля были обязательными и не было лишних
+        // Строгие схемы (Claude) требуют, чтобы все поля были обязательными и не было лишних
         XCTAssertEqual(Set(item["required"] as? [String] ?? []), Set(itemProperties.keys))
         XCTAssertEqual(item["additionalProperties"] as? Bool, false)
 
@@ -425,7 +425,6 @@ final class CloudActionParsingTests: XCTestCase {
 
         let prompt = AIPrompt(system: "SYSTEM", turns: [], leadingText: nil, images: [], text: "question")
         XCTAssertNoThrow(try ClaudeAPI.requestBody(prompt, schema: schema))
-        XCTAssertNoThrow(try OpenAIAPI.requestBody(prompt, schema: schema))
         XCTAssertNoThrow(try GeminiAPI.requestBody(prompt, schema: schema))
     }
 }

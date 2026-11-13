@@ -213,7 +213,6 @@
 "Ключ %@ сохранён" = "%@ key saved";
 "Ключ Claude начинается с «sk-ant-». Скопируйте его из консоли Anthropic целиком." = "A Claude key starts with “sk-ant-”. Copy it in full from the Anthropic console.";
 "Ключ Gemini не похож на ключ API. Скопируйте его из Google AI Studio целиком." = "This does not look like a Gemini API key. Copy it in full from Google AI Studio.";
-"Ключ OpenAI начинается с «sk-». Нужен ключ API с platform.openai.com, а не пароль или подписка ChatGPT." = "An OpenAI key starts with “sk-”. You need an API key from platform.openai.com, not a password or a ChatGPT subscription.";
 "Ключ из Google AI Studio" = "A key from Google AI Studio";
 "Ключ каждого сервиса хранится в Keychain только на этом телефоне. С ключом ИИ-чат отвечает на любые вопросы, разбирает чеки, выписки и скриншоты моделью %@: вопрос, скриншоты и сводка ваших операций, карт (последние 4 цифры) и долгов отправляются в %@, оплата по тарифу ключа." = "Each service’s key is stored in the Keychain on this phone only. With a key, the AI chat answers any questions and reads receipts, statements and screenshots with the %@ model: your question, screenshots and a summary of your transactions, cards (last 4 digits) and debts are sent to %@, billed under your key’s plan.";
 "Кому я должен?" = "Whom do I owe?";
@@ -245,7 +244,6 @@
 "Мята" = "Mint";
 "На картах %@:" = "Total on your cards: %@";
 "На счёте ключа закончились средства. Пополните баланс в Google AI Studio." = "The key’s balance has run out. Top up your balance in Google AI Studio.";
-"На счёте ключа закончились средства. Пополните баланс в кабинете OpenAI." = "The key’s balance has run out. Top up your balance in your OpenAI account.";
 "На счёте ключа закончились средства. Пополните баланс в консоли Anthropic." = "The key’s balance has run out. Top up your balance in the Anthropic console.";
 "Название" = "Title";
 "Название банка / кредитора" = "Bank / lender name";
@@ -529,7 +527,6 @@
 "Новый телефон" = "New phone";
 "Номер не проходит проверку: возможно, в нём опечатка" = "The number fails the check: it may contain a typo";
 "Номер не сохранён на этом устройстве. Введите его снова, если хотите сохранить." = "The number is not stored on this device. Enter it again to save it.";
-"Нужен ключ API с platform.openai.com: подписка ChatGPT для него не подходит." = "You need an API key from platform.openai.com: a ChatGPT subscription does not work for it.";
 "О приложении" = "About";
 "Обзор" = "Overview";
 "Обновить" = "Refresh";
@@ -581,7 +578,6 @@
 "Подарки" = "Gifts";
 "Подарок" = "Gift";
 "Подушка безопасности" = "Emergency fund";
-"Пока я понимаю скриншоты и тексты банковских СМС и такие вопросы:\n• сколько я потратил за неделю?\n• сколько ушло на продукты за месяц?\n• какой у меня баланс?\n• кому я должен?\n• дай совет\n• как мои копилки?\nЧтобы я отвечал на любые вопросы и разбирал чеки и выписки, добавьте ключ Claude, ChatGPT или Gemini: кнопка с ключом вверху или Настройки → ИИ-помощник." = "For now I understand screenshots and texts of bank SMS and questions like these:\n• how much did I spend this week?\n• how much did I spend on groceries this month?\n• what is my balance?\n• whom do I owe?\n• give me advice\n• how are my savings goals?\nTo have me answer any question and read receipts and statements, add a Claude, ChatGPT or Gemini key: the key button at the top or Settings → AI assistant.";
 "Показать лицевую сторону" = "Show the front side";
 "Показать оборот карты" = "Show the back of the card";
 "Показывает подсказку «Расход или доход?», затем категорию, и сохраняет покупку в Hashiv." = "Shows a prompt “Expense or income?”, then the category, and saves the purchase in Hashiv.";
@@ -661,7 +657,6 @@
 "Создайте цель, чтобы начать копить деньги на мечту." = "Create a goal to start saving for something you want.";
 "Создать ключ в Google AI Studio" = "Create a key in Google AI Studio";
 "Создать ключ в консоли Anthropic" = "Create a key in the Anthropic console";
-"Создать ключ на platform.openai.com" = "Create a key on platform.openai.com";
 "Создать копилку" = "Create a goal";
 "Сохранено" = "Saved";
 "Сохранить" = "Save";
@@ -683,7 +678,6 @@
 "Сумма (%@)" = "Amount (%@)";
 "Текст СМС" = "SMS text";
 "Текст политики доступен на русском и английском языках." = "The policy text is available in Russian and English.";
-"Текст распознал, но банковских СМС в нём нет. Подойдут СМС с суммой и маской карты, например «GNUM 3,500.00 AMD 4318***0640». Чтобы разбирать чеки и выписки, добавьте ключ Claude, ChatGPT или Gemini: Настройки → ИИ-помощник." = "I read the text, but there is no bank SMS in it. An SMS with an amount and a masked card number works, for example “GNUM 3,500.00 AMD 4318***0640”. To read receipts and statements, add a Claude, ChatGPT or Gemini key: Settings → AI assistant.";
 "Техника" = "Gadgets";
 "Точки" = "Dots";
 "Транспорт" = "Transport";

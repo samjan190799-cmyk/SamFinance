@@ -47,13 +47,13 @@ final class AIHTTPTests: XCTestCase {
     func testURLSessionTimeoutIsReportedAndNotRetried() async {
         let calls = Calls()
         do {
-            _ = try await AIHTTP.send(request, provider: .openAI) { _ in
+            _ = try await AIHTTP.send(request, provider: .gemini) { _ in
                 await calls.record()
                 throw URLError(.timedOut)
             }
             XCTFail("тайм-аут сети не стал ошибкой")
         } catch AIAPIError.timedOut(let provider) {
-            XCTAssertEqual(provider, .openAI)
+            XCTAssertEqual(provider, .gemini)
         } catch {
             XCTFail("ожидался timedOut, пришло \(error)")
         }

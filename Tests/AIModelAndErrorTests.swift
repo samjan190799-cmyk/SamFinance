@@ -28,7 +28,7 @@ final class AIRateLimitMessageTests: XCTestCase {
             XCTAssertFalse(text.contains("\n\n"), "\(provider.rawValue): \(text)")
             XCTAssertTrue(text.contains(provider.displayName), text)
         }
-        XCTAssertEqual(error(.openAI, "{}").errorDescription, AIAPIError.rateLimited(.openAI, nil).errorDescription)
+        XCTAssertEqual(error(.gemini, "{}").errorDescription, AIAPIError.rateLimited(.gemini, nil).errorDescription)
     }
 
     func testRateLimitStillMapsToTheSameCase() {

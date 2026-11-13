@@ -4,7 +4,6 @@ import Foundation
 /// пользователь ничего не выбирает и не вводит. Здесь остаются названия сервисов, согласие на отправку данных и модели.
 enum AIProvider: String, CaseIterable, Identifiable, Sendable {
     case claude
-    case openAI
     case gemini
 
     var id: String { rawValue }
@@ -17,7 +16,6 @@ enum AIProvider: String, CaseIterable, Identifiable, Sendable {
     var displayName: String {
         switch self {
         case .claude: return "Claude"
-        case .openAI: return "ChatGPT"
         case .gemini: return "Gemini"
         }
     }
@@ -26,7 +24,6 @@ enum AIProvider: String, CaseIterable, Identifiable, Sendable {
     var company: String {
         switch self {
         case .claude: return "Anthropic"
-        case .openAI: return "OpenAI"
         case .gemini: return "Google"
         }
     }
@@ -57,7 +54,6 @@ enum AIProvider: String, CaseIterable, Identifiable, Sendable {
     var defaultModel: String {
         switch self {
         case .claude: return "claude-opus-5-5"
-        case .openAI: return "gpt-6.1-sol"
         case .gemini: return "gemini-3.5-flash-lite"
         }
     }

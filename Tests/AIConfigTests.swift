@@ -5,16 +5,15 @@ import XCTest
 final class AIConfigTests: XCTestCase {
 
     func testValuesAreReadFromTheInfoDictionary() {
-        let config = AIConfig(info: ["AIAPIKey": "  secret-key  ", "AIProviderName": "OpenAI", "AIModelName": " gpt-x "])
+        let config = AIConfig(info: ["AIAPIKey": "  secret-key  ", "AIProviderName": "Claude", "AIModelName": " claude-x "])
         XCTAssertEqual(config.apiKey, "secret-key")
-        XCTAssertEqual(config.provider, .openAI)
-        XCTAssertEqual(config.modelName, "gpt-x")
+        XCTAssertEqual(config.provider, .claude)
+        XCTAssertEqual(config.modelName, "claude-x")
     }
 
     func testProviderNameIsCaseInsensitive() {
         XCTAssertEqual(AIConfig(info: ["AIProviderName": "CLAUDE"]).provider, .claude)
         XCTAssertEqual(AIConfig(info: ["AIProviderName": "Gemini"]).provider, .gemini)
-        XCTAssertEqual(AIConfig(info: ["AIProviderName": "openai"]).provider, .openAI)
     }
 
     func testMissingEmptyAndUnsubstitutedValuesMeanNone() {
@@ -50,7 +49,6 @@ final class AIConfigTests: XCTestCase {
         let config = AIConfig(apiKey: "the-key", provider: .gemini)
         XCTAssertEqual(AIKeyStore.key(for: .gemini, config: config), "the-key")
         XCTAssertNil(AIKeyStore.key(for: .claude, config: config), "ключ Gemini нельзя отправлять другому сервису")
-        XCTAssertNil(AIKeyStore.key(for: .openAI, config: config))
     }
 
     func testBuildWithoutKeyHasNoKeyForAnyone() {
