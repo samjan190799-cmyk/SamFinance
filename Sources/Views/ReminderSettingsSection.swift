@@ -5,6 +5,7 @@ import UIKit
 struct ReminderSettingsSection: View {
     let financeService: FinanceService
     @AppStorage(ReminderKeys.debts) private var debts = true
+    @AppStorage(ReminderKeys.subscriptions) private var subscriptions = true
     @AppStorage(ReminderKeys.goalDeadlines) private var goalDeadlines = true
     @AppStorage(ReminderKeys.goalSaving) private var goalSavingRaw = GoalSavingReminder.off.rawValue
     @AppStorage(ReminderKeys.cardExpiry) private var cardExpiry = true
@@ -17,6 +18,7 @@ struct ReminderSettingsSection: View {
     private var current: ReminderSettings {
         ReminderSettings(
             debts: debts,
+            subscriptions: subscriptions,
             goalDeadlines: goalDeadlines,
             goalSaving: GoalSavingReminder(rawValue: goalSavingRaw) ?? .off,
             cardExpiry: cardExpiry,
@@ -67,6 +69,10 @@ struct ReminderSettingsSection: View {
             } label: {
                 Label("Настройки по видам", systemImage: "slider.horizontal.3")
                     .labelStyle(.settingsIcon(.slate))
+            }
+            Toggle(isOn: $subscriptions) {
+                Label("Подписки", systemImage: "arrow.triangle.2.circlepath")
+                    .labelStyle(.settingsIcon(.lilac))
             }
             Toggle(isOn: $goalDeadlines) {
                 Label("Сроки копилок", systemImage: "flag")
@@ -134,6 +140,6 @@ struct ReminderSettingsSection: View {
 private extension ReminderSettings {
     /// Сколько видов напоминаний включено: если стало больше, приложение просит разрешение на уведомления
     var enabledCount: Int {
-        [debts, goalDeadlines, goalSaving != .off, cardExpiry, dailyLog].filter { $0 }.count
+        [debts, subscriptions, goalDeadlines, goalSaving != .off, cardExpiry, dailyLog].filter { $0 }.count
     }
 }

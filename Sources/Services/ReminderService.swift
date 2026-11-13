@@ -5,6 +5,7 @@ import Observation
 /// Ключи настроек напоминаний. Их же читают переключатели в настройках через @AppStorage.
 enum ReminderKeys {
     static let debts = "reminders_debts"
+    static let subscriptions = "reminders_subscriptions"
     static let goalDeadlines = "reminders_goal_deadlines"
     static let goalSaving = "reminders_goal_saving"
     static let cardExpiry = "reminders_card_expiry"
@@ -35,6 +36,8 @@ enum GoalSavingReminder: String, CaseIterable, Identifiable, Sendable {
 /// Настройки напоминаний
 struct ReminderSettings: Equatable, Sendable {
     var debts = true
+    /// Напоминания о списании подписок
+    var subscriptions = true
     var goalDeadlines = true
     var goalSaving: GoalSavingReminder = .off
     var cardExpiry = true
@@ -50,6 +53,7 @@ struct ReminderSettings: Equatable, Sendable {
         var settings = ReminderSettings()
         settings.debtTypes = DebtTypeSettings.load(from: defaults)
         settings.debts = defaults.object(forKey: ReminderKeys.debts) as? Bool ?? settings.debts
+        settings.subscriptions = defaults.object(forKey: ReminderKeys.subscriptions) as? Bool ?? settings.subscriptions
         settings.goalDeadlines = defaults.object(forKey: ReminderKeys.goalDeadlines) as? Bool ?? settings.goalDeadlines
         settings.goalSaving = defaults.string(forKey: ReminderKeys.goalSaving).flatMap { GoalSavingReminder(rawValue: $0) } ?? settings.goalSaving
         settings.cardExpiry = defaults.object(forKey: ReminderKeys.cardExpiry) as? Bool ?? settings.cardExpiry
@@ -69,6 +73,7 @@ enum ReminderID {
     static let cardCategory = "reminder.card"
     static let dailyCategory = "reminder.daily"
     static let customCategory = "reminder.custom"
+    static let subscriptionCategory = "reminder.subscription"
     /// У платежа кнопка «Оплачен» вместо «Погашен»
     static let billCategory = "reminder.bill"
     static let paidAction = "reminder.action.paid"
@@ -78,9 +83,10 @@ enum ReminderID {
     static let legacyDebtPrefix = "debt-due-"
 }
 
-/// Куда ведёт напоминание: долг, копилка, карта или обзор
+/// Куда ведёт напоминание: долг, подписка, копилка, карта или обзор
 enum ReminderTarget: Equatable, Sendable {
     case debt(UUID)
+    case subscription(UUID)
     case goal(UUID)
     case savings
     case card(UUID)
@@ -89,6 +95,7 @@ enum ReminderTarget: Equatable, Sendable {
     var raw: String {
         switch self {
         case .debt(let id): return "debt:\(id.uuidString)"
+        case .subscription(let id): return "subscription:\(id.uuidString)"
         case .goal(let id): return "goal:\(id.uuidString)"
         case .savings: return "savings"
         case .card(let id): return "card:\(id.uuidString)"
@@ -101,6 +108,7 @@ enum ReminderTarget: Equatable, Sendable {
         let id = parts.count == 2 ? UUID(uuidString: parts[1]) : nil
         switch (parts.first ?? "", id) {
         case ("debt", let id?): self = .debt(id)
+        case ("subscription", let id?): self = .subscription(id)
         case ("goal", let id?): self = .goal(id)
         case ("card", let id?): self = .card(id)
         case ("savings", _): self = .savings
@@ -112,7 +120,7 @@ enum ReminderTarget: Equatable, Sendable {
     /// Раздел приложения, который открывается по нажатию на напоминание
     var tab: AppTab {
         switch self {
-        case .debt: return .debts
+        case .debt, .subscription: return .debts
         case .goal, .savings, .card: return .cards
         case .overview: return .overview
         }
@@ -143,6 +151,7 @@ enum ReminderPlanner {
         goals: [Goal],
         cards: [Card],
         customReminders: [CustomReminder] = [],
+        subscriptions: [AppSubscription] = [],
         transactions: [Transaction],
         reviewCount: Int,
         snoozes: [UUID: Date],
@@ -157,6 +166,11 @@ enum ReminderPlanner {
         if settings.debts {
             for debt in debts {
                 result += debtSpecs(debt, snooze: snoozes[debt.id], settings: settings, now: now, calendar: calendar)
+            }
+        }
+        if settings.subscriptions {
+            for subscription in subscriptions {
+                result += subscriptionSpecs(subscription, settings: settings, now: now, calendar: calendar)
             }
         }
         if settings.goalDeadlines {
@@ -282,6 +296,45 @@ enum ReminderPlanner {
             add("snooze", fireDate: snooze, title: isLate ? texts.lateTitle : texts.dueTitle, body: isLate ? texts.lateBody : texts.dueBody)
         }
         return result
+    }
+
+    // MARK: - Подписки
+
+    /// Сколько ближайших списаний подписки получают напоминание: окно сдвигается при каждом открытии приложения и сохранении данных
+    static func upcomingReminderCount(for period: SubscriptionPeriod) -> Int {
+        switch period {
+        case .weekly: return 4
+        case .monthly: return 3
+        case .yearly: return 1
+        }
+    }
+
+    /// Напоминание о списании активной подписки: одно на каждое из ближайших списаний, за выбранное число дней до него
+    /// (в день списания, если выбрано «В день срока»). Подписка на паузе, в архиве и с выключенным напоминанием молчит.
+    static func subscriptionSpecs(_ subscription: AppSubscription, settings: ReminderSettings, now: Date, calendar: Calendar) -> [ReminderSpec] {
+        guard subscription.isActive, let daysBefore = subscription.effectiveReminder.daysBefore else { return [] }
+        let money = subscription.currency.formatAmount(subscription.amount)
+        let name = subscription.name
+        let count = upcomingReminderCount(for: subscription.period)
+
+        return subscription.upcomingChargeDates(count: count, now: now, calendar: calendar).compactMap { chargeDate in
+            let chargeDay = calendar.startOfDay(for: chargeDate)
+            guard let remindDay = calendar.date(byAdding: .day, value: -daysBefore, to: chargeDay),
+                  let fireDate = moment(remindDay, minutes: settings.minutes, calendar: calendar),
+                  fireDate > now else { return nil }
+            let stamp = calendar.dateComponents([.year, .month, .day], from: chargeDay)
+            let isToday = daysBefore == 0
+            let date = shortDate(chargeDay)
+            return ReminderSpec(
+                id: "\(ReminderID.prefix)subscription.\(subscription.id.uuidString).\(stamp.year ?? 0)-\(stamp.month ?? 0)-\(stamp.day ?? 0)",
+                title: isToday ? String(localized: "Сегодня списание за подписку") : String(localized: "Скоро списание за подписку"),
+                body: isToday ? "\(name) · \(money)" : String(localized: "\(name) · \(money) · спишется \(date)"),
+                category: ReminderID.subscriptionCategory,
+                target: .subscription(subscription.id),
+                fireDate: fireDate,
+                repeating: nil
+            )
+        }
     }
 
     // MARK: - Копилки
@@ -489,6 +542,8 @@ final class AppRouter {
     static let shared = AppRouter()
 
     var requestedTab: AppTab? = nil
+    /// Вкладка экрана долгов, которую нужно открыть: напоминание о подписке ведёт на «Подписки»
+    var requestedDebtTab: DebtTab? = nil
 
     private init() {}
 }
@@ -514,7 +569,8 @@ final class ReminderService {
             UNNotificationCategory(identifier: ReminderID.goalCategory, actions: [], intentIdentifiers: [], options: []),
             UNNotificationCategory(identifier: ReminderID.cardCategory, actions: [], intentIdentifiers: [], options: []),
             UNNotificationCategory(identifier: ReminderID.dailyCategory, actions: [], intentIdentifiers: [], options: []),
-            UNNotificationCategory(identifier: ReminderID.customCategory, actions: [], intentIdentifiers: [], options: [])
+            UNNotificationCategory(identifier: ReminderID.customCategory, actions: [], intentIdentifiers: [], options: []),
+            UNNotificationCategory(identifier: ReminderID.subscriptionCategory, actions: [], intentIdentifiers: [], options: [])
         ]
     }
 
@@ -544,6 +600,7 @@ final class ReminderService {
             goals: financeService.goals,
             cards: financeService.cards,
             customReminders: financeService.customReminders,
+            subscriptions: financeService.subscriptions,
             transactions: financeService.transactions,
             reviewCount: financeService.reviewCount,
             snoozes: snoozes,
@@ -587,6 +644,9 @@ final class ReminderService {
                 }
             }
         case UNNotificationDefaultActionIdentifier:
+            if case .subscription = target {
+                AppRouter.shared.requestedDebtTab = .subscriptions
+            }
             AppRouter.shared.requestedTab = target.tab
         default:
             break

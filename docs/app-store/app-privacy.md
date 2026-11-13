@@ -53,7 +53,7 @@
 | --- | --- |
 | Privacy Policy URL | ссылка на страницу политики (см. `docs/app-store/README.md`, раздел «Публикация политики») |
 | Support URL | обязательна; нужна страница, где можно связаться с вами (почта или форма) |
-| Tracking (App Tracking Transparency) | **используется**: запрос «Разрешить отслеживание» показывается перед первой рекламой (`NSUserTrackingUsageDescription` в `Info.plist`, переводы в `InfoPlist.strings`); в `PrivacyInfo.xcprivacy` стоит `NSPrivacyTracking = true` |
+| Tracking (App Tracking Transparency) | **используется**: запрос «Разрешить отслеживание» показывается перед первой рекламой (`NSUserTrackingUsageDescription` в `Info.plist`, переводы в `InfoPlist.strings`); в `PrivacyInfo.xcprivacy` стоит `NSPrivacyTracking = true` и перечислены домены отслеживания AppMetrica (при `true` пустой список Apple отклоняет: ITMS-91064) |
 | Advertising Identifier (IDFA) | **Yes**: только «Serve advertisements within the app»; два других пункта (атрибуция установок и действий) **No** |
 | Encryption | в `Info.plist` стоит `ITSAppUsesNonExemptEncryption = NO` (только системный HTTPS), поэтому вопрос об экспорте шифрования не задаётся при каждой сборке |
 | Sign-in required | **No**, демо-аккаунт не нужен |
@@ -66,4 +66,4 @@
 
 ## Если что-то изменится
 
-Для рекламы Яндекса отдельно: в `NSPrivacyTrackingDomains` в `PrivacyInfo.xcprivacy` нужно перечислить домены отслеживания, если Яндекс их опубликует (сейчас список пустой). Любой новый вид отправки данных (аналитика, свой сервер, облачная синхронизация, подписка) нужно сначала отразить в `PrivacyInfo.xcprivacy`, политике (`Resources/Legal`) и в этой анкете, и только потом выпускать.
+Для рекламы Яндекса отдельно: пока `NSPrivacyTracking = true`, список `NSPrivacyTrackingDomains` в `PrivacyInfo.xcprivacy` не может быть пустым (ITMS-91064, сборка получает «Ошибку двоичного файла»). Сейчас там два домена из манифеста AppMetrica (`AppMetricaAdSupport`); при обновлении SDK сверьте список с его манифестом. Если реклама уйдёт, уберите оба ключа сразу. Любой новый вид отправки данных (аналитика, свой сервер, облачная синхронизация, подписка) нужно сначала отразить в `PrivacyInfo.xcprivacy`, политике (`Resources/Legal`) и в этой анкете, и только потом выпускать.
