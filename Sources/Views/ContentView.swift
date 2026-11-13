@@ -81,19 +81,15 @@ struct ContentView: View {
     @Namespace private var tabNamespace
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Реклама Яндекса: у каждой из пяти вкладок свой баннер, закреплённый вверху над содержимым. .id пересоздаёт его
-            // при смене вкладки, и новая вкладка запрашивает свою рекламу. Без идентификатора блока в сборке баннера нет
-            AdBannerSection()
+        // ZStack: при смене раздела старый и новый экраны накладываются, а не встают друг под другом.
+        // Реклама Яндекса стоит внутри каждого экрана (между первым и вторым блоком, см. AdBannerSection), а .id пересоздаёт
+        // экран при смене вкладки, поэтому новая вкладка запрашивает свою рекламу
+        ZStack {
+            tabContent
                 .id(selectedTab)
-            // ZStack: при смене раздела старый и новый экраны накладываются, а не встают друг под другом
-            ZStack {
-                tabContent
-                    .id(selectedTab)
-                    .transition(.opacity.combined(with: .scale(scale: 0.985)))
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .transition(.opacity.combined(with: .scale(scale: 0.985)))
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .monoScreen()
             // Прокрутка уходит под системные часы и значки: полоса фона не даёт им налезать на плитки и текст.
             // В ролике для магазина сверху своя полоса с подписью, там накладка не нужна

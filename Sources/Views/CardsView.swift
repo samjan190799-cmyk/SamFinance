@@ -28,6 +28,7 @@ struct CardsView: View {
                 if financeService.cards.isEmpty {
                     emptyCardsPlaceholder
                         .padding(.horizontal, 20)
+                    AdBannerSection()
                 } else {
                     carousel
                         .padding(.top, 20)
@@ -37,6 +38,9 @@ struct CardsView: View {
                         pageIndicator
                             .padding(.top, 16)
                     }
+
+                    // Реклама Яндекса: между каруселью и целями выбранной карты
+                    AdBannerSection()
 
                     if let card = currentCard {
                         CardWithGoalsSection(
