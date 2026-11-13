@@ -88,9 +88,14 @@ struct AIChatView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 12) {
-                    ForEach(store.messages) { message in
+                    ForEach(Array(store.messages.enumerated()), id: \.element.id) { index, message in
                         messageView(message)
                             .transition(messageTransition(for: message))
+                        // Реклама Яндекса: сразу после приветствия, на всю ширину экрана (поля переписки 16 pt)
+                        if index == 0 {
+                            AdBannerSection()
+                                .padding(.horizontal, -16)
+                        }
                     }
                     if store.isWorking {
                         workingIndicator

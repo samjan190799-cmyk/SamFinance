@@ -53,6 +53,10 @@ struct ReportView: View {
                     .padding(.top, 16)
                     .appearAnimation(order: 2)
 
+                // Реклама Яндекса: на всю ширину экрана, поэтому отрицательное поле вместо полей контента
+                AdBannerSection()
+                    .padding(.horizontal, -20)
+
                 chartCard
                     .padding(.top, 16)
                     .appearAnimation(order: 3)

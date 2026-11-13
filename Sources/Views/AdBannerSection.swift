@@ -2,8 +2,9 @@ import AppTrackingTransparency
 import SwiftUI
 import YandexMobileAds
 
-/// Баннер Яндекс Рекламы. У каждой из пяти вкладок свой баннер: ContentView создаёт его заново при смене вкладки
-/// (`.id(selectedTab)`), и он закреплён вверху экрана над содержимым вкладки, поэтому виден при любой прокрутке.
+/// Баннер Яндекс Рекламы. У каждой из пяти вкладок свой баннер: он стоит внутри прокрутки между первым и вторым блоком
+/// экрана (на «Обзоре» между картой баланса и кнопками) и прокручивается вместе с содержимым. ContentView создаёт экран
+/// заново при смене вкладки (`.id(selectedTab)`), поэтому и баннер запрашивает рекламу заново.
 /// Это единственное место приложения, которое знает про SDK Яндекса.
 /// В данные баннера не передаётся ничего из учёта: ни операции, ни карты, ни долги.
 ///
@@ -13,8 +14,8 @@ import YandexMobileAds
 /// у прошлого: иначе экран прыгал бы вверх-вниз при каждой смене вкладки. Если реклама не загрузилась, баннер уходит.
 @MainActor
 struct AdBannerSection: View {
-    /// Отступ сверху и снизу, пока баннер показан: сверху до строки состояния, снизу до заголовка раздела
-    static let verticalSpacing: CGFloat = 6
+    /// Отступ сверху и снизу, пока баннер показан: до соседних блоков экрана
+    static let verticalSpacing: CGFloat = 12
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -72,7 +73,7 @@ struct AdBannerSection: View {
         .padding(.vertical, isLoaded ? Self.verticalSpacing : 0)
         .frame(minHeight: Self.reservedHeight(isLoaded: isLoaded, isFailed: isFailed, lastHeight: AdsRuntime.lastStripHeight), alignment: .top)
         .frame(maxWidth: .infinity)
-        // Сплошной фон: когда баннер закреплён над прокруткой, она не должна просвечивать за ним
+        // Сплошной фон под баннером, как у экрана
         .background(isLoaded ? Theme.background : Color.clear)
         // Высота загруженной полосы запоминается для следующей вкладки
         .onGeometryChange(for: CGFloat.self) { proxy in
