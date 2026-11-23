@@ -5,6 +5,11 @@ name: Deploy SamFinance to TestFlight
 # Ручной запуск доступен, когда этот файл лежит в ветке по умолчанию.
 on:
   workflow_dispatch:
+    inputs:
+      demo_ads:
+        description: "Демо-блок Яндекс Рекламы вместо боевого (тестовая реклама; секрет не меняется)"
+        type: boolean
+        default: false
   push:
     tags: [ 'v*' ]
 
@@ -111,8 +116,13 @@ jobs:
         # Боевой блок нельзя проверять собственными нажатиями на рекламу: для проверки используйте демо-блок.
         env:
           YANDEX_ADS_BANNER_ID: ${{ secrets.YANDEX_ADS_BANNER_ID }}
+          DEMO_ADS: ${{ inputs.demo_ads }}
         run: |
           PLIST=Sources/Info.plist
+          # Ручной запуск с галочкой demo_ads: вместо боевого блока демо-блок (секрет остаётся прежним)
+          if [ "$DEMO_ADS" = "true" ]; then
+            YANDEX_ADS_BANNER_ID="demo-banner-yandex"
+          fi
           if [ -z "$YANDEX_ADS_BANNER_ID" ]; then
             echo "::warning::Секрет YANDEX_ADS_BANNER_ID не задан: в этой сборке нет рекламы"
           elif [ "$YANDEX_ADS_BANNER_ID" = "demo-banner-yandex" ]; then
