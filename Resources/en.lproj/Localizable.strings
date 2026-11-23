@@ -851,3 +851,16 @@
 "Обнулить баланс?" = "Set the balance to zero?";
 "Баланс всех незамороженных карт станет 0. Доходы, расходы и копилки не изменятся." = "The balance of every card that is not frozen will become 0. Income, expenses and goals will not change.";
 "Действия с балансом" = "Balance actions";
+"ИИ-сервисы" = "AI services";
+"IT и разработка" = "IT & development";
+"Домены и хостинг" = "Domains & hosting";
+"VPN и защита" = "VPN & security";
+"Мобильная связь" = "Mobile plan";
+"Интернет и ТВ" = "Internet & TV";
+"Еда и доставка" = "Food & delivery";
+"Жильё и аренда" = "Housing & rent";
+"Коммунальные услуги" = "Utilities";
+"Банк и финансы" = "Banking & finance";
+"Дети" = "Kids";
+"Питомцы" = "Pets";
+"Пожертвования" = "Donations";

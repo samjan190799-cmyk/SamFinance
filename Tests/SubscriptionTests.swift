@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 import UserNotifications
 @testable import SamFinance
 
@@ -530,7 +531,10 @@ final class SubscriptionTests: XCTestCase {
             "Сегодня списание за подписку", "Скоро списание за подписку", "%@ · %@ · спишется %@", "≈ %@ в год",
             "Валюта", "Подписка", "Период", "Списание", "Ближайшее списание", "Следующее списание: %@", "Карта списания",
             "Не указана", "Новая подписка", "Изменить подписку", "Добавить подписку", "В месяц", "В год", "Пауза",
-            "Возобновить", "В архив"
+            "Возобновить", "В архив",
+            "ИИ-сервисы", "IT и разработка", "Домены и хостинг", "VPN и защита", "Мобильная связь", "Интернет и ТВ", "Здоровье",
+            "Еда и доставка", "Покупки", "Транспорт", "Путешествия", "Жильё и аренда", "Коммунальные услуги", "Страховка",
+            "Банк и финансы", "Дети", "Питомцы", "Пожертвования", "Другое"
         ]
         for language in [AppLanguage.english, .armenian] {
             for key in keys {
@@ -541,10 +545,28 @@ final class SubscriptionTests: XCTestCase {
         XCTAssertEqual(AppLanguage.english.string("tab_subscriptions"), "Subscriptions")
     }
 
+    func testCategoriesAreDistinctAndOldOnesKeepTheirNames() throws {
+        let all = SubscriptionCategory.allCases
+        XCTAssertEqual(Set(all.map(\.rawValue)).count, all.count, "имена видов должны быть разными")
+        XCTAssertEqual(Set(all.map(\.icon)).count, all.count, "у каждого вида свой значок")
+        XCTAssertEqual(Set(all.map(\.title)).count, all.count, "у каждого вида своё название")
+        XCTAssertEqual(all.last, .other, "«Другое» стоит в списке последним")
+        XCTAssertGreaterThanOrEqual(all.count, 20)
+
+        // Эти имена лежат в сохранённых подписках и в резервных копиях: менять нельзя
+        for name in ["video", "music", "cloud", "apps", "games", "reading", "learning", "fitness", "other"] {
+            XCTAssertNotNil(SubscriptionCategory(rawValue: name), "пропал вид «\(name)», старые подписки потеряют категорию")
+        }
+
+        let decoded = try JSONDecoder().decode([SubscriptionCategory].self, from: Data(#"["video","kids","charity"]"#.utf8))
+        XCTAssertEqual(decoded, [.video, .kids, .charity])
+    }
+
     func testEveryCategoryAndPeriodHasATitleAndSymbol() {
         for category in SubscriptionCategory.allCases {
             XCTAssertFalse(category.title.isEmpty)
             XCTAssertFalse(category.icon.isEmpty)
+            XCTAssertNotNil(UIImage(systemName: category.icon), "нет значка SF Symbols «\(category.icon)» у вида \(category.rawValue)")
         }
         for period in SubscriptionPeriod.allCases {
             XCTAssertFalse(period.title.isEmpty)

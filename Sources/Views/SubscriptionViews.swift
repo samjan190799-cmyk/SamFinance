@@ -221,11 +221,13 @@ struct SubscriptionEditorView: View {
                             Text("\(option.flagIcon) \(option.rawValue) \(option.symbol)").tag(option)
                         }
                     }
+                    // Видов много: выпадающее меню на 27 строк неудобно, список открывается отдельным экраном
                     Picker("Категория", selection: $category) {
                         ForEach(SubscriptionCategory.allCases) { option in
                             Label(option.title, systemImage: option.icon).tag(option)
                         }
                     }
+                    .pickerStyle(.navigationLink)
                 } header: {
                     Text("Подписка")
                 }

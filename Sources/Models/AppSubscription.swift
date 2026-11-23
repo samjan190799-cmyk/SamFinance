@@ -62,16 +62,36 @@ public enum SubscriptionStatus: String, Codable, Sendable, CaseIterable, Identif
     }
 }
 
-/// Вид подписки: от него зависят значок и цвет строки
+/// Вид подписки: от него зависят значок и цвет строки. Новые виды добавлять можно свободно: в сохранённых данных лежит имя
+/// вида, а незнакомое имя (например, из резервной копии от более новой версии) читается как «Другое». Имена старых видов не менять.
 public enum SubscriptionCategory: String, Codable, Sendable, CaseIterable, Identifiable {
+    // Порядок задаёт порядок в списке выбора: «Другое» всегда последним
     case video
     case music
-    case cloud
-    case apps
     case games
     case reading
+    case apps
+    case ai
+    case cloud
+    case software
+    case hosting
+    case security
+    case mobile
+    case internet
     case learning
     case fitness
+    case health
+    case food
+    case shopping
+    case transport
+    case travel
+    case housing
+    case utilities
+    case insurance
+    case finance
+    case kids
+    case pets
+    case charity
     case other
 
     public var id: String { rawValue }
@@ -80,27 +100,63 @@ public enum SubscriptionCategory: String, Codable, Sendable, CaseIterable, Ident
         switch self {
         case .video: return String(localized: "Видео")
         case .music: return String(localized: "Музыка")
-        case .cloud: return String(localized: "Облако")
-        case .apps: return String(localized: "Приложения")
         case .games: return String(localized: "Игры")
         case .reading: return String(localized: "Чтение")
+        case .apps: return String(localized: "Приложения")
+        case .ai: return String(localized: "ИИ-сервисы")
+        case .cloud: return String(localized: "Облако")
+        case .software: return String(localized: "IT и разработка")
+        case .hosting: return String(localized: "Домены и хостинг")
+        case .security: return String(localized: "VPN и защита")
+        case .mobile: return String(localized: "Мобильная связь")
+        case .internet: return String(localized: "Интернет и ТВ")
         case .learning: return String(localized: "Обучение")
         case .fitness: return String(localized: "Спорт")
+        case .health: return String(localized: "Здоровье")
+        case .food: return String(localized: "Еда и доставка")
+        case .shopping: return String(localized: "Покупки")
+        case .transport: return String(localized: "Транспорт")
+        case .travel: return String(localized: "Путешествия")
+        case .housing: return String(localized: "Жильё и аренда")
+        case .utilities: return String(localized: "Коммунальные услуги")
+        case .insurance: return String(localized: "Страховка")
+        case .finance: return String(localized: "Банк и финансы")
+        case .kids: return String(localized: "Дети")
+        case .pets: return String(localized: "Питомцы")
+        case .charity: return String(localized: "Пожертвования")
         case .other: return String(localized: "Другое")
         }
     }
 
-    /// Значок SF Symbols
+    /// Значок SF Symbols (все из SF Symbols 5: доступны с iOS 17)
     public var icon: String {
         switch self {
         case .video: return "play.rectangle.fill"
         case .music: return "music.note"
-        case .cloud: return "icloud.fill"
-        case .apps: return "square.grid.2x2.fill"
         case .games: return "gamecontroller.fill"
         case .reading: return "book.fill"
+        case .apps: return "square.grid.2x2.fill"
+        case .ai: return "sparkles"
+        case .cloud: return "icloud.fill"
+        case .software: return "laptopcomputer"
+        case .hosting: return "globe"
+        case .security: return "lock.shield.fill"
+        case .mobile: return "iphone"
+        case .internet: return "wifi"
         case .learning: return "graduationcap.fill"
         case .fitness: return "figure.run"
+        case .health: return "cross.case.fill"
+        case .food: return "fork.knife"
+        case .shopping: return "bag.fill"
+        case .transport: return "car.fill"
+        case .travel: return "airplane"
+        case .housing: return "house.fill"
+        case .utilities: return "bolt.fill"
+        case .insurance: return "shield.fill"
+        case .finance: return "building.columns.fill"
+        case .kids: return "figure.and.child.holdinghands"
+        case .pets: return "pawprint.fill"
+        case .charity: return "heart.circle.fill"
         case .other: return "arrow.triangle.2.circlepath"
         }
     }
@@ -110,12 +166,30 @@ public enum SubscriptionCategory: String, Codable, Sendable, CaseIterable, Ident
         switch self {
         case .video: return .coral
         case .music: return .rose
-        case .cloud: return .sky
-        case .apps: return .lilac
         case .games: return .sun
         case .reading: return .sand
+        case .apps: return .lilac
+        case .ai: return .aqua
+        case .cloud: return .sky
+        case .software: return .sky
+        case .hosting: return .aqua
+        case .security: return .mint
+        case .mobile: return .sky
+        case .internet: return .aqua
         case .learning: return .peach
         case .fitness: return .mint
+        case .health: return .coral
+        case .food: return .peach
+        case .shopping: return .rose
+        case .transport: return .sun
+        case .travel: return .sky
+        case .housing: return .sand
+        case .utilities: return .sun
+        case .insurance: return .slate
+        case .finance: return .mint
+        case .kids: return .rose
+        case .pets: return .peach
+        case .charity: return .coral
         case .other: return .slate
         }
     }
