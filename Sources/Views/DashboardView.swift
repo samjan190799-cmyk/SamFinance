@@ -52,6 +52,8 @@ struct DashboardView: View {
     @State private var isShowingSettingsSheet = false
     @State private var isShowingAllTransactions = false
     @State private var isShowingSavings = false
+    /// Подтверждение обнуления общего баланса
+    @State private var isConfirmingZeroBalance = false
 
     // Распознавание СМС из буфера обмена: только по кнопке «Из СМС», иначе iOS каждый раз спрашивала бы разрешение на вставку
     @State private var detectedBatchTransactions: [ParsedSMSTransaction] = []
@@ -141,6 +143,9 @@ struct DashboardView: View {
                 Text("Баланс")
                 Spacer()
                 Text(Date.now, format: .dateTime.month(.wide))
+                if !financeService.cards.isEmpty {
+                    balanceMenu
+                }
             }
             .font(.system(size: 14, weight: .medium))
 
@@ -179,6 +184,38 @@ struct DashboardView: View {
         .background(Theme.accent)
         .clipShape(RoundedRectangle(cornerRadius: 32))
         .padding(.top, 20)
+        .confirmationDialog(
+            String(localized: "Обнулить баланс?"),
+            isPresented: $isConfirmingZeroBalance,
+            titleVisibility: .visible
+        ) {
+            Button(String(localized: "Обнулить"), role: .destructive) {
+                HapticManager.shared.trigger(.success)
+                withAnimation(Motion.spring) {
+                    _ = financeService.zeroTotalBalance()
+                }
+            }
+        } message: {
+            Text(String(localized: "Баланс всех незамороженных карт станет 0. Доходы, расходы и копилки не изменятся."))
+        }
+    }
+
+    /// Меню в углу карты баланса: обнулить общий баланс (с подтверждением)
+    private var balanceMenu: some View {
+        Menu {
+            Button(role: .destructive) {
+                isConfirmingZeroBalance = true
+            } label: {
+                Label(String(localized: "Обнулить баланс"), systemImage: "arrow.counterclockwise")
+            }
+            .disabled(abs(financeService.totalBalance) < 0.005)
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 15, weight: .bold))
+                .frame(width: 32, height: 24)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(String(localized: "Действия с балансом"))
     }
 
     private func balancePill(_ text: String) -> some View {

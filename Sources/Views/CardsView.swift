@@ -10,6 +10,10 @@ struct CardsView: View {
     @State private var cardBeingEdited: Card? = nil
     @State private var selectedCardForNewGoal: Card? = nil
     @State private var isShowingSavings = false
+    /// Правка баланса вручную: какую карту и в какую сторону
+    @State private var balanceRequest: CardBalanceRequest? = nil
+    /// Карта, баланс которой собираются обнулить (ждёт подтверждения)
+    @State private var cardToZero: Card? = nil
     /// Карта в центре карусели; nil, пока пользователь не листал (тогда текущая — первая)
     @State private var centeredCardID: UUID? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -58,6 +62,15 @@ struct CardsView: View {
                             onAddGoal: {
                                 selectedCardForNewGoal = card
                             },
+                            onTopUp: {
+                                balanceRequest = CardBalanceRequest(cardID: card.id, mode: .topUp)
+                            },
+                            onReduce: {
+                                balanceRequest = CardBalanceRequest(cardID: card.id, mode: .reduce)
+                            },
+                            onZero: {
+                                cardToZero = card
+                            },
                             isFirst: card.id == financeService.cards.first?.id,
                             onPinFirst: {
                                 pinFirst(card)
@@ -96,6 +109,25 @@ struct CardsView: View {
         }
         .sheet(isPresented: $isShowingSavings) {
             SavingsView(financeService: financeService)
+        }
+        .sheet(item: $balanceRequest) { request in
+            CardBalanceSheet(financeService: financeService, cardID: request.cardID, mode: request.mode)
+                .presentationDetents([.medium, .large])
+        }
+        .confirmationDialog(
+            String(localized: "Обнулить баланс карты?"),
+            isPresented: Binding(get: { cardToZero != nil }, set: { if !$0 { cardToZero = nil } }),
+            titleVisibility: .visible,
+            presenting: cardToZero
+        ) { card in
+            Button(String(localized: "Обнулить"), role: .destructive) {
+                HapticManager.shared.trigger(.success)
+                withAnimation(Motion.spring) {
+                    _ = financeService.setCardBalance(id: card.id, to: 0)
+                }
+            }
+        } message: { card in
+            Text(String(localized: "Баланс карты станет 0. Доходы, расходы и копилки не изменятся.") + "\n" + card.pickerTitle)
         }
     }
 
@@ -284,6 +316,10 @@ struct CardWithGoalsSection: View {
     let onEdit: () -> Void
     let onShowAllGoals: () -> Void
     let onAddGoal: () -> Void
+    /// Ручная правка баланса: пополнить, убавить, обнулить
+    var onTopUp: () -> Void = {}
+    var onReduce: () -> Void = {}
+    var onZero: () -> Void = {}
     /// Карта стоит первой в карусели
     var isFirst = false
     var onPinFirst: () -> Void = {}
@@ -295,6 +331,8 @@ struct CardWithGoalsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             actionButtons
+
+            balanceButtons
 
             reservedLine
 
@@ -341,6 +379,28 @@ struct CardWithGoalsSection: View {
                 pinButton
             }
         }
+    }
+
+    /// Ручная правка баланса: пополнить, убавить или довести до нуля. «Обнулить» без денег на карте недоступно.
+    private var balanceButtons: some View {
+        let isEmpty = abs(card.balance) < 0.005
+        return HStack(spacing: 8) {
+            outlineButton(title: String(localized: "Пополнить")) {
+                HapticManager.shared.impact(.light)
+                onTopUp()
+            }
+            outlineButton(title: String(localized: "Убавить")) {
+                HapticManager.shared.impact(.light)
+                onReduce()
+            }
+            outlineButton(title: String(localized: "Обнулить")) {
+                HapticManager.shared.impact(.light)
+                onZero()
+            }
+            .disabled(isEmpty)
+            .opacity(isEmpty ? 0.4 : 1)
+        }
+        .padding(.top, 8)
     }
 
     /// Булавка: у первой карты залита лаймом, у остальных нажатие ставит карту первой

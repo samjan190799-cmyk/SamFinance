@@ -260,6 +260,46 @@ public final class FinanceService {
         return delta
     }
 
+    /// Ручная правка баланса карты: пополнить (положительная сумма) или убавить (отрицательная).
+    /// Это поправка, а не доход или расход: в операции и отчёты она не попадает. Как и правка в редакторе карты,
+    /// она становится новой точкой отсчёта: операции старше этого момента баланс не изменят.
+    @discardableResult
+    public func adjustCardBalance(id: UUID, by delta: Double) -> Bool {
+        guard delta.isFinite, abs(delta) > 0.0001,
+              let current = cards.first(where: { $0.id == id })?.balance else { return false }
+        return setCardBalance(id: id, to: current + delta)
+    }
+
+    /// Ставит баланс карты вручную, например 0. Копейки округляются до сотых; точка отсчёта сдвигается на сейчас.
+    @discardableResult
+    public func setCardBalance(id: UUID, to balance: Double) -> Bool {
+        guard balance.isFinite, prepareForWrite(.cards), let index = cards.firstIndex(where: { $0.id == id }) else { return false }
+        let rounded = (balance * 100).rounded() / 100
+        // Без «−0»: убавили ровно всё, получился ноль
+        cards[index].balance = rounded == 0 ? 0 : rounded
+        cards[index].balanceUpdatedAt = Date()
+        saveCards()
+        return true
+    }
+
+    /// Обнуляет баланс всех карт, которые входят в общий баланс (не заморожены, деньги на них есть).
+    /// Операции и копилки не меняются. Возвращает, у скольких карт баланс стал нулём.
+    @discardableResult
+    public func zeroTotalBalance() -> Int {
+        guard prepareForWrite(.cards) else { return 0 }
+        let now = Date()
+        var changed = 0
+        for index in cards.indices where !cards[index].isFrozen && abs(cards[index].balance) > 0.0001 {
+            cards[index].balance = 0
+            cards[index].balanceUpdatedAt = now
+            changed += 1
+        }
+        if changed > 0 {
+            saveCards()
+        }
+        return changed
+    }
+
     /// Откатывает изменение баланса, которое операция внесла в карту
     private func revertBalance(of transaction: Transaction) {
         guard let cardId = transaction.cardId,

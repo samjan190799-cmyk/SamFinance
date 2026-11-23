@@ -839,3 +839,15 @@
 "Пауза" = "Pause";
 "Возобновить" = "Resume";
 "В архив" = "Archive";
+"Убавить" = "Reduce";
+"Обнулить" = "Set to zero";
+"Пополнение баланса" = "Balance top-up";
+"Уменьшение баланса" = "Balance reduction";
+"Сейчас: %@" = "Now: %@";
+"Станет: %@" = "It will be %@";
+"Обнулить баланс карты?" = "Set the card balance to zero?";
+"Баланс карты станет 0. Доходы, расходы и копилки не изменятся." = "The card balance will become 0. Income, expenses and goals will not change.";
+"Обнулить баланс" = "Set balance to zero";
+"Обнулить баланс?" = "Set the balance to zero?";
+"Баланс всех незамороженных карт станет 0. Доходы, расходы и копилки не изменятся." = "The balance of every card that is not frozen will become 0. Income, expenses and goals will not change.";
+"Действия с балансом" = "Balance actions";
