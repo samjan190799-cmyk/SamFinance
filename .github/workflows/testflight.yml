@@ -10,6 +10,10 @@ on:
         description: "Демо-блок Яндекс Рекламы вместо боевого (тестовая реклама; секрет не меняется)"
         type: boolean
         default: false
+      ads_debug:
+        description: "Показывать на экране стадию и ошибку рекламы (для проверки, не для выпуска)"
+        type: boolean
+        default: false
   push:
     tags: [ 'v*' ]
 
@@ -117,6 +121,7 @@ jobs:
         env:
           YANDEX_ADS_BANNER_ID: ${{ secrets.YANDEX_ADS_BANNER_ID }}
           DEMO_ADS: ${{ inputs.demo_ads }}
+          ADS_DEBUG: ${{ inputs.ads_debug }}
         run: |
           PLIST=Sources/Info.plist
           # Ручной запуск с галочкой demo_ads: вместо боевого блока демо-блок (секрет остаётся прежним)
@@ -132,6 +137,11 @@ jobs:
           fi
           /usr/libexec/PlistBuddy -c "Delete :YandexAdsBannerUnitID" "$PLIST" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :YandexAdsBannerUnitID string \"${YANDEX_ADS_BANNER_ID}\"" "$PLIST"
+          if [ "$ADS_DEBUG" = "true" ]; then
+            /usr/libexec/PlistBuddy -c "Delete :YandexAdsShowErrors" "$PLIST" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :YandexAdsShowErrors string true" "$PLIST"
+            echo "::warning::В сборке включён показ стадии и ошибок рекламы на экране: для проверки, не для выпуска"
+          fi
           # Проверка без печати значения: ключ на месте, а список SKAdNetwork и текст запроса отслеживания не потерялись
           /usr/libexec/PlistBuddy -c "Print :YandexAdsBannerUnitID" "$PLIST" > /dev/null
           /usr/libexec/PlistBuddy -c "Print :SKAdNetworkItems:0:SKAdNetworkIdentifier" "$PLIST" > /dev/null

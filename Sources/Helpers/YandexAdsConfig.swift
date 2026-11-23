@@ -7,6 +7,8 @@ struct YandexAdsConfig: Sendable, Equatable {
     /// Ключ Info.plist, в который сборка кладёт идентификатор блока
     enum InfoKey {
         static let bannerUnitID = "YandexAdsBannerUnitID"
+        /// «true» только в проверочных сборках (флажок ads_debug в testflight.yml): баннер пишет на экране стадию и ошибку
+        static let showsErrors = "YandexAdsShowErrors"
     }
 
     /// Демо-блок Яндекса: отдаёт тестовую рекламу. Для проверки интеграции, а не для выпуска.
@@ -15,10 +17,14 @@ struct YandexAdsConfig: Sendable, Equatable {
     /// Идентификатор баннерного блока вида R-M-…-…; nil, если сборка без рекламы
     var bannerUnitID: String?
 
+    /// Показывать ли на месте баннера, на какой стадии он и почему не загрузился. В выпускных сборках всегда false.
+    var showsErrors: Bool
+
     static let standard = YandexAdsConfig(info: Bundle.main.infoDictionary ?? [:])
 
-    init(bannerUnitID: String?) {
+    init(bannerUnitID: String?, showsErrors: Bool = false) {
         self.bannerUnitID = bannerUnitID
+        self.showsErrors = showsErrors
     }
 
     /// Настройки из словаря Info.plist. Пустое значение и неподставленное «$(…)» считаются отсутствующими.
@@ -29,6 +35,7 @@ struct YandexAdsConfig: Sendable, Equatable {
         } else {
             self.bannerUnitID = nil
         }
+        self.showsErrors = (info[InfoKey.showsErrors] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) == "true"
     }
 
     var isBannerEnabled: Bool {

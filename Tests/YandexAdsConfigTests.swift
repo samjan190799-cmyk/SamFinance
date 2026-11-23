@@ -29,6 +29,16 @@ final class YandexAdsConfigTests: XCTestCase {
         }
     }
 
+    func testErrorDisplayIsOffUnlessTheBuildAsksForIt() {
+        XCTAssertFalse(YandexAdsConfig(info: [:]).showsErrors)
+        XCTAssertFalse(YandexAdsConfig(info: ["YandexAdsShowErrors": ""]).showsErrors)
+        XCTAssertFalse(YandexAdsConfig(info: ["YandexAdsShowErrors": "yes"]).showsErrors)
+        XCTAssertFalse(YandexAdsConfig(info: ["YandexAdsShowErrors": true]).showsErrors, "ключ задаёт сборка строкой «true»")
+        XCTAssertTrue(YandexAdsConfig(info: ["YandexAdsShowErrors": " true "]).showsErrors)
+        XCTAssertFalse(YandexAdsConfig(bannerUnitID: "R-M-1-1").showsErrors)
+        XCTAssertFalse(YandexAdsConfig.standard.showsErrors, "в выпускной сборке и в репозитории показа ошибок нет")
+    }
+
     func testValueOfTheWrongTypeMeansNoAds() {
         XCTAssertNil(YandexAdsConfig(info: ["YandexAdsBannerUnitID": 123456]).bannerUnitID)
         XCTAssertNil(YandexAdsConfig(info: ["YandexAdsBannerUnitID": ["R-M-1-1"]]).bannerUnitID)

@@ -20,16 +20,20 @@ struct AdBannerSection: View {
     @Environment(\.scenePhase) private var scenePhase
 
     private let unitID: String?
+    private let showsErrors: Bool
 
     /// Создаётся один раз на экземпляр баннера: пересоздание при каждом обновлении экрана перезагружало бы рекламу
     @State private var bannerState: BannerState?
     @State private var isLoaded = false
     @State private var isFailed = false
     @State private var isPreparing = false
+    /// Стадия и ошибка баннера; заполняется и показывается только в проверочной сборке (YandexAdsConfig.showsErrors)
+    @State private var debugLine = ""
 
     init(config: YandexAdsConfig = .standard) {
         let isScreenshotMode = ScreenshotMode.scene != nil || ScreenshotMode.isTour
         unitID = YandexAdsConfig.shouldShowAds(config: config, isScreenshotMode: isScreenshotMode) ? config.bannerUnitID : nil
+        showsErrors = config.showsErrors
     }
 
     /// Сколько места держать под баннером, пока реклама грузится: высоту прошлого баннера. Загрузился или не загрузился,
@@ -59,15 +63,28 @@ struct AdBannerSection: View {
                     .onAdLoad { _ in
                         isLoaded = true
                         isFailed = false
+                        note("loaded")
                     }
-                    .onAdFailure { _ in
+                    .onAdFailure { error in
                         isLoaded = false
                         isFailed = true
+                        note("FAILED: \(String(describing: error))")
                     }
                     // Высоту подбирает сам баннер после загрузки; до неё места он не занимает
                     .frame(height: isLoaded ? nil : 0)
                     .opacity(isLoaded ? 1 : 0)
                     .clipped()
+            }
+
+            // Только проверочная сборка: на каком шаге остановилась реклама и что ответил Яндекс
+            if showsErrors, !debugLine.isEmpty {
+                Text(verbatim: debugLine)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(Theme.textSecondary)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
             }
         }
         .padding(.vertical, isLoaded ? Self.verticalSpacing : 0)
@@ -91,8 +108,16 @@ struct AdBannerSection: View {
         isPreparing = true
         defer { isPreparing = false }
 
+        note("SDK init...")
         await AdsRuntime.prepare()
+        note("SDK ready, request sent, unit \(unitID)")
         bannerState = BannerState(size: .sticky(), request: AdRequest(adUnitID: unitID))
+    }
+
+    private func note(_ text: String) {
+        if showsErrors {
+            debugLine = text
+        }
     }
 }
 
