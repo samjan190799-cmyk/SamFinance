@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Что делаем с балансом карты вручную
+/// Что делаем с балансом вручную
 enum CardBalanceMode: String, Identifiable {
     case topUp
     case reduce
@@ -8,28 +8,37 @@ enum CardBalanceMode: String, Identifiable {
     var id: String { rawValue }
 }
 
-/// Какую карту и в какую сторону правим: по этому значению показывается лист
+/// Чей баланс правим (карта или наличные) и в какую сторону: по этому значению показывается лист
 struct CardBalanceRequest: Identifiable {
-    let cardID: UUID
+    let target: BalanceAccount
     let mode: CardBalanceMode
 
-    var id: String { "\(cardID.uuidString)-\(mode.rawValue)" }
+    var id: String { "\(target.storageKey)-\(mode.rawValue)" }
 }
 
-/// Ручная правка баланса карты: сколько добавить или убавить. Это поправка, а не операция: в доходы, расходы и отчёты
-/// она не попадает, а новый баланс становится точкой отсчёта для операций (как при правке баланса в редакторе карты).
+/// Ручная правка баланса карты или наличных: сколько добавить или убавить. Это поправка, а не операция: в доходы, расходы и
+/// отчёты она не попадает, а новый баланс становится точкой отсчёта для операций (как при правке баланса в редакторе карты).
 @MainActor
 struct CardBalanceSheet: View {
     @Environment(\.dismiss) private var dismiss
     let financeService: FinanceService
-    let cardID: UUID
+    let target: BalanceAccount
     let mode: CardBalanceMode
 
     @State private var amountText = ""
     @State private var showsError = false
     @FocusState private var isAmountFocused: Bool
 
-    private var card: Card? { financeService.cards.first { $0.id == cardID } }
+    /// Название счёта и его баланс сейчас; nil, если карты уже нет
+    private var subject: (title: String, balance: Double)? {
+        switch target {
+        case .cash:
+            return (String(localized: "Наличные"), financeService.cashBalance)
+        case .card(let id):
+            guard let card = financeService.cards.first(where: { $0.id == id }) else { return nil }
+            return (card.pickerTitle, card.balance)
+        }
+    }
 
     private var parsedAmount: Double? {
         guard let value = GoalQuickAmounts.parse(amountText), value > 0 else { return nil }
@@ -38,8 +47,8 @@ struct CardBalanceSheet: View {
 
     var body: some View {
         Group {
-            if let card {
-                form(card)
+            if let subject {
+                form(title: subject.title, balance: subject.balance)
             } else {
                 Color.clear.onAppear { dismiss() }
             }
@@ -53,18 +62,18 @@ struct CardBalanceSheet: View {
     }
 
     // MARK: - Ввод суммы
-    private func form(_ card: Card) -> some View {
+    private func form(title: String, balance: Double) -> some View {
         ScrollView {
             VStack(spacing: 18) {
                 VStack(spacing: 4) {
                     Text(mode == .topUp ? String(localized: "Пополнение баланса") : String(localized: "Уменьшение баланса"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(Theme.textSecondary)
-                    Text(card.pickerTitle)
+                    Text(title)
                         .font(.system(size: 18, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                         .lineLimit(1)
-                    Text(String(localized: "Сейчас: \(money(card.balance))"))
+                    Text(String(localized: "Сейчас: \(money(balance))"))
                         .font(.system(size: 13))
                         .monospacedDigit()
                         .foregroundColor(Theme.textSecondary)
@@ -85,15 +94,15 @@ struct CardBalanceSheet: View {
                         .padding(.trailing, 8)
                 }
 
-                // «Всё»: убавить ровно столько, сколько есть на карте, то есть довести баланс до нуля
-                if mode == .reduce, card.balance > 0 {
-                    allChip(balance: card.balance)
+                // «Всё»: убавить ровно столько, сколько есть, то есть довести баланс до нуля
+                if mode == .reduce, balance > 0 {
+                    allChip(balance: balance)
                 }
 
-                outcomeLine(card)
+                outcomeLine(balance: balance)
 
                 PrimaryButton(title: mode == .topUp ? String(localized: "Пополнить") : String(localized: "Убавить")) {
-                    submit(card)
+                    submit()
                 }
             }
             .padding(.horizontal, 20)
@@ -130,14 +139,14 @@ struct CardBalanceSheet: View {
 
     /// Что получится после правки, либо что не так с суммой
     @ViewBuilder
-    private func outcomeLine(_ card: Card) -> some View {
+    private func outcomeLine(balance: Double) -> some View {
         if showsError {
             Text(String(localized: "Введите сумму больше нуля"))
                 .font(.system(size: 13))
                 .foregroundColor(Color.red)
                 .multilineTextAlignment(.center)
         } else if let amount = parsedAmount {
-            let after = card.balance + (mode == .topUp ? amount : -amount)
+            let after = balance + (mode == .topUp ? amount : -amount)
             Text(String(localized: "Станет: \(money(after))"))
                 .font(.system(size: 13))
                 .monospacedDigit()
@@ -146,14 +155,29 @@ struct CardBalanceSheet: View {
         }
     }
 
-    private func submit(_ card: Card) {
-        guard let amount = parsedAmount,
-              financeService.adjustCardBalance(id: card.id, by: mode == .topUp ? amount : -amount) else {
-            showsError = true
-            HapticManager.shared.trigger(.error)
+    private func submit() {
+        guard let amount = parsedAmount else {
+            fail()
+            return
+        }
+        let delta = mode == .topUp ? amount : -amount
+        let isDone: Bool
+        switch target {
+        case .cash:
+            isDone = financeService.adjustCashBalance(by: delta)
+        case .card(let id):
+            isDone = financeService.adjustCardBalance(id: id, by: delta)
+        }
+        guard isDone else {
+            fail()
             return
         }
         HapticManager.shared.trigger(.success)
         dismiss()
+    }
+
+    private func fail() {
+        showsError = true
+        HapticManager.shared.trigger(.error)
     }
 }

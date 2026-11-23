@@ -415,11 +415,14 @@ enum CloudFinanceAssistant {
         if financeService.cards.isEmpty {
             lines.append("Карт пока нет.")
         } else {
-            lines.append("Карты (общий баланс \(currency.format(financeService.totalBalance))):")
+            lines.append("Карты (общий баланс \(currency.format(financeService.cardsBalance))):")
             for card in financeService.cards {
                 let frozen = card.isFrozen ? ", заморожена" : ""
                 lines.append("• [c:\(card.last4)] «\(card.type)» — \(currency.format(card.balance))\(frozen)")
             }
+        }
+        if abs(financeService.cashBalance) > 0.005 {
+            lines.append("Наличные: \(currency.format(financeService.cashBalance)). Общий баланс карт и наличных: \(currency.format(financeService.totalBalance)).")
         }
 
         let monthStart = calendar.date(byAdding: .day, value: -30, to: now) ?? now

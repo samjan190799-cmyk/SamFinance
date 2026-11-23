@@ -849,7 +849,6 @@
 "Баланс карты станет 0. Доходы, расходы и копилки не изменятся." = "The card balance will become 0. Income, expenses and goals will not change.";
 "Обнулить баланс" = "Set balance to zero";
 "Обнулить баланс?" = "Set the balance to zero?";
-"Баланс всех незамороженных карт станет 0. Доходы, расходы и копилки не изменятся." = "The balance of every card that is not frozen will become 0. Income, expenses and goals will not change.";
 "Действия с балансом" = "Balance actions";
 "ИИ-сервисы" = "AI services";
 "IT и разработка" = "IT & development";
@@ -864,3 +863,13 @@
 "Дети" = "Kids";
 "Питомцы" = "Pets";
 "Пожертвования" = "Donations";
+"Наличные" = "Cash";
+"Откуда" = "From";
+"Куда" = "To";
+"Не учитывать" = "Don't count";
+"Всего: %@" = "Total: %@";
+"Обнулить наличные?" = "Set cash to zero?";
+"Баланс наличных станет 0. Доходы, расходы и копилки не изменятся." = "The cash balance will become 0. Income, expenses and goals will not change.";
+"Баланс всех незамороженных карт и наличных станет 0. Доходы, расходы и копилки не изменятся." = "The balance of every card that is not frozen and your cash will become 0. Income, expenses and goals will not change.";
+"Деньги на руках входят в общий баланс вместе с картами. Добавляя операцию, выберите «Наличные»: эта сумма изменится сама." = "Cash on hand counts toward your total balance together with your cards. When you add a transaction, choose Cash and this amount will change by itself.";
+"Баланс не изменится: операция раньше последней правки баланса." = "The balance will not change: this transaction is older than the last balance correction.";

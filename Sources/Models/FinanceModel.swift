@@ -657,9 +657,11 @@ public struct Transaction: Codable, Identifiable, Hashable, Sendable {
     public var needsReview: Bool? // Категория подобрана наугад: стоит проверить
     public var balanceDelta: Double? // На сколько операция изменила баланс карты (чтобы откатить при удалении)
     public var debtId: UUID? // Долг или платёж, оплатой которого создана операция
+    public var isCash: Bool? // Операция из наличных (кошелька), а не с карты
 
-    public init(id: UUID = UUID(), title: String, amount: Double, type: TransactionType, category: Category, date: Date = Date(), notes: String? = nil, brandName: String? = nil, brandIcon: String? = nil, brandColorHex: String? = nil, cardId: UUID? = nil, externalKey: String? = nil, needsReview: Bool? = nil, balanceDelta: Double? = nil, debtId: UUID? = nil) {
+    public init(id: UUID = UUID(), title: String, amount: Double, type: TransactionType, category: Category, date: Date = Date(), notes: String? = nil, brandName: String? = nil, brandIcon: String? = nil, brandColorHex: String? = nil, cardId: UUID? = nil, externalKey: String? = nil, needsReview: Bool? = nil, balanceDelta: Double? = nil, debtId: UUID? = nil, isCash: Bool? = nil) {
         self.debtId = debtId
+        self.isCash = isCash
         self.id = id
         self.title = title
         self.amount = amount

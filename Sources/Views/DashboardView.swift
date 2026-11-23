@@ -143,7 +143,7 @@ struct DashboardView: View {
                 Text("Баланс")
                 Spacer()
                 Text(Date.now, format: .dateTime.month(.wide))
-                if !financeService.cards.isEmpty {
+                if !financeService.cards.isEmpty || abs(financeService.cashBalance) > 0.005 {
                     balanceMenu
                 }
             }
@@ -162,6 +162,9 @@ struct DashboardView: View {
                     .font(Theme.number(24, weight: .bold))
             }
             .padding(.top, 6)
+
+            accountSplit
+                .padding(.top, 10)
 
             BalanceSparkline(financeService: financeService)
                 .frame(height: 40)
@@ -196,7 +199,7 @@ struct DashboardView: View {
                 }
             }
         } message: {
-            Text(String(localized: "Баланс всех незамороженных карт станет 0. Доходы, расходы и копилки не изменятся."))
+            Text(String(localized: "Баланс всех незамороженных карт и наличных станет 0. Доходы, расходы и копилки не изменятся."))
         }
     }
 
@@ -216,6 +219,37 @@ struct DashboardView: View {
                 .contentShape(Rectangle())
         }
         .accessibilityLabel(String(localized: "Действия с балансом"))
+    }
+
+    /// Из чего сложен баланс: карты и наличные
+    private var accountSplit: some View {
+        HStack(spacing: 8) {
+            accountPill(systemName: "creditcard.fill", title: String(localized: "Карты"), value: financeService.cardsBalance)
+            accountPill(systemName: "banknote.fill", title: String(localized: "Наличные"), value: financeService.cashBalance)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func accountPill(systemName: String, title: String, value: Double) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: systemName)
+                .font(.system(size: 11, weight: .bold))
+            Text(title)
+                .font(.system(size: 12))
+                .opacity(0.75)
+            Text(CurrencyManager.shared.format(value))
+                .font(.system(size: 13, weight: .semibold))
+                .monospacedDigit()
+                .contentTransition(.numericText(value: value))
+                .animation(Motion.digits, value: value)
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+        .layoutPriority(1)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Theme.onAccent.opacity(0.12))
+        .clipShape(Capsule())
     }
 
     private func balancePill(_ text: String) -> some View {

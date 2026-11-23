@@ -216,13 +216,27 @@ enum LocalFinanceAssistant {
 
     private static func balanceAnswer(_ financeService: FinanceService) -> String {
         let cards = financeService.cards
-        guard !cards.isEmpty else {
+        let cash = financeService.cashBalance
+        let hasCash = abs(cash) > 0.005
+        guard !cards.isEmpty || hasCash else {
             return String(localized: "Карт пока нет. Пришлите скриншот СМС банка — карта добавится сама, а баланс возьмётся из остатка.")
         }
-        var answer = String(localized: "На картах \(format(financeService.totalBalance)):")
-        for card in cards {
-            let frozen = card.isFrozen ? " " + String(localized: "(заморожена, не считается)") : ""
-            answer += "\n• •••• \(card.last4) — \(format(card.balance))\(frozen)"
+        var answer = ""
+        if !cards.isEmpty {
+            answer = String(localized: "На картах \(format(financeService.cardsBalance)):")
+            for card in cards {
+                let frozen = card.isFrozen ? " " + String(localized: "(заморожена, не считается)") : ""
+                answer += "\n• •••• \(card.last4) — \(format(card.balance))\(frozen)"
+            }
+        }
+        if hasCash {
+            if !answer.isEmpty {
+                answer += "\n"
+            }
+            answer += String(localized: "Наличные") + ": " + format(cash)
+            if !cards.isEmpty {
+                answer += "\n" + String(localized: "Всего: \(format(financeService.totalBalance))")
+            }
         }
         return answer
     }

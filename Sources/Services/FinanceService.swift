@@ -19,6 +19,8 @@ public final class FinanceService {
     
     public private(set) var transactions: [Transaction] = []
     public private(set) var cards: [Card] = []
+    /// Наличные: один кошелёк рядом с картами
+    public private(set) var cash = CashAccount()
     public private(set) var debts: [Debt] = []
     public private(set) var goals: [Goal] = []
     public private(set) var customReminders: [CustomReminder] = []
@@ -57,6 +59,12 @@ public final class FinanceService {
         return paths[0].appendingPathComponent("subscriptions.json")
     }()
 
+    /// Наличные лежат в своём файле (в нём один элемент); у тех, кто обновился, его нет: кошелёк пуст, файл создаётся при первой правке
+    private let cashURL: URL = {
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        return paths[0].appendingPathComponent("cash.json")
+    }()
+
     /// Хранилища данных на диске
     private enum Store: String {
         case transactions
@@ -65,6 +73,7 @@ public final class FinanceService {
         case goals
         case reminders
         case subscriptions
+        case cash
     }
 
     /// Хранилища, файл которых существует, но не удалось прочитать или сохранить рядом резервную копию
@@ -104,6 +113,41 @@ public final class FinanceService {
 
         // Автоматически корректируем баланс карт, если транзакция привязана к счету (дополнительная логика)
         saveData()
+        return true
+    }
+
+    /// Записывает операцию и, если указан счёт (наличные или карта), меняет его баланс: расход уменьшает, доход увеличивает.
+    /// Операция старше последней правки баланса счёта записывается, но баланс не меняет: правка уже учитывает её.
+    /// Без счёта (nil) балансы не трогаются. Возвращает false, если операцию записать нельзя или такой карты нет.
+    @discardableResult
+    public func addTransaction(_ transaction: Transaction, account: BalanceAccount?) -> Bool {
+        var recorded = transaction
+        switch account {
+        case .cash?:
+            recorded.isCash = true
+            recorded.cardId = nil
+        case .card(let id)?:
+            guard cards.contains(where: { $0.id == id }) else { return false }
+            recorded.cardId = id
+            recorded.isCash = nil
+        case nil:
+            break
+        }
+        guard addTransaction(recorded) else { return false }
+
+        let delta = recorded.type == .income ? recorded.amount : -recorded.amount
+        var applied: Double?
+        switch account {
+        case .cash?:
+            applied = applyToCashBalance(delta: delta, asOf: recorded.date)
+        case .card(let id)?:
+            applied = applyToCardBalance(id: id, delta: delta, asOf: recorded.date)
+        case nil:
+            break
+        }
+        if let applied {
+            setBalanceDelta(transactionID: recorded.id, delta: applied)
+        }
         return true
     }
 
@@ -167,12 +211,14 @@ public final class FinanceService {
         goals.removeAll()
         customReminders.removeAll()
         subscriptions.removeAll()
+        cash = CashAccount()
         saveData()
         saveCards()
         saveDebts()
         saveGoals()
         saveReminders()
         saveSubscriptions()
+        saveCash()
     }
     
     // MARK: - API для карт
@@ -282,28 +328,83 @@ public final class FinanceService {
         return true
     }
 
-    /// Обнуляет баланс всех карт, которые входят в общий баланс (не заморожены, деньги на них есть).
-    /// Операции и копилки не меняются. Возвращает, у скольких карт баланс стал нулём.
+    /// Обнуляет общий баланс: все карты, которые в него входят (не заморожены, деньги на них есть), и наличные.
+    /// Операции и копилки не меняются. Возвращает, сколько счетов (карт и наличных) стали нулём.
     @discardableResult
     public func zeroTotalBalance() -> Int {
-        guard prepareForWrite(.cards) else { return 0 }
-        let now = Date()
         var changed = 0
-        for index in cards.indices where !cards[index].isFrozen && abs(cards[index].balance) > 0.0001 {
-            cards[index].balance = 0
-            cards[index].balanceUpdatedAt = now
-            changed += 1
+        if prepareForWrite(.cards) {
+            let now = Date()
+            for index in cards.indices where !cards[index].isFrozen && abs(cards[index].balance) > 0.0001 {
+                cards[index].balance = 0
+                cards[index].balanceUpdatedAt = now
+                changed += 1
+            }
+            if changed > 0 {
+                saveCards()
+            }
         }
-        if changed > 0 {
-            saveCards()
+        if abs(cash.balance) > 0.0001, setCashBalance(to: 0) {
+            changed += 1
         }
         return changed
     }
 
+    // MARK: - Наличные
+
+    /// Ручная правка наличных: пополнить (положительная сумма) или убавить (отрицательная). Как и у карты, это поправка,
+    /// а не доход или расход: в операции и отчёты она не попадает, а её момент становится точкой отсчёта для операций.
+    @discardableResult
+    public func adjustCashBalance(by delta: Double) -> Bool {
+        guard delta.isFinite, abs(delta) > 0.0001 else { return false }
+        return setCashBalance(to: cash.balance + delta)
+    }
+
+    /// Ставит баланс наличных вручную, например 0. Копейки округляются до сотых.
+    @discardableResult
+    public func setCashBalance(to balance: Double) -> Bool {
+        guard balance.isFinite, prepareForWrite(.cash) else { return false }
+        let rounded = (balance * 100).rounded() / 100
+        // Без «−0»: убавили ровно всё, получился ноль
+        cash.balance = rounded == 0 ? 0 : rounded
+        cash.balanceUpdatedAt = Date()
+        saveCash()
+        return true
+    }
+
+    /// Применяет операцию к наличным и возвращает изменение. nil, если баланс не трогали: операция старше последней правки.
+    /// В отличие от карты, точка отсчёта здесь не сдвигается операциями: записать вчерашний расход после сегодняшнего можно.
+    @discardableResult
+    public func applyToCashBalance(delta: Double, asOf date: Date) -> Double? {
+        guard delta.isFinite, prepareForWrite(.cash) else { return nil }
+        if let updatedAt = cash.balanceUpdatedAt, date <= updatedAt { return nil }
+        cash.balance += delta
+        saveCash()
+        return delta
+    }
+
+    /// Изменит ли операция с этой датой баланс счёта (иначе она старше последней правки и уже учтена)
+    public func willChangeBalance(of account: BalanceAccount, on date: Date) -> Bool {
+        switch account {
+        case .cash:
+            guard let updatedAt = cash.balanceUpdatedAt else { return true }
+            return date > updatedAt
+        case .card(let id):
+            guard let updatedAt = cards.first(where: { $0.id == id })?.balanceUpdatedAt else { return false }
+            return date > updatedAt
+        }
+    }
+
     /// Откатывает изменение баланса, которое операция внесла в карту
     private func revertBalance(of transaction: Transaction) {
+        guard let delta = transaction.balanceDelta else { return }
+        if transaction.isCash == true {
+            guard prepareForWrite(.cash) else { return }
+            cash.balance -= delta
+            saveCash()
+            return
+        }
         guard let cardId = transaction.cardId,
-              let delta = transaction.balanceDelta,
               prepareForWrite(.cards),
               let index = cards.firstIndex(where: { $0.id == cardId }) else { return }
         cards[index].balance -= delta
@@ -671,11 +772,21 @@ public final class FinanceService {
 
     // MARK: - Подсчеты и вычисления
     
-    /// Общий текущий баланс (сумма всех активных балансов карт)
-    public var totalBalance: Double {
+    /// Баланс карт: сумма балансов всех активных (не замороженных) карт
+    public var cardsBalance: Double {
         cards
             .filter { !$0.isFrozen }
             .reduce(0.0) { $0 + $1.balance }
+    }
+
+    /// Баланс наличных
+    public var cashBalance: Double {
+        cash.balance
+    }
+
+    /// Общий текущий баланс: активные карты и наличные
+    public var totalBalance: Double {
+        cardsBalance + cashBalance
     }
     
     /// Суммарный доход (по транзакциям)
@@ -716,6 +827,7 @@ public final class FinanceService {
         loadGoals()
         loadReminders()
         loadSubscriptions()
+        loadCash()
         ReminderService.shared.update(from: self)
     }
 
@@ -796,6 +908,13 @@ public final class FinanceService {
         }
     }
 
+    /// Файл наличных хранит массив из одного кошелька (так его читает общий читатель хранилищ)
+    private func loadCash() {
+        if let loaded = readStore([CashAccount].self, store: .cash, url: cashURL, dateStrategy: .iso8601), let wallet = loaded.first {
+            cash = wallet
+        }
+    }
+
     /// Заменяет категорию транзакции на встроенную с тем же названием и типом (с постоянным id)
     private static func withCanonicalCategory(_ transaction: Transaction) -> Transaction {
         guard let canonical = Category.defaultCategories.first(where: {
@@ -871,6 +990,7 @@ public final class FinanceService {
             case .goals: loadGoals()
             case .reminders: loadReminders()
             case .subscriptions: loadSubscriptions()
+            case .cash: loadCash()
             }
         }
         return !unreadableStores.contains(store)
@@ -957,5 +1077,18 @@ public final class FinanceService {
             print("⚠️ Не удалось сохранить подписки: \(error.localizedDescription)")
         }
         ReminderService.shared.update(from: self)
+    }
+
+    private func saveCash() {
+        guard !unreadableStores.contains(.cash) else { return }
+        do {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            encoder.outputFormatting = .prettyPrinted
+            let data = try encoder.encode([cash])
+            try data.write(to: cashURL, options: [.atomic, .completeFileProtection])
+        } catch {
+            print("⚠️ Не удалось сохранить наличные: \(error.localizedDescription)")
+        }
     }
 }

@@ -13,6 +13,8 @@ struct AddTransactionView: View {
     @State private var date: Date = Date()
     @State private var notes: String = ""
     @State private var isShowingBatchImport = false
+    /// Откуда списаны деньги или куда пришли; nil — балансы не трогать. Запоминается до следующей операции.
+    @State private var account: BalanceAccount?
 
     // Результат распознавания
     @State private var recognitionMessage: String? = nil
@@ -24,12 +26,19 @@ struct AddTransactionView: View {
     @Namespace private var chipNamespace
 
     private static let keypadKeys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ",", "0", "⌫"]
+    private static let accountDefaultsKey = "lastTransactionAccount"
 
     init(financeService: FinanceService, initialType: TransactionType = .expense) {
         self.financeService = financeService
         _transactionType = State(initialValue: initialType)
         let firstCategory = financeService.categories.first { $0.type == initialType } ?? financeService.categories[0]
         _selectedCategory = State(initialValue: firstCategory)
+
+        var initialAccount = UserDefaults.standard.string(forKey: Self.accountDefaultsKey).flatMap { BalanceAccount(storageKey: $0) }
+        if case .card(let id)? = initialAccount, !financeService.cards.contains(where: { $0.id == id }) {
+            initialAccount = nil
+        }
+        _account = State(initialValue: initialAccount)
     }
 
     var body: some View {
@@ -276,6 +285,10 @@ struct AddTransactionView: View {
             }
 
             row {
+                accountSelector
+            }
+
+            row {
                 HStack {
                     Text("Заметка")
                         .font(.system(size: 15))
@@ -289,6 +302,63 @@ struct AddTransactionView: View {
         }
         .padding(.top, 12)
         .padding(.bottom, 16)
+    }
+
+    // MARK: - Откуда и куда
+    /// Откуда списаны деньги (расход) или куда пришли (доход): наличные или карта. «Не учитывать» оставляет балансы как были.
+    private var accountSelector: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(transactionType == .expense ? String(localized: "Откуда") : String(localized: "Куда"))
+                .font(.system(size: 15))
+                .foregroundColor(Theme.textSecondary)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    accountChip(title: String(localized: "Не учитывать"), systemName: nil, value: nil)
+                    accountChip(title: String(localized: "Наличные"), systemName: "banknote.fill", value: .cash)
+                    ForEach(financeService.cards.filter { !$0.isFrozen }) { card in
+                        accountChip(title: "•••• \(card.last4)", systemName: "creditcard.fill", value: .card(card.id))
+                    }
+                }
+            }
+
+            if let account, !financeService.willChangeBalance(of: account, on: date) {
+                Text(String(localized: "Баланс не изменится: операция раньше последней правки баланса."))
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.textSecondary)
+            }
+        }
+        .padding(.vertical, 10)
+    }
+
+    private func accountChip(title: String, systemName: String?, value: BalanceAccount?) -> some View {
+        let isSelected = account == value
+        return Button {
+            HapticManager.shared.selection()
+            withAnimation(Motion.spring) {
+                account = value
+            }
+        } label: {
+            HStack(spacing: 6) {
+                if let systemName {
+                    Image(systemName: systemName)
+                        .font(.system(size: 13))
+                }
+                Text(title)
+                    .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
+            }
+            .foregroundColor(isSelected ? Theme.onAccent : .white)
+            .padding(.horizontal, 14)
+            .frame(height: 40)
+            .background {
+                if isSelected {
+                    Capsule().fill(Theme.accent)
+                }
+            }
+            .overlay(Capsule().stroke(Theme.line, lineWidth: isSelected ? 0 : 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(PressableButtonStyle(scale: 0.94))
     }
 
     private func row<Content: View>(@ViewBuilder content: () -> Content) -> some View {
@@ -410,7 +480,8 @@ struct AddTransactionView: View {
             brandColorHex: selectedCategory.colorHex
         )
 
-        financeService.addTransaction(newTransaction)
+        financeService.addTransaction(newTransaction, account: account)
+        UserDefaults.standard.set(account?.storageKey ?? "", forKey: Self.accountDefaultsKey)
         if !trimmedTitle.isEmpty {
             // В следующий раз этот магазин получит выбранную категорию сам
             AutomationService.shared.learnCategory(merchant: trimmedTitle, category: selectedCategory)

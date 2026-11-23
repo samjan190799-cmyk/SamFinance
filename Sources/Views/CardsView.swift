@@ -14,6 +14,10 @@ struct CardsView: View {
     @State private var balanceRequest: CardBalanceRequest? = nil
     /// Карта, баланс которой собираются обнулить (ждёт подтверждения)
     @State private var cardToZero: Card? = nil
+    /// Что показано: карты или наличные
+    @State private var section: CardsSection = .cards
+    /// Обнуление наличных ждёт подтверждения
+    @State private var isConfirmingZeroCash = false
     /// Карта в центре карусели; nil, пока пользователь не листал (тогда текущая — первая)
     @State private var centeredCardID: UUID? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -29,7 +33,15 @@ struct CardsView: View {
                     .padding(.horizontal, 20)
                     .appearAnimation(order: 0)
 
-                if financeService.cards.isEmpty {
+                sectionPicker
+                    .padding(.horizontal, 20)
+                    .padding(.top, 14)
+
+                if section == .cash {
+                    cashContent
+                        .padding(.horizontal, 20)
+                    AdBannerSection()
+                } else if financeService.cards.isEmpty {
                     emptyCardsPlaceholder
                         .padding(.horizontal, 20)
                     AdBannerSection()
@@ -63,10 +75,10 @@ struct CardsView: View {
                                 selectedCardForNewGoal = card
                             },
                             onTopUp: {
-                                balanceRequest = CardBalanceRequest(cardID: card.id, mode: .topUp)
+                                balanceRequest = CardBalanceRequest(target: .card(card.id), mode: .topUp)
                             },
                             onReduce: {
-                                balanceRequest = CardBalanceRequest(cardID: card.id, mode: .reduce)
+                                balanceRequest = CardBalanceRequest(target: .card(card.id), mode: .reduce)
                             },
                             onZero: {
                                 cardToZero = card
@@ -111,7 +123,7 @@ struct CardsView: View {
             SavingsView(financeService: financeService)
         }
         .sheet(item: $balanceRequest) { request in
-            CardBalanceSheet(financeService: financeService, cardID: request.cardID, mode: request.mode)
+            CardBalanceSheet(financeService: financeService, target: request.target, mode: request.mode)
                 .presentationDetents([.medium, .large])
         }
         .confirmationDialog(
@@ -129,6 +141,20 @@ struct CardsView: View {
         } message: { card in
             Text(String(localized: "Баланс карты станет 0. Доходы, расходы и копилки не изменятся.") + "\n" + card.pickerTitle)
         }
+        .confirmationDialog(
+            String(localized: "Обнулить наличные?"),
+            isPresented: $isConfirmingZeroCash,
+            titleVisibility: .visible
+        ) {
+            Button(String(localized: "Обнулить"), role: .destructive) {
+                HapticManager.shared.trigger(.success)
+                withAnimation(Motion.spring) {
+                    _ = financeService.setCashBalance(to: 0)
+                }
+            }
+        } message: {
+            Text(String(localized: "Баланс наличных станет 0. Доходы, расходы и копилки не изменятся."))
+        }
     }
 
     #if DEBUG
@@ -144,6 +170,44 @@ struct CardsView: View {
         }
     }
     #endif
+
+    // MARK: - Карты и наличные
+    /// Переключатель «Карты | Наличные»: баланс складывается из двух частей
+    private var sectionPicker: some View {
+        MonoSegmentedControl(
+            options: CardsSection.allCases,
+            title: { $0 == .cards ? String(localized: "Карты") : String(localized: "Наличные") },
+            selection: $section
+        )
+    }
+
+    /// Наличные: плитка с балансом, ручная правка и пояснение
+    private var cashContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            CashTile(balance: financeService.cashBalance)
+                .padding(.top, 20)
+
+            BalanceActionRow(
+                isEmpty: abs(financeService.cashBalance) < 0.005,
+                onTopUp: {
+                    balanceRequest = CardBalanceRequest(target: .cash, mode: .topUp)
+                },
+                onReduce: {
+                    balanceRequest = CardBalanceRequest(target: .cash, mode: .reduce)
+                },
+                onZero: {
+                    isConfirmingZeroCash = true
+                }
+            )
+            .padding(.top, 14)
+
+            Text(String(localized: "Деньги на руках входят в общий баланс вместе с картами. Добавляя операцию, выберите «Наличные»: эта сумма изменится сама."))
+                .font(.system(size: 13))
+                .foregroundColor(Theme.textTertiary)
+                .padding(.top, 14)
+        }
+        .appearAnimation(order: 1)
+    }
 
     // MARK: - Карусель
     /// Соседние карты выглядывают по краям, уменьшены и повёрнуты к центру; листание с доводкой до карты
