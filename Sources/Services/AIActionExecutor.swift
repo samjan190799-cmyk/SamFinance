@@ -126,6 +126,61 @@ enum AIActionExecutor {
         String(format: "%02d:%02d", minutes / 60, minutes % 60)
     }
 
+    // MARK: - Подписки и балансы
+
+    /// Сумма подписки в её валюте: подписка хранит сумму так, как её списывают, без пересчёта в базовую
+    private static func subscriptionAmount(_ value: Double?) -> Double? {
+        guard let value, value.isFinite, value > 0, value < 1_000_000_000 else { return nil }
+        return value
+    }
+
+    /// Период подписки из повтора: раз в неделю, месяц или год; nil, если повтор другой (каждый день, без повтора)
+    private static func subscriptionPeriod(_ rule: ReminderRepeat?, default fallback: SubscriptionPeriod?) -> SubscriptionPeriod? {
+        guard let rule else { return fallback }
+        switch rule {
+        case .weekly: return .weekly
+        case .monthly: return .monthly
+        case .yearly: return .yearly
+        case .never, .daily: return nil
+        }
+    }
+
+    /// Вид подписки по имени (video, music…) или по названию на языке приложения
+    private static func subscriptionCategory(_ raw: String?) -> SubscriptionCategory? {
+        guard let needle = cleanName(raw).map(normalized), !needle.isEmpty else { return nil }
+        return SubscriptionCategory.allCases.first { normalized($0.rawValue) == needle || normalized($0.title) == needle }
+    }
+
+    /// Счёт для правки баланса: наличные («cash») или карта по последним четырём цифрам
+    private static func balanceAccount(_ target: String?, service: FinanceService) -> Match<BalanceAccount> {
+        let key = normalized(target ?? "")
+        if key.hasPrefix("cash") || key.hasPrefix("налич") || key.hasPrefix("կանխիկ") {
+            return .found(.cash)
+        }
+        switch match(target, in: service.cards, id: { $0.id }, names: { [$0.last4, $0.type] }) {
+        case .found(let card): return .found(.card(card.id))
+        case .notFound: return .notFound
+        case .ambiguous: return .ambiguous
+        }
+    }
+
+    private static func accountTitle(_ account: BalanceAccount, service: FinanceService) -> String {
+        switch account {
+        case .cash:
+            return String(localized: "Наличные")
+        case .card(let id):
+            guard let card = service.cards.first(where: { $0.id == id }) else { return String(localized: "Карта") }
+            return "•••• \(card.last4)"
+        }
+    }
+
+    /// Новый баланс в базовой валюте: он может быть и нулём
+    private static func baseBalance(_ value: Double?, _ action: AIAction) -> Double? {
+        guard let value, value.isFinite, value >= 0, value < 1_000_000_000 else { return nil }
+        let currency = action.currency ?? CurrencyManager.shared.currentCurrency
+        return CurrencyService.shared.convert(amount: value, from: currency, to: CurrencyManager.shared.baseCurrency)
+    }
+
     // MARK: - Проверка
 
     static func plan(_ action: AIAction, service: FinanceService = .shared, now: Date = Date(), calendar: Calendar = .current) -> PlannedAction {
@@ -628,6 +683,163 @@ enum AIActionExecutor {
                 )
             }
 
+        // MARK: Подписки
+        case .addSubscription:
+            let icon = "repeat.circle"
+            guard let name = cleanName(action.name) else {
+                return failure(String(localized: "Добавить подписку"), String(localized: "Не указано название"), icon)
+            }
+            guard let amount = subscriptionAmount(action.amount) else {
+                return failure(String(localized: "Добавить подписку «\(name)»"), String(localized: "Не указана сумма"), icon)
+            }
+            guard let period = subscriptionPeriod(action.repeatRule, default: .monthly) else {
+                return failure(String(localized: "Добавить подписку «\(name)»"), String(localized: "Подписка может повторяться раз в неделю, месяц или год"), icon)
+            }
+            let currency = action.currency ?? CurrencyManager.shared.currentCurrency
+            let firstCharge = calendar.startOfDay(for: action.date ?? now)
+            let interval: Int? = (action.interval ?? 1) > 1 ? min(action.interval ?? 1, 36) : nil
+            let subscription = AppSubscription(
+                name: name,
+                amount: amount,
+                currency: currency,
+                period: period,
+                interval: interval,
+                firstChargeDate: firstCharge,
+                category: subscriptionCategory(action.category) ?? .other,
+                reminder: action.reminder,
+                note: cleanName(action.note)
+            )
+            let schedule = period.repeatRule.title(every: interval ?? 1).lowercased()
+            let summary = String(localized: "Добавить подписку «\(name)»: \(currency.formatAmount(amount)), \(schedule), ближайшее списание \(shortDate(firstCharge))")
+            return result(.addSubscription(subscription), summary, icon)
+
+        case .changeSubscription:
+            let icon = "pencil"
+            switch match(action.target, in: service.subscriptions, id: { $0.id }, names: { [$0.name] }) {
+            case .notFound:
+                return failure(String(localized: "Изменить подписку"), String(localized: "Не нашёл подписку «\(action.target ?? "")»"), icon)
+            case .ambiguous:
+                return failure(String(localized: "Изменить подписку"), String(localized: "Подходит несколько вариантов: «\(action.target ?? "")». Уточните"), icon)
+            case .found(let subscription):
+                var updated = subscription
+                var changes: [String] = []
+                if let name = cleanName(action.name), name != subscription.name {
+                    updated.name = name
+                    changes.append(String(localized: "название «\(name)»"))
+                }
+                if let currency = action.currency, currency != updated.currency {
+                    updated.currency = currency
+                    changes.append(String(localized: "валюта \(currency.rawValue)"))
+                }
+                if action.amount != nil {
+                    guard let amount = subscriptionAmount(action.amount) else {
+                        return failure(String(localized: "Изменить подписку «\(subscription.name)»"), String(localized: "Неверная сумма"), icon)
+                    }
+                    updated.amount = amount
+                    changes.append(String(localized: "сумма \(updated.currency.formatAmount(amount))"))
+                }
+                if let date = action.date {
+                    let day = calendar.startOfDay(for: date)
+                    updated.firstChargeDate = day
+                    changes.append(String(localized: "списание \(shortDate(day))"))
+                }
+                if action.repeatRule != nil || action.interval != nil {
+                    guard let period = subscriptionPeriod(action.repeatRule, default: updated.period) else {
+                        return failure(String(localized: "Изменить подписку «\(subscription.name)»"), String(localized: "Подписка может повторяться раз в неделю, месяц или год"), icon)
+                    }
+                    updated.period = period
+                    if let interval = action.interval {
+                        updated.interval = interval > 1 ? min(interval, 36) : nil
+                    }
+                    changes.append(period.repeatRule.title(every: updated.effectiveInterval).lowercased())
+                }
+                if let category = subscriptionCategory(action.category), category != updated.category {
+                    updated.category = category
+                    changes.append(category.title)
+                }
+                if let reminder = action.reminder {
+                    updated.reminder = reminder
+                    changes.append(String(localized: "напоминание: \(reminder.title)"))
+                }
+                if let note = cleanName(action.note) {
+                    updated.note = note
+                    changes.append(String(localized: "заметка «\(note)»"))
+                }
+                guard !changes.isEmpty else {
+                    return failure(String(localized: "Изменить подписку «\(subscription.name)»"), String(localized: "Нечего менять"), icon)
+                }
+                return result(.updateSubscription(updated), String(localized: "Изменить подписку «\(subscription.name)»: \(changes.joined(separator: ", "))"), icon)
+            }
+
+        case .pauseSubscription, .resumeSubscription, .archiveSubscription, .deleteSubscription:
+            let icon: String
+            switch action.kind {
+            case .pauseSubscription: icon = "pause.circle"
+            case .resumeSubscription: icon = "play.circle"
+            case .archiveSubscription: icon = "archivebox"
+            default: icon = "trash"
+            }
+            switch match(action.target, in: service.subscriptions, id: { $0.id }, names: { [$0.name] }) {
+            case .notFound:
+                return failure(String(localized: "Подписка"), String(localized: "Не нашёл подписку «\(action.target ?? "")»"), icon)
+            case .ambiguous:
+                return failure(String(localized: "Подписка"), String(localized: "Подходит несколько вариантов: «\(action.target ?? "")». Уточните"), icon)
+            case .found(let subscription):
+                let status: SubscriptionStatus
+                let summary: String
+                switch action.kind {
+                case .pauseSubscription:
+                    status = .paused
+                    summary = String(localized: "Поставить подписку «\(subscription.name)» на паузу")
+                case .resumeSubscription:
+                    status = .active
+                    summary = String(localized: "Возобновить подписку «\(subscription.name)»")
+                case .archiveSubscription:
+                    status = .archived
+                    summary = String(localized: "Отправить подписку «\(subscription.name)» в архив")
+                default:
+                    return result(.deleteSubscription(subscription.id), String(localized: "Удалить подписку «\(subscription.name)»"), icon)
+                }
+                if subscription.status == status {
+                    return failure(summary, String(localized: "Подписка уже в этом состоянии"), icon)
+                }
+                return result(.setSubscriptionStatus(subscription.id, status), summary, icon)
+            }
+
+        // MARK: Балансы наличных и карт
+        case .topUpBalance, .reduceBalance, .setBalance:
+            let icon: String
+            switch action.kind {
+            case .topUpBalance: icon = "plus.circle"
+            case .reduceBalance: icon = "minus.circle"
+            default: icon = "equal.circle"
+            }
+            switch balanceAccount(action.target, service: service) {
+            case .notFound:
+                return failure(String(localized: "Баланс"), String(localized: "Не нашёл счёт «\(action.target ?? "")»: нужны наличные или карта"), icon)
+            case .ambiguous:
+                return failure(String(localized: "Баланс"), String(localized: "Подходит несколько вариантов: «\(action.target ?? "")». Уточните"), icon)
+            case .found(let account):
+                let title = accountTitle(account, service: service)
+                switch action.kind {
+                case .setBalance:
+                    guard let value = baseBalance(action.amount, action) else {
+                        return failure(String(localized: "Поставить баланс (\(title))"), String(localized: "Не указана сумма"), icon)
+                    }
+                    return result(.setBalance(account, value), String(localized: "Поставить баланс (\(title)): \(money(value))"), icon)
+                case .topUpBalance:
+                    guard let amount = baseAmount(action) else {
+                        return failure(String(localized: "Пополнить баланс (\(title))"), String(localized: "Не указана сумма"), icon)
+                    }
+                    return result(.adjustBalance(account, amount), String(localized: "Пополнить баланс (\(title)) на \(money(amount))"), icon)
+                default:
+                    guard let amount = baseAmount(action) else {
+                        return failure(String(localized: "Убавить баланс (\(title))"), String(localized: "Не указана сумма"), icon)
+                    }
+                    return result(.adjustBalance(account, -amount), String(localized: "Убавить баланс (\(title)) на \(money(amount))"), icon)
+                }
+            }
+
         // MARK: Настройки
         case .setCurrency:
             let icon = "dollarsign.circle"
@@ -749,6 +961,37 @@ enum AIActionExecutor {
             // Выбор запоминается: следующая такая операция получит эту категорию сама
             AutomationService.shared.learnCategory(merchant: transaction.brandName ?? transaction.title, category: category)
 
+        case .addSubscription(let subscription):
+            service.addSubscription(subscription)
+        case .updateSubscription(let subscription):
+            service.updateSubscription(subscription)
+        case .setSubscriptionStatus(let id, let status):
+            guard service.subscriptions.contains(where: { $0.id == id }) else {
+                return .failed(String(localized: "Подписка уже удалена"))
+            }
+            service.setSubscriptionStatus(id: id, status: status)
+        case .deleteSubscription(let id):
+            service.deleteSubscription(id: id)
+
+        case .adjustBalance(let account, let delta):
+            let isDone: Bool
+            switch account {
+            case .cash: isDone = service.adjustCashBalance(by: delta)
+            case .card(let id): isDone = service.adjustCardBalance(id: id, by: delta)
+            }
+            if !isDone {
+                return .failed(String(localized: "Не удалось изменить баланс"))
+            }
+        case .setBalance(let account, let value):
+            let isDone: Bool
+            switch account {
+            case .cash: isDone = service.setCashBalance(to: value)
+            case .card(let id): isDone = service.setCardBalance(id: id, to: value)
+            }
+            if !isDone {
+                return .failed(String(localized: "Не удалось изменить баланс"))
+            }
+
         case .setCurrency(let currency):
             CurrencyManager.shared.currentCurrency = currency
         case .setReminderSetting(let change):
@@ -774,6 +1017,7 @@ enum AIActionExecutor {
         case .updateDebt(let debt)?: return debt.effectiveReminder != .off
         case .addGoal(let goal)?, .updateGoal(let goal)?: return goal.deadline != nil
         case .addReminder?, .updateReminder?: return true
+        case .addSubscription(let subscription)?, .updateSubscription(let subscription)?: return subscription.effectiveReminder != .off
         case .setReminderSetting?: return true
         default: return false
         }

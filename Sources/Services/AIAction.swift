@@ -23,11 +23,20 @@ struct AIAction: Sendable, Equatable {
         case setTransactionCategory = "set_transaction_category"
         case setCurrency = "set_currency"
         case setReminderSetting = "set_reminder_setting"
+        case addSubscription = "add_subscription"
+        case changeSubscription = "change_subscription"
+        case pauseSubscription = "pause_subscription"
+        case resumeSubscription = "resume_subscription"
+        case archiveSubscription = "archive_subscription"
+        case deleteSubscription = "delete_subscription"
+        case topUpBalance = "top_up_balance"
+        case reduceBalance = "reduce_balance"
+        case setBalance = "set_balance"
 
         /// Удаление нельзя отменить, поэтому такие предложения подсвечиваются красным
         var isDestructive: Bool {
             switch self {
-            case .deleteDebt, .deleteGoal, .deleteReminder, .deleteTransaction: return true
+            case .deleteDebt, .deleteGoal, .deleteReminder, .deleteTransaction, .deleteSubscription: return true
             default: return false
             }
         }
@@ -142,6 +151,14 @@ enum AIOperation: Equatable, Sendable {
     case setTransactionCategory(UUID, Category)
     case setCurrency(AppCurrency)
     case setReminderSetting(ReminderSettingChange)
+    case addSubscription(AppSubscription)
+    case updateSubscription(AppSubscription)
+    case setSubscriptionStatus(UUID, SubscriptionStatus)
+    case deleteSubscription(UUID)
+    /// Больше нуля — пополнить наличные или карту, меньше нуля — убавить; в базовой валюте
+    case adjustBalance(BalanceAccount, Double)
+    /// Новый баланс наличных или карты, в базовой валюте
+    case setBalance(BalanceAccount, Double)
 }
 
 enum ReminderSettingChange: Equatable, Sendable {

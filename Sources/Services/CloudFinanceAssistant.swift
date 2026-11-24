@@ -196,7 +196,7 @@ enum CloudFinanceAssistant {
         Результаты запросов к данным на телефоне (суммы в валюте отображения):
         \(results)
 
-        Ответь пользователю на его вопрос по этим данным, коротко и без Markdown. Операции и действия заполняй, только если пользователь просил что-то записать или изменить. \(ending)
+        Ответь пользователю на его вопрос по этим данным на том же языке, на котором он спрашивал, коротко и без Markdown. Операции и действия заполняй, только если пользователь просил что-то записать или изменить. \(ending)
         """
         // Скриншоты уже разобраны на первом шаге, повторно они не нужны
         return AIPrompt(system: prompt.system, turns: turns, leadingText: nil, images: [], text: text)
@@ -340,9 +340,11 @@ enum CloudFinanceAssistant {
 
     // MARK: - Подсказка и данные пользователя
 
-    private static func systemPrompt() -> String {
+    static func systemPrompt() -> String {
         """
-        Ты — помощник в приложении учёта личных финансов Hashiv. Отвечай на языке пользователя (\(AppLanguage.current.promptName)), коротко и по делу, обычным текстом без Markdown; перечисления пиши строками, начинающимися с «• ».
+        Ты — помощник в приложении учёта личных финансов Hashiv. Отвечай коротко и по делу, обычным текстом без Markdown; перечисления пиши строками, начинающимися с «• ».
+
+        Язык. Понимай пользователя на любом языке мира и отвечай на том языке, на котором он написал последнее сообщение; если языки смешаны, на преобладающем. Если язык по сообщению не определить («500», «ок», только цифры или эмодзи), отвечай на языке приложения: \(AppLanguage.current.promptName). Если пользователь просит ответить или перевести на другой язык, сделай так. Поля JSON с фиксированными значениями (kind, currency, type, category и другие) заполняй точно так, как они даны в схеме и в списках ниже, а в reply называй категории и виды на языке ответа. Имена людей, банков и магазинов не переводи. СМС, чеки, счета и выписки принимай на любом языке и из любой страны (латиница, кириллица, армянское, грузинское, арабское, ивритское письмо, иероглифы, деванагари и другие): сумму, валюту, дату и магазин читай по тексту документа. Числа и даты в reply пиши так, как принято на языке ответа. Приложение считает деньги только в AMD, RUB, USD и EUR: если документ в другой валюте, не придумывай курс, а скажи об этом в reply и оставь operations пустым.
 
         Считай только по данным пользователя ниже. Если данных не хватает, так и скажи и не придумывай суммы.
 
@@ -374,7 +376,12 @@ enum CloudFinanceAssistant {
         • delete_transaction — target. set_transaction_category — target и category (из списка категорий нужного типа).
         • set_currency — value (AMD, RUB, USD или EUR).
         • set_reminder_setting — setting и value: для debts, goal_deadlines, card_expiry, daily_log значение «on» или «off»; для goal_saving — «off», «weekly» или «monthly»; для reminder_time и daily_log_time — «ЧЧ:ММ».
-        target — номер из квадратных скобок в списках ниже ([d:…] долг, [g:…] копилка, [r:…] напоминание, [t:…] операция), для карты — последние 4 цифры. Номера копируй точно, не придумывай их; если номера нет, напиши название. Даты и время отсчитывай от текущего времени и пиши в ISO 8601 с часовым поясом пользователя; если у напоминания время не названо, возьми 10:00. Если валюта не названа, currency — null: сумма в валюте отображения.
+        • add_subscription — name (сервис: Netflix, iCloud, спортзал), amount, currency (валюта списания; если не названа — валюта отображения), date (ближайшее списание; если не названо — сегодня), repeat_rule (weekly, monthly или yearly; если не названо — monthly), interval (каждые N периодов, если не 1: 3 при monthly — раз в квартал), category (вид подписки, один из: \(SubscriptionCategory.allCases.map(\.rawValue).joined(separator: ", "))), reminder, note. Подписка — регулярная оплата сервиса; коммуналка, интернет, аренда, кредиты и долги остаются платежами и долгами (add_debt).
+        • change_subscription — target и любые из name, amount, currency, date, repeat_rule, interval, category, reminder, note.
+        • pause_subscription (пауза), resume_subscription (возобновить), archive_subscription (отменена, в архив), delete_subscription — target.
+        • top_up_balance, reduce_balance — target и amount: пополнить или убавить баланс наличных либо карты на сумму. target — cash для наличных или последние 4 цифры карты. Это ручная поправка баланса для просьб вроде «пополни наличные на 20 000» или «на карте на 5 000 меньше». Если пользователь рассказывает о трате или доходе («купил кофе за 1500», «получил зарплату»), используй operations, а не эти действия.
+        • set_balance — target (cash или последние 4 цифры карты) и amount — какой баланс стал: «у меня на руках 80 000», «обнули наличные» (amount 0).
+        target — номер из квадратных скобок в списках ниже ([d:…] долг, [g:…] копилка, [r:…] напоминание, [s:…] подписка, [t:…] операция), для карты — последние 4 цифры. Номера копируй точно, не придумывай их; если номера нет, напиши название. Даты и время отсчитывай от текущего времени и пиши в ISO 8601 с часовым поясом пользователя; если у напоминания время не названо, возьми 10:00. Если валюта не названа, currency — null: сумма в валюте отображения.
 
         Поле queries — запросы к данным на телефоне. В списках ниже только последние 30 дней, 60 операций и итоги по ним. Если для ответа нужен другой период, фильтр (категория, магазин, карта) или точный итог («сколько я потратил в сентябре», «на кофе за полгода», «самая крупная покупка в этом году», «сравни октябрь и ноябрь»), не считай по памяти и не угадывай: верни queries (не больше 4), reply оставь коротким («Считаю…»), а operations и actions пустыми. Приложение выполнит запросы и пришлёт результаты следующим сообщением, после чего ответь по ним. Если данных в списках достаточно, queries — пустой массив.
         Виды (kind):
@@ -388,7 +395,7 @@ enum CloudFinanceAssistant {
     }
 
     /// Сводка данных пользователя: карты, траты по категориям, последние операции и долги
-    private static func financeContext() -> String {
+    static func financeContext() -> String {
         let financeService = FinanceService.shared
         let currency = CurrencyManager.shared
         let calendar = Calendar.current
@@ -518,6 +525,37 @@ enum CloudFinanceAssistant {
             lines.append("Свои напоминания:")
             for reminder in financeService.customReminders.prefix(20) {
                 lines.append("• [r:\(AIActionExecutor.shortID(reminder.id))] «\(reminder.title)» — \(dateFormatter.string(from: reminder.date)), повтор: \(reminder.repeatRule.rawValue)")
+            }
+        }
+
+        // Подписки: сумма в валюте подписки, итоги в валюте приложения; номер нужен, чтобы изменить подписку
+        lines.append("")
+        if financeService.subscriptions.isEmpty {
+            lines.append("Подписок нет.")
+        } else {
+            let base = currency.baseCurrency
+            let totals = SubscriptionTotals(financeService.subscriptions) { amount, from in
+                CurrencyService.shared.convert(amount: amount, from: from, to: base)
+            }
+            lines.append("Подписки (активных \(totals.count), в среднем \(currency.format(totals.perMonth)) в месяц, \(currency.format(totals.perYear)) в год):")
+            for subscription in AppSubscription.sortedForList(financeService.subscriptions, now: now, calendar: calendar).prefix(30) {
+                var schedule = subscription.period.rawValue
+                if subscription.effectiveInterval > 1 {
+                    schedule += ", каждые \(subscription.effectiveInterval)"
+                }
+                var line = "• [s:\(AIActionExecutor.shortID(subscription.id))] «\(subscription.name)» — \(subscription.currency.formatAmount(subscription.amount)), повтор: \(schedule)"
+                switch subscription.status {
+                case .active:
+                    if let next = subscription.nextChargeDate(now: now, calendar: calendar) {
+                        line += ", следующее списание \(dateFormatter.string(from: next))"
+                    }
+                case .paused:
+                    line += ", на паузе"
+                case .archived:
+                    line += ", в архиве"
+                }
+                line += ", вид: \(subscription.category.rawValue)"
+                lines.append(line)
             }
         }
 
