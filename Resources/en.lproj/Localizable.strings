@@ -896,3 +896,8 @@
 "Не удалось изменить баланс" = "Could not change the balance";
 "Активных подписок нет. Добавьте первую в разделе «Долги» → «Подписки»." = "No active subscriptions. Add the first one in Debts → Subscriptions.";
 "Активных подписок: %lld. В среднем %@ в месяц, %@ в год." = "Active subscriptions: %lld. On average %@ per month, %@ per year.";
+"Дневной лимит ИИ-помощника исчерпан. Он обновится в течение суток. Остальные разделы приложения работают." = "The AI assistant’s daily limit is used up. It will reset within a day. The rest of the app keeps working.";
+"Слишком много запросов к ИИ-помощнику за минуту. Подождите минуту и повторите." = "Too many requests to the AI assistant within a minute. Wait a minute and try again.";
+"Слишком много запросов к ИИ-помощнику. Повторите через %lld с." = "Too many requests to the AI assistant. Try again in %lld s.";
+"Слишком много запросов к ИИ-помощнику. Повторите через %lld мин." = "Too many requests to the AI assistant. Try again in %lld min.";
+"А пока отвечаю по данным на телефоне:" = "Meanwhile, I am answering from the data on your phone:";

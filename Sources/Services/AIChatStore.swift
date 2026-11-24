@@ -394,7 +394,15 @@ final class AIChatStore {
             return
         } catch {
             HapticManager.shared.trigger(.error)
-            reply((error as? LocalizedError)?.errorDescription ?? String(localized: "Не получилось получить ответ \(provider.displayName). Повторите запрос."))
+            var text = (error as? LocalizedError)?.errorDescription ?? String(localized: "Не получилось получить ответ \(provider.displayName). Повторите запрос.")
+            // Дневной лимит кончился надолго: на вопрос, который понимает локальный помощник, отвечаем по данным на телефоне
+            if case AIAPIError.quotaLimited(_, let limit, _) = error, limit.period == .day {
+                let local = LocalFinanceAssistant.answer(question, financeService: FinanceService.shared)
+                if local != LocalFinanceAssistant.helpText {
+                    text += "\n\n" + String(localized: "А пока отвечаю по данным на телефоне:") + "\n" + local
+                }
+            }
+            reply(text)
         }
     }
 

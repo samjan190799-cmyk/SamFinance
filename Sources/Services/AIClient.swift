@@ -8,6 +8,9 @@ enum AIAPIError: LocalizedError {
     case noCredit(AIProvider)
     /// Лимит запросов или квоты; во втором значении настоящий текст отказа сервиса: в нём название квоты и время ожидания
     case rateLimited(AIProvider, String?)
+    /// Лимит с известными подробностями: минутный он или дневной и когда повторить (так отвечает Gemini).
+    /// В третьем значении настоящий текст отказа сервиса, как и у rateLimited.
+    case quotaLimited(AIProvider, AIQuotaLimit, String?)
     case overloaded(AIProvider)
     case refused(AIProvider)
     case cutOff
@@ -26,6 +29,12 @@ enum AIAPIError: LocalizedError {
             return String(localized: "Лимит или баланс ИИ-сервиса исчерпан. Попробуйте позже или напишите в поддержку.")
         case .rateLimited(let provider, let detail):
             var text = String(localized: "Слишком много запросов подряд или исчерпан лимит ключа \(provider.displayName). Подождите минуту и повторите.")
+            if let detail {
+                text += "\n\n" + String(localized: "Ответ сервиса: \(detail)")
+            }
+            return text
+        case .quotaLimited(_, let limit, let detail):
+            var text = limit.summary
             if let detail {
                 text += "\n\n" + String(localized: "Ответ сервиса: \(detail)")
             }
@@ -73,7 +82,12 @@ enum AIAPIError: LocalizedError {
                 return .invalidKey(provider)
             }
             if status == 402 { return .noCredit(provider) }
-            if status == 429 { return .rateLimited(provider, limitDetail) }
+            if status == 429 {
+                if let limit = AIQuotaLimit(googleError: details) {
+                    return .quotaLimited(provider, limit, limitDetail)
+                }
+                return .rateLimited(provider, limitDetail)
+            }
             if status == 503 { return .overloaded(provider) }
         }
         return .server(provider, message)
@@ -84,6 +98,94 @@ enum AIAPIError: LocalizedError {
         guard let message, !message.isEmpty else { return nil }
         guard message.count > limit else { return message }
         return String(message.prefix(limit)) + "…"
+    }
+}
+
+/// Какой лимит исчерпан и когда можно повторить. Читается из отказа Google (429, RESOURCE_EXHAUSTED): в details лежит
+/// нарушенная квота (её имя говорит, минутная она или дневная) и время ожидания.
+struct AIQuotaLimit: Equatable, Sendable {
+    enum Period: Equatable, Sendable {
+        case minute
+        case day
+        /// Тип лимита не назван, но время ожидания известно
+        case other
+    }
+
+    let period: Period
+    /// Через сколько секунд сервис разрешает повторить. Для дневного лимита не важно: он обновляется раз в сутки.
+    let retryAfter: Int?
+
+    init(period: Period, retryAfter: Int?) {
+        self.period = period
+        self.retryAfter = retryAfter
+    }
+
+    /// nil, если в ответе нет ни типа лимита, ни времени ожидания: тогда остаётся обычное сообщение о лимите
+    init?(googleError error: [String: Any]?) {
+        guard let error else { return nil }
+        var period: Period?
+        var retry: Int?
+
+        for detail in error["details"] as? [[String: Any]] ?? [] {
+            let type = detail["@type"] as? String ?? ""
+            if type.hasSuffix("QuotaFailure") {
+                for violation in detail["violations"] as? [[String: Any]] ?? [] {
+                    let name = (violation["quotaId"] as? String ?? "") + " " + (violation["quotaMetric"] as? String ?? "")
+                    if let found = Self.period(inName: name) {
+                        // Дневной лимит важнее минутного: ждать нужно до обновления за сутки
+                        period = (period == .day || found == .day) ? .day : found
+                    }
+                }
+            }
+            if type.hasSuffix("RetryInfo"), let delay = detail["retryDelay"] as? String {
+                retry = Double(delay.trimmingCharacters(in: CharacterSet(charactersIn: "s "))).flatMap(Self.wholeSeconds)
+            }
+        }
+
+        // Старые ответы без details: время ожидания и тип только в тексте («Please retry in 35.8s»)
+        let message = error["message"] as? String ?? ""
+        if retry == nil, let range = message.range(of: "retry in ", options: .caseInsensitive) {
+            let number = message[range.upperBound...].prefix { $0.isNumber || $0 == "." }
+            retry = Double(number).flatMap(Self.wholeSeconds)
+        }
+        if period == nil {
+            period = Self.period(inName: message)
+        }
+
+        guard period != nil || retry != nil else { return nil }
+        self.period = period ?? .other
+        self.retryAfter = retry
+    }
+
+    private static func period(inName name: String) -> Period? {
+        if name.localizedCaseInsensitiveContains("PerDay") || name.localizedCaseInsensitiveContains("per day") {
+            return .day
+        }
+        if name.localizedCaseInsensitiveContains("PerMinute") || name.localizedCaseInsensitiveContains("per minute") {
+            return .minute
+        }
+        return nil
+    }
+
+    private static func wholeSeconds(_ value: Double) -> Int? {
+        guard value.isFinite, value > 0, value < 86_400 else { return nil }
+        return Int(value.rounded(.up))
+    }
+
+    /// Что сказать человеку: какой лимит и когда повторить
+    var summary: String {
+        switch period {
+        case .day:
+            return String(localized: "Дневной лимит ИИ-помощника исчерпан. Он обновится в течение суток. Остальные разделы приложения работают.")
+        case .minute, .other:
+            guard let wait = retryAfter else {
+                return String(localized: "Слишком много запросов к ИИ-помощнику за минуту. Подождите минуту и повторите.")
+            }
+            if wait >= 120 {
+                return String(localized: "Слишком много запросов к ИИ-помощнику. Повторите через \((wait + 59) / 60) мин.")
+            }
+            return String(localized: "Слишком много запросов к ИИ-помощнику. Повторите через \(wait) с.")
+        }
     }
 }
 
