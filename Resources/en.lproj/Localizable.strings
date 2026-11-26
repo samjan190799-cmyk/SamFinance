@@ -901,3 +901,16 @@
 "Слишком много запросов к ИИ-помощнику. Повторите через %lld с." = "Too many requests to the AI assistant. Try again in %lld s.";
 "Слишком много запросов к ИИ-помощнику. Повторите через %lld мин." = "Too many requests to the AI assistant. Try again in %lld min.";
 "А пока отвечаю по данным на телефоне:" = "Meanwhile, I am answering from the data on your phone:";
+"О рекламе и жалобы" = "About ads and complaints";
+"Реклама" = "Ads";
+"Что используется для рекламы" = "What is used for ads";
+"В приложении показывается реклама Яндекса. Для её показа Яндекс получает технические данные устройства: IP-адрес (по нему примерно определяется регион), модель и версию iOS, язык, идентификаторы устройства, рекламный идентификатор (только если вы разрешили отслеживание), сведения о показах и нажатиях на рекламу." = "This app shows Yandex ads. To show them, Yandex receives technical device data: the IP address (used to estimate the region), the device model and iOS version, the language, device identifiers, the advertising identifier (only if you allowed tracking) and information about ad impressions and taps.";
+"Что не используется" = "What is not used";
+"Операции, карты, долги, копилки, подписки, вопросы к ИИ-помощнику и другие ваши финансовые данные в рекламу не передаются." = "Your transactions, cards, debts, savings goals, subscriptions, questions to the AI assistant and other financial data are not passed to advertising.";
+"Отслеживание" = "Tracking";
+"Персональную рекламу можно отключить: Настройки iOS → Конфиденциальность и безопасность → Отслеживание." = "You can turn off personalised ads: iOS Settings → Privacy & Security → Tracking.";
+"Открыть настройки iOS" = "Open iOS Settings";
+"Жалобы" = "Complaints";
+"Неподходящее объявление можно отметить в меню самого объявления или написать о нём Яндексу." = "You can flag an unsuitable ad from its own menu or tell Yandex about it.";
+"Пожаловаться на рекламу" = "Report an ad";
+"Политика конфиденциальности Яндекса" = "Yandex Privacy Policy";

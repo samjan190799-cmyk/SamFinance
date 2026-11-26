@@ -93,7 +93,7 @@ struct AIChatView: View {
                             .transition(messageTransition(for: message))
                         // Реклама Яндекса: сразу после приветствия, на всю ширину экрана (поля переписки 16 pt)
                         if index == 0 {
-                            AdBannerSection()
+                            AdBannerSection(placement: .chat)
                                 .padding(.horizontal, -16)
                         }
                     }

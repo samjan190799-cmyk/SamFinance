@@ -67,7 +67,7 @@ struct DashboardView: View {
                 balanceCard
                     .appearAnimation(order: 1)
                 // Реклама Яндекса: на всю ширину экрана, поэтому отрицательное поле вместо полей контента
-                AdBannerSection()
+                AdBannerSection(placement: .dashboard)
                     .padding(.horizontal, -20)
                 quickActions
                     .appearAnimation(order: 1)

@@ -3,25 +3,33 @@ import SwiftUI
 import YandexMobileAds
 
 /// Баннер Яндекс Рекламы. У каждой из пяти вкладок свой баннер: он стоит внутри прокрутки между первым и вторым блоком
-/// экрана (на «Обзоре» между картой баланса и кнопками) и прокручивается вместе с содержимым. ContentView создаёт экран
-/// заново при смене вкладки (`.id(selectedTab)`), поэтому и баннер запрашивает рекламу заново.
+/// экрана (на «Обзоре» между картой баланса и кнопками) и прокручивается вместе с содержимым.
 /// Это единственное место приложения, которое знает про SDK Яндекса.
 /// В данные баннера не передаётся ничего из учёта: ни операции, ни карты, ни долги.
 ///
+/// Требования Рекламной сети Яндекса к рекламе в приложениях, которые держит этот вид:
+/// - место под баннер (320×50) занято с самого начала, поэтому объявление не появляется неожиданно и не сдвигает кнопки;
+/// - над и под баннером отступ `verticalSpacing`: кнопки не стоят вплотную к объявлению, ничто его не перекрывает;
+/// - один экран запрашивает рекламу не чаще раза в 30 секунд (`AdsRuntime`): при более быстром возвращении на вкладку
+///   баннера на ней нет;
+/// - после ошибки загрузки повторного запроса нет, пустое место убирается.
+///
 /// Без идентификатора блока (YandexAdsConfig) и в режимах снимков App Store ничего не показывает и не занимает места.
-/// Порядок такой: приложение становится активным, iOS спрашивает разрешение на отслеживание (ATT), SDK инициализируется
-/// (см. AdsRuntime), баннер вкладки запрашивает рекламу. Пока она не загрузилась, место под баннер остаётся таким же, как
-/// у прошлого: иначе экран прыгал бы вверх-вниз при каждой смене вкладки. Если реклама не загрузилась, баннер уходит.
+/// Порядок такой: приложение становится активным, iOS спрашивает разрешение на отслеживание (ATT), для жителей ЕЭЗ,
+/// Великобритании и Швейцарии передаётся отказ от согласия (GDPR), SDK инициализируется, баннер запрашивает рекламу.
 @MainActor
 struct AdBannerSection: View {
-    /// Отступ сверху и снизу, пока баннер показан: до соседних блоков экрана
-    static let verticalSpacing: CGFloat = 12
+    /// Отступ сверху и снизу, пока под баннер держится место: до соседних блоков и кнопок экрана
+    static let verticalSpacing: CGFloat = 20
 
     @Environment(\.scenePhase) private var scenePhase
 
+    private let placement: AdPlacement
     private let unitID: String?
     private let showsErrors: Bool
 
+    /// Решается один раз, когда вид появляется: рекламу этого экрана нельзя запрашивать чаще раза в 30 секунд
+    @State private var isAllowed: Bool
     /// Создаётся один раз на экземпляр баннера: пересоздание при каждом обновлении экрана перезагружало бы рекламу
     @State private var bannerState: BannerState?
     @State private var isLoaded = false
@@ -30,21 +38,21 @@ struct AdBannerSection: View {
     /// Стадия и ошибка баннера; заполняется и показывается только в проверочной сборке (YandexAdsConfig.showsErrors)
     @State private var debugLine = ""
 
-    init(config: YandexAdsConfig = .standard) {
+    init(placement: AdPlacement, config: YandexAdsConfig = .standard) {
         let isScreenshotMode = ScreenshotMode.scene != nil || ScreenshotMode.isTour
+        self.placement = placement
         unitID = YandexAdsConfig.shouldShowAds(config: config, isScreenshotMode: isScreenshotMode) ? config.bannerUnitID : nil
         showsErrors = config.showsErrors
-    }
-
-    /// Сколько места держать под баннером, пока реклама грузится: высоту прошлого баннера. Загрузился или не загрузился,
-    /// держать нечего: загруженный сам занимает своё место, а у незагрузившегося места быть не должно.
-    static func reservedHeight(isLoaded: Bool, isFailed: Bool, lastHeight: CGFloat) -> CGFloat {
-        isLoaded || isFailed ? 0 : lastHeight
+        _isAllowed = State(initialValue: AdsRuntime.canRequest(placement))
     }
 
     var body: some View {
         if let unitID {
-            content(unitID: unitID)
+            if isAllowed {
+                content(unitID: unitID)
+            } else if showsErrors {
+                debugText("throttled: \(placement.rawValue) asked less than 30 s ago")
+            }
         }
     }
 
@@ -58,48 +66,46 @@ struct AdBannerSection: View {
                     await prepareBanner(unitID: unitID)
                 }
 
-            if let bannerState {
-                Banner(state: bannerState)
-                    .onAdLoad { _ in
-                        isLoaded = true
-                        isFailed = false
-                        note("loaded")
+            if !isFailed {
+                // Место под объявление держится всё время загрузки: экран не прыгает, когда баннер появляется
+                ZStack {
+                    if let bannerState {
+                        Banner(state: bannerState)
+                            .onAdLoad { _ in
+                                isLoaded = true
+                                note("loaded")
+                            }
+                            .onAdFailure { error in
+                                // Неудачное обновление уже показанного объявления его не убирает
+                                if !isLoaded {
+                                    isFailed = true
+                                }
+                                note("FAILED: \(String(describing: error))")
+                            }
+                            .opacity(isLoaded ? 1 : 0)
                     }
-                    .onAdFailure { error in
-                        isLoaded = false
-                        isFailed = true
-                        note("FAILED: \(String(describing: error))")
-                    }
-                    // Высоту подбирает сам баннер после загрузки; до неё места он не занимает
-                    .frame(height: isLoaded ? nil : 0)
-                    .opacity(isLoaded ? 1 : 0)
-                    .clipped()
+                }
+                .frame(width: YandexAdsConfig.bannerWidth, height: YandexAdsConfig.bannerHeight)
+                .clipped()
             }
 
             // Только проверочная сборка: на каком шаге остановилась реклама и что ответил Яндекс
             if showsErrors, !debugLine.isEmpty {
-                Text(verbatim: debugLine)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(Theme.textSecondary)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 6)
+                debugText(debugLine)
             }
         }
-        .padding(.vertical, isLoaded ? Self.verticalSpacing : 0)
-        .frame(minHeight: Self.reservedHeight(isLoaded: isLoaded, isFailed: isFailed, lastHeight: AdsRuntime.lastStripHeight), alignment: .top)
+        .padding(.vertical, isFailed ? 0 : Self.verticalSpacing)
         .frame(maxWidth: .infinity)
-        // Сплошной фон под баннером, как у экрана
-        .background(isLoaded ? Theme.background : Color.clear)
-        // Высота загруженной полосы запоминается для следующей вкладки
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.height
-        } action: { height in
-            if isLoaded, height > 0 {
-                AdsRuntime.lastStripHeight = height
-            }
-        }
+    }
+
+    private func debugText(_ text: String) -> some View {
+        Text(verbatim: text)
+            .font(.system(size: 11, design: .monospaced))
+            .foregroundColor(Theme.textSecondary)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
     }
 
     /// Ждёт запуска SDK и создаёт баннер. Повторные вызовы ничего не делают.
@@ -110,8 +116,15 @@ struct AdBannerSection: View {
 
         note("SDK init...")
         await AdsRuntime.prepare()
+        // Пока шёл запуск SDK, этот экран уже мог запросить рекламу другим экземпляром баннера
+        guard AdsRuntime.canRequest(placement) else {
+            isAllowed = false
+            return
+        }
+        AdsRuntime.registerRequest(placement)
         note("SDK ready, request sent, unit \(unitID)")
-        bannerState = BannerState(size: .sticky(), request: AdRequest(adUnitID: unitID))
+        // Размер совпадает с YandexAdsConfig.bannerWidth и bannerHeight
+        bannerState = BannerState(size: .fixed(width: 320, height: 50), request: AdRequest(adUnitID: unitID))
     }
 
     private func note(_ text: String) {
@@ -121,20 +134,31 @@ struct AdBannerSection: View {
     }
 }
 
-/// Запрос ATT и запуск SDK Яндекса: один раз за запуск приложения. Здесь же запоминается высота последнего загруженного баннера.
-/// Работа идёт в отдельной задаче: когда iOS показывает окно ATT, приложение на миг неактивно, и задача баннера
+/// Запрос ATT и запуск SDK Яндекса: один раз за запуск приложения. Здесь же запоминается, когда каждый экран
+/// в последний раз запрашивал рекламу.
+/// Запуск идёт в отдельной задаче: когда iOS показывает окно ATT, приложение на миг неактивно, и задача баннера
 /// (`.task(id: scenePhase)`) отменяется, а запрос должен дойти до конца.
 @MainActor
 private enum AdsRuntime {
     private static var preparation: Task<Void, Never>?
+    private static var lastRequests: [AdPlacement: Date] = [:]
 
-    /// Высота полосы последнего загруженного баннера (сам баннер и отступы); 0, пока ни один не загрузился
-    static var lastStripHeight: CGFloat = 0
+    static func canRequest(_ placement: AdPlacement, now: Date = Date()) -> Bool {
+        YandexAdsConfig.canRequestAd(lastRequest: lastRequests[placement], now: now)
+    }
+
+    static func registerRequest(_ placement: AdPlacement, now: Date = Date()) {
+        lastRequests[placement] = now
+    }
 
     static func prepare() async {
         let task: Task<Void, Never> = preparation ?? Task { @MainActor in
             // Без ответа на этот запрос iOS не отдаёт рекламный идентификатор. Отказ рекламу не отключает: она просто менее персональная.
             _ = await ATTrackingManager.requestTrackingAuthorization()
+            // GDPR: согласие приложение не спрашивает, поэтому жителям этих стран передаётся отказ. Значение нужно при каждом запуске.
+            if YandexAdsConfig.requiresGDPRConsent(regionCode: Locale.current.region?.identifier) {
+                YandexAds.setUserConsent(false)
+            }
             await YandexAds.initializeSDK()
         }
         preparation = task

@@ -63,15 +63,39 @@ final class YandexAdsConfigTests: XCTestCase {
         XCTAssertFalse(YandexAdsConfig.standard.isBannerEnabled, "в Info.plist из репозитория должен быть пустой идентификатор блока")
     }
 
+    // MARK: - Правила рекламной сети
+
+    func testOneScreenRequestsAnAdAtMostOncePerThirtySeconds() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        XCTAssertTrue(YandexAdsConfig.canRequestAd(lastRequest: nil, now: now))
+        XCTAssertFalse(YandexAdsConfig.canRequestAd(lastRequest: now, now: now))
+        XCTAssertFalse(YandexAdsConfig.canRequestAd(lastRequest: now.addingTimeInterval(-29.9), now: now))
+        XCTAssertTrue(YandexAdsConfig.canRequestAd(lastRequest: now.addingTimeInterval(-30), now: now))
+        XCTAssertGreaterThanOrEqual(YandexAdsConfig.minReloadInterval, 30, "Яндекс запрещает перезагружать блок чаще")
+    }
+
     @MainActor
-    func testSpaceIsHeldOnlyWhileTheAdIsStillLoading() {
-        // Пока реклама грузится, держим высоту прошлого баннера, чтобы экран не прыгал при смене вкладки
-        XCTAssertEqual(AdBannerSection.reservedHeight(isLoaded: false, isFailed: false, lastHeight: 112), 112)
-        // Загруженный баннер занимает своё место сам, у незагрузившегося места быть не должно
-        XCTAssertEqual(AdBannerSection.reservedHeight(isLoaded: true, isFailed: false, lastHeight: 112), 0)
-        XCTAssertEqual(AdBannerSection.reservedHeight(isLoaded: false, isFailed: true, lastHeight: 112), 0)
-        // До первой загрузки держать нечего
-        XCTAssertEqual(AdBannerSection.reservedHeight(isLoaded: false, isFailed: false, lastHeight: 0), 0)
+    func testTheBannerHasRoomAroundItAndAFixedSize() {
+        XCTAssertGreaterThanOrEqual(AdBannerSection.verticalSpacing, 16, "кнопки не должны стоять вплотную к объявлению")
+        XCTAssertEqual(YandexAdsConfig.bannerWidth, 320)
+        XCTAssertEqual(YandexAdsConfig.bannerHeight, 50)
+        XCTAssertEqual(AdPlacement.allCases.count, 5, "по одному баннеру на вкладку")
+    }
+
+    func testGDPRCountriesGetARefusalAndOthersDoNot() {
+        for region in ["DE", "FR", "PL", "NO", "IS", "GB", "CH", "de"] {
+            XCTAssertTrue(YandexAdsConfig.requiresGDPRConsent(regionCode: region), region)
+        }
+        for region in ["AM", "RU", "US", "GE", "KZ", "BY", "AE"] {
+            XCTAssertFalse(YandexAdsConfig.requiresGDPRConsent(regionCode: region), region)
+        }
+        XCTAssertFalse(YandexAdsConfig.requiresGDPRConsent(regionCode: nil))
+    }
+
+    @MainActor
+    func testComplaintAndPrivacyLinksAreSecure() {
+        XCTAssertEqual(AdInfoView.complaintURL.scheme, "https")
+        XCTAssertEqual(AdInfoView.yandexPrivacyURL.scheme, "https")
     }
 
     // MARK: - Info.plist приложения

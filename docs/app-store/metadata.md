@@ -71,8 +71,9 @@ Hashiv — личный учёт денег для тех, кому надоел
 • Интерфейс на русском, английском и армянском
 
 КОНФИДЕНЦИАЛЬНОСТЬ
-• Нет регистрации и рекламы, данные хранятся на вашем телефоне
-• В облако данные уходят только если вы сами добавили ключ ИИ и разрешили отправку
+• Нет регистрации, ваши финансовые данные хранятся на телефоне
+• В приложении есть реклама Яндекса: финансовые данные в неё не передаются
+• Данные уходят ИИ-сервису только после вашего разрешения
 • Политика конфиденциальности есть в Настройках приложения
 ```
 
@@ -147,8 +148,9 @@ CURRENCIES AND LANGUAGES
 • The interface is in Russian, English and Armenian
 
 PRIVACY
-• No sign-up and no ads; your data stays on your phone
-• Data goes to the cloud only if you add an AI key yourself and allow sending
+• No sign-up; your financial data stays on your phone
+• The app shows Yandex ads; your financial data is not passed to them
+• Data goes to the AI service only after you allow it
 • The privacy policy is in the app's Settings
 ```
 

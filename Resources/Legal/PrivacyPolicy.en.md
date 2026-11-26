@@ -1,11 +1,11 @@
 # Hashiv Privacy Policy
 
-Effective October 22, 2026.
+Effective November 26, 2026.
 
 ## In short
 
 - Hashiv keeps your data only on your iPhone. The app has no accounts and no server of ours: we do not receive or see your transactions, cards, debts or savings goals.
-- The app has no ads, analytics, tracking or third-party SDKs.
+- The app shows Yandex advertising. It uses the Yandex Mobile Ads SDK and the AppMetrica library included in it: they receive technical device data, but not your financial data. The app has no analytics of its own.
 - The only things that leave your phone are exchange-rate requests (without your data), technical data for showing Yandex ads (without your financial data) and, if you allow the AI assistant to send data, your requests to the AI service.
 - You can erase all your data in Settings.
 
@@ -46,15 +46,15 @@ If you ask the AI to change something in the app (add a debt, set a reminder), i
 
 You can withdraw permission at any time: turn off "Send data to AI" in Settings → AI assistant. While it is off, the app asks for permission again before sending and, without it, answers questions using only the data on your phone.
 
-**3. Advertising.** The app shows Yandex advertising (Yandex Advertising Network, Yandex Mobile Ads SDK). Before the first ad iOS asks for permission to track you. The advertising service may receive technical data about the device and the app: for example, the IP address, device identifiers, the advertising identifier (only if you allow tracking), device model and iOS version, language, and ad impressions and taps. Your transactions, cards, debts, savings goals, questions to the AI and other financial data are not passed to advertising. You can withdraw the tracking permission at any time: iOS Settings → Privacy & Security → Tracking. Yandex processes data under its own rules: [Yandex Privacy Policy](https://yandex.ru/legal/confidential/).
+**3. Advertising.** The app shows Yandex advertising (Yandex Advertising Network, Yandex Mobile Ads SDK). Before the first ad iOS asks for permission to track you. The advertising service may receive technical data about the device and the app: for example, the IP address, device identifiers, the advertising identifier (only if you allow tracking), device model and iOS version, language, and ad impressions and taps. Your transactions, cards, debts, savings goals, questions to the AI and other financial data are not passed to advertising. You can withdraw the tracking permission at any time: iOS Settings → Privacy & Security → Tracking. Yandex processes data under its own rules: [Yandex Privacy Policy](https://yandex.ru/legal/confidential/). For users in the European Economic Area, the United Kingdom and Switzerland (by the device region) the app tells Yandex that consent to personal data processing is not given. You can report an ad from its own menu or in Settings → Ads → “About ads and complaints”.
 
-**3. iOS features.** You choose screenshots in the system iOS picker, and the app sees only the pictures you pick. The clipboard is read only when you tap the buttons that scan an SMS or paste from the clipboard. Export puts a CSV table on the clipboard when you tap it. Reminders (about debts, savings goals, cards and your own) and Apple Pay purchase prompts are shown by the device itself if you allowed notifications. Shortcuts run on your phone; the app does not read messages on its own, iOS does not allow that.
+**4. iOS features.** You choose screenshots in the system iOS picker, and the app sees only the pictures you pick. The clipboard is read only when you tap the buttons that scan an SMS or paste from the clipboard. Export puts a CSV table on the clipboard when you tap it. Reminders (about debts, savings goals, cards and your own) and Apple Pay purchase prompts are shown by the device itself if you allowed notifications. Shortcuts run on your phone; the app does not read messages on its own, iOS does not allow that.
 
 ## What we do not do
 
 - we do not create accounts or collect contact details;
-- we do not show ads or pass data to ad networks;
-- we do not use analytics, tracking or third-party SDKs;
+- we do not pass your financial data to ad networks;
+- we run no analytics of our own and add no third-party SDKs except the advertising one;
 - we do not sell or share your data with third parties, except as described above: when you allow data to be sent to an AI service and when the Yandex advertising service receives technical data to show ads.
 
 ## Your control

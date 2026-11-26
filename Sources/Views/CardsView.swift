@@ -40,11 +40,11 @@ struct CardsView: View {
                 if section == .cash {
                     cashContent
                         .padding(.horizontal, 20)
-                    AdBannerSection()
+                    AdBannerSection(placement: .cards)
                 } else if financeService.cards.isEmpty {
                     emptyCardsPlaceholder
                         .padding(.horizontal, 20)
-                    AdBannerSection()
+                    AdBannerSection(placement: .cards)
                 } else {
                     carousel
                         .padding(.top, 20)
@@ -56,7 +56,7 @@ struct CardsView: View {
                     }
 
                     // Реклама Яндекса: между каруселью и целями выбранной карты
-                    AdBannerSection()
+                    AdBannerSection(placement: .cards)
 
                     if let card = currentCard {
                         CardWithGoalsSection(

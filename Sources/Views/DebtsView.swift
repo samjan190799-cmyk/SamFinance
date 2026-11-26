@@ -67,7 +67,7 @@ struct DebtsView: View {
                 summaryView
                     .appearAnimation(order: 1)
                 // Реклама Яндекса: на всю ширину экрана, поэтому отрицательное поле вместо полей строки списка
-                AdBannerSection()
+                AdBannerSection(placement: .debts)
                     .padding(.horizontal, -20)
                 segmentView
                     .appearAnimation(order: 2)

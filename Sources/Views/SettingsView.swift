@@ -167,6 +167,20 @@ struct SettingsView: View {
                     Text("В Быстрых командах: Автоматизация → Транзакция → выберите карты → «Выполнять сразу» → действие «Записать покупку Apple Pay», подставьте Магазин и Сумму из транзакции. После оплаты придёт уведомление: расход или доход, затем категория.")
                 }
 
+                // Реклама: что используется для её показа и как пожаловаться (App Store требует это от приложений с рекламой)
+                if YandexAdsConfig.standard.isBannerEnabled {
+                    Section {
+                        NavigationLink {
+                            AdInfoView()
+                        } label: {
+                            Label(String(localized: "О рекламе и жалобы"), systemImage: "megaphone.fill")
+                                .labelStyle(.settingsIcon(.peach))
+                        }
+                    } header: {
+                        Text(String(localized: "Реклама"))
+                    }
+                }
+
                 // О приложении: политика конфиденциальности и версия
                 Section {
                     NavigationLink {
